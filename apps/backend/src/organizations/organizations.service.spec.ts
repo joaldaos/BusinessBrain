@@ -1,0 +1,105 @@
+import { Test } from '@nestjs/testing';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { OrganizationsService } from './organizations.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+describe('OrganizationsService', () => {
+  let service: OrganizationsService;
+  let prisma: {
+    organization: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
+    membership: { findMany: jest.Mock; upsert: jest.Mock };
+    invitation: { create: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+    $transaction: jest.Mock;
+  };
+
+  beforeEach(async () => {
+    prisma = {
+      organization: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      membership: { findMany: jest.fn(), upsert: jest.fn() },
+      invitation: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      $transaction: jest.fn((ops) => Promise.all(ops)),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        OrganizationsService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+
+    service = moduleRef.get(OrganizationsService);
+  });
+
+  describe('create', () => {
+    it('genera un slug único a partir del nombre, con acentos y símbolos normalizados', async () => {
+      prisma.organization.findUnique.mockResolvedValue(null); // slug libre a la primera
+      prisma.organization.create.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'org-1', ...data }),
+      );
+
+      const org = await service.create('Café & Diseño S.L.', 'usr-1');
+
+      expect(org.slug).toBe('cafe-diseno-s-l');
+      expect(prisma.organization.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            memberships: { create: { userId: 'usr-1', role: 'OWNER' } },
+          }),
+        }),
+      );
+    });
+
+    it('añade un sufijo si el slug ya existe', async () => {
+      prisma.organization.findUnique
+        .mockResolvedValueOnce({ id: 'existing' })
+        .mockResolvedValueOnce(null);
+      prisma.organization.create.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'org-2', ...data }),
+      );
+
+      const org = await service.create('Acme', 'usr-1');
+
+      expect(org.slug).toMatch(/^acme-[0-9a-f]{4}$/);
+    });
+  });
+
+  describe('acceptInvitation', () => {
+    it('rechaza una invitación expirada', async () => {
+      prisma.invitation.findUnique.mockResolvedValue({
+        id: 'inv-1',
+        email: 'a@b.dev',
+        acceptedAt: null,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        service.acceptInvitation('tok', 'usr-1', 'a@b.dev'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rechaza si el email del usuario no coincide con el de la invitación', async () => {
+      prisma.invitation.findUnique.mockResolvedValue({
+        id: 'inv-1',
+        email: 'invited@b.dev',
+        acceptedAt: null,
+        expiresAt: new Date(Date.now() + 100000),
+      });
+
+      await expect(
+        service.acceptInvitation('tok', 'usr-1', 'someone-else@b.dev'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+});

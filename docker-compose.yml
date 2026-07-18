@@ -1,0 +1,37 @@
+# Infraestructura de desarrollo local para BusinessBrain (Postgres+pgvector, Redis).
+# El .env.example de la raíz pertenece a Drop (server/index.js) y no se toca.
+# Si quieres sobreescribir estos valores, crea un ".env" local (no versionado) en la raíz
+# con las mismas claves: docker compose lo carga automáticamente.
+name: businessbrain
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-businessbrain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-businessbrain}
+      POSTGRES_DB: ${POSTGRES_DB:-businessbrain}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - businessbrain_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-businessbrain}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  businessbrain_postgres_data:

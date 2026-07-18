@@ -1,0 +1,700 @@
+// packages/database/prisma/schema.prisma
+//
+// Fuente de verdad: docs/BUSINESSBRAIN_MIGRATION_PLAN.md §6 (aprobado, congelado).
+// Este archivo debe ser una copia exacta de ese schema. Cualquier cambio de modelo
+// pasa primero por el documento — no se edita aquí de forma independiente.
+//
+// Vive en un paquete de workspace propio (no dentro de apps/backend) para que
+// futuros workers o servicios (ver roadmap, fase de extracción de microservicios)
+// puedan depender del mismo cliente Prisma sin duplicar el schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────
+
+enum PlatformRole {
+  USER
+  SUPERADMIN
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+enum KnowledgeSourceType {
+  FILE_UPLOAD
+  WEBSITE
+  GOOGLE_DRIVE
+  GMAIL
+  CRM
+  ERP
+  DATABASE
+  SOCIAL_MEDIA
+  API
+}
+
+// Reutilizado por KnowledgeSource e Integration (ambos son "conexiones" a sistemas externos)
+enum ConnectionStatus {
+  PENDING
+  SYNCING
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+enum IngestionTriggerType {
+  MANUAL
+  SCHEDULE
+  EVENT
+}
+
+enum KnowledgeItemStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+  SUPERSEDED // reemplazado por una versión más reciente del mismo KnowledgeItem
+}
+
+enum LlmProviderName {
+  ANTHROPIC
+  OPENAI
+  GEMINI
+  MISTRAL
+  OLLAMA
+}
+
+enum AgentTemplateVisibility {
+  PRIVATE // solo la organización que la creó
+  ORGANIZATION // compartida entre agentes de la misma organización
+  PUBLIC // catálogo del marketplace (futuro)
+}
+
+enum AgentArea {
+  SALES
+  MARKETING
+  SUPPORT
+  OPERATIONS
+  FINANCE
+  HR
+  GENERAL
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum AutomationTriggerType {
+  SCHEDULE
+  EVENT
+  MANUAL
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ReportFormat {
+  PDF
+  HTML
+  MARKDOWN
+  JSON
+}
+
+enum RecommendationStatus {
+  NEW
+  ACCEPTED
+  DISMISSED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum IntegrationProvider {
+  HUBSPOT
+  SALESFORCE
+  GOOGLE_DRIVE
+  SLACK
+  SAP
+  ZENDESK
+  CUSTOM
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Identidad y multi-tenancy
+// ─────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  platformRole PlatformRole @default(USER)
+  status       String       @default("ACTIVE") // ACTIVE | BANNED
+  lastActiveAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  memberships      Membership[]
+  conversations    Conversation[]
+  notifications    Notification[]
+  auditLogsAsActor AuditLog[]     @relation("AuditActor")
+  createdApiKeys   ApiKey[]
+  refreshTokens    RefreshToken[]
+
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  planTier  PlanTier @default(FREE)
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships          Membership[]
+  invitations          Invitation[]
+  subscription         Subscription?
+  knowledgeSources     KnowledgeSource[]
+  knowledgeItems       KnowledgeItem[]
+  knowledgeCollections KnowledgeCollection[]
+  agents               Agent[]
+  agentTemplates       AgentTemplate[] // plantillas publicadas por esta organización (si visibility != PRIVATE)
+  llmProfiles          LlmProfile[]
+  conversations        Conversation[]
+  automations          Automation[]
+  reports              Report[]
+  integrations         Integration[]
+  apiKeys              ApiKey[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  recommendations      Recommendation[]
+  usageRecords         UsageRecord[]
+
+  @@index([slug])
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MembershipRole @default(MEMBER)
+  invitedById    String?
+  joinedAt       DateTime       @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id             String         @id @default(cuid())
+  organizationId String
+  email          String
+  role           MembershipRole @default(MEMBER)
+  token          String         @unique
+  createdById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Subscription {
+  id                            String             @id @default(cuid())
+  organizationId                String             @unique
+  planTier                      PlanTier
+  status                        SubscriptionStatus
+  paymentProviderCustomerId     String?
+  paymentProviderSubscriptionId String?
+  seats                         Int                @default(1)
+  currentPeriodEnd              DateTime?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// KNOWLEDGE ENGINE — núcleo del producto
+// KnowledgeSource → IngestionJob → KnowledgeItem (versionado, dedup, confianza) → KnowledgeChunk
+// ─────────────────────────────────────────────────────────────────────────
+
+model KnowledgeSource {
+  id             String              @id @default(cuid())
+  organizationId String
+  type           KnowledgeSourceType
+  connectorKey   String // identifica la implementación del conector, p.ej. "google_drive_v1"
+  name           String
+  configEnc      String // JSON cifrado: credenciales/config específica del conector
+  status         ConnectionStatus    @default(PENDING)
+  lastSyncedAt   DateTime?
+  lastError      String?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItems KnowledgeItem[]
+  ingestionJobs  IngestionJob[]
+
+  @@index([organizationId])
+}
+
+// Una fila por cada ejecución de sincronización de una KnowledgeSource — antes solo existía
+// como campo de estado en la fuente, sin histórico ni estadísticas por ejecución.
+model IngestionJob {
+  id                String               @id @default(cuid())
+  knowledgeSourceId String
+  organizationId    String
+  triggerType       IngestionTriggerType @default(MANUAL)
+  status            RunStatus            @default(PENDING)
+  stats             Json                 @default("{}") // { itemsFound, itemsCreated, itemsUpdated, itemsSkippedDuplicate, itemsFailed }
+  error             String?
+  startedAt         DateTime             @default(now())
+  finishedAt        DateTime?
+
+  knowledgeSource KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeSourceId])
+  @@index([organizationId])
+}
+
+model KnowledgeCollection {
+  id             String     @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  area           AgentArea?
+  createdAt      DateTime   @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItems KnowledgeItem[]
+  agents         Agent[]         @relation("AgentKnowledgeScope")
+
+  @@index([organizationId])
+}
+
+model KnowledgeItem {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  knowledgeSourceId     String?
+  knowledgeCollectionId String?
+  title                 String
+  sourceUrl             String?
+  mimeType              String?
+  sizeBytes             Int?
+  contentHash           String // hash normalizado del contenido — base de la deduplicación
+  status                KnowledgeItemStatus @default(PENDING)
+  error                 String?
+  classification        Json? // { category, tags } generado por classify-content.use-case
+  confidenceScore       Float? // 0..1, generado por score-confidence.use-case
+  version               Int                 @default(1)
+  isCanonical           Boolean             @default(true) // false si una versión más nueva la reemplazó
+  supersedesId          String?             @unique
+  createdAt             DateTime            @default(now())
+  indexedAt             DateTime?
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeSource     KnowledgeSource?     @relation(fields: [knowledgeSourceId], references: [id], onDelete: SetNull)
+  knowledgeCollection KnowledgeCollection? @relation(fields: [knowledgeCollectionId], references: [id], onDelete: SetNull)
+  chunks              KnowledgeChunk[]
+  supersedes          KnowledgeItem?       @relation("KnowledgeItemVersions", fields: [supersedesId], references: [id])
+  supersededBy        KnowledgeItem?       @relation("KnowledgeItemVersions")
+
+  @@index([organizationId])
+  @@index([knowledgeSourceId])
+  @@index([knowledgeCollectionId])
+  @@index([organizationId, contentHash]) // lookup rápido de duplicados por organización
+}
+
+model KnowledgeChunk {
+  id              String                      @id @default(cuid())
+  knowledgeItemId String
+  organizationId  String
+  chunkIndex      Int
+  content         String
+  tokenCount      Int?
+  metadata        Json                        @default("{}")
+  embedding       Unsupported("vector(1536)")
+  createdAt       DateTime                    @default(now())
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  // Índice HNSW sobre `embedding` creado vía migración SQL manual:
+  // CREATE INDEX ON "KnowledgeChunk" USING hnsw (embedding vector_cosine_ops);
+
+  @@index([organizationId])
+  @@index([knowledgeItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Conversación — superficie de consumo del Knowledge Engine (NO es el núcleo)
+// ─────────────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  agentId        String?
+  title          String?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent        Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  messages     Message[]
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  citations      Json? // [{ knowledgeItemId, chunkId, snippet }]
+  tokenCount     Int?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Agentes especializados por área — más que un prompt: capacidades, herramientas,
+// memoria, permisos, políticas y alcance de conocimiento explícitos
+// ─────────────────────────────────────────────────────────────────────────
+
+model Agent {
+  id             String    @id @default(cuid())
+  organizationId String
+  templateId     String? // si se instaló desde un AgentTemplate (groundwork de marketplace)
+  name           String
+  area           AgentArea @default(GENERAL)
+  systemPrompt   String
+  llmProfileId   String? // proveedor/modelo (ver LlmProfile) — null = usa el perfil por defecto de la organización
+  temperature    Float? // override puntual; si es null se usa el de LlmProfile
+  capabilities   Json      @default("[]") // habilidades de alto nivel: ["answer_questions", "generate_report", "trigger_automation"]
+  tools          Json      @default("[]") // [{ tool: "sql_query", permission: "READ_ONLY" }, { tool: "send_email", permission: "REQUIRES_CONFIRMATION" }]
+  memoryConfig   Json      @default("{}") // { strategy: "short_term" | "long_term" | "none", windowSize }
+  guardrails     Json      @default("{}") // políticas: límites de acción, reglas de escalado a un humano, temas prohibidos
+  isActive       Boolean   @default(true)
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template             AgentTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  llmProfile           LlmProfile?           @relation(fields: [llmProfileId], references: [id], onDelete: SetNull)
+  knowledgeCollections KnowledgeCollection[] @relation("AgentKnowledgeScope")
+  conversations        Conversation[]
+  recommendations      Recommendation[]
+  memories             AgentMemory[]
+
+  @@index([organizationId])
+}
+
+// Memoria persistente del agente, independiente del historial de una conversación concreta
+// (p. ej. "el cliente X prefiere que se le contacte por email", aprendido en una conversación
+// y reutilizable en cualquier interacción futura con ese agente).
+model AgentMemory {
+  id             String   @id @default(cuid())
+  agentId        String
+  organizationId String
+  conversationId String? // null = memoria de largo plazo del agente, no ligada a una conversación
+  key            String
+  value          Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, organizationId])
+}
+
+// Groundwork de marketplace: una plantilla instalable de agente. No se construye el
+// marketplace en esta fase, pero el modelo evita una migración disruptiva más adelante.
+model AgentTemplate {
+  id                  String                  @id @default(cuid())
+  publisherOrgId      String? // null = plantilla first-party de BusinessBrain
+  name                String
+  description         String
+  area                AgentArea
+  visibility          AgentTemplateVisibility @default(PRIVATE)
+  defaultSystemPrompt String
+  defaultCapabilities Json                    @default("[]")
+  defaultTools        Json                    @default("[]")
+  version             Int                     @default(1)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  publisherOrg    Organization? @relation(fields: [publisherOrgId], references: [id], onDelete: SetNull)
+  installedAgents Agent[]
+
+  @@index([publisherOrgId])
+  @@index([visibility])
+}
+
+// Configuración de proveedor de IA — decouplea el dominio de Anthropic/OpenAI/Gemini/Mistral/Ollama.
+// organizationId = null representa un perfil de plataforma disponible como default para cualquier org.
+model LlmProfile {
+  id             String          @id @default(cuid())
+  organizationId String?
+  provider       LlmProviderName
+  modelName      String // p.ej. "claude-sonnet-5", "gpt-4.1", "gemini-2.5-pro", "llama3:70b"
+  params         Json            @default("{}") // temperature por defecto, max_tokens, top_p...
+  apiKeyEnc      String? // API key propia del cliente (BYO key), cifrada; null = se usa la key de plataforma
+  isDefault      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agents       Agent[]
+
+  @@index([organizationId])
+}
+
+model Recommendation {
+  id             String               @id @default(cuid())
+  organizationId String
+  agentId        String?
+  area           AgentArea?
+  title          String
+  description    String
+  priority       Int                  @default(0)
+  status         RecommendationStatus @default(NEW)
+  createdAt      DateTime             @default(now())
+  resolvedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent        Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Automatizaciones
+// ─────────────────────────────────────────────────────────────────────────
+
+model Automation {
+  id             String                @id @default(cuid())
+  organizationId String
+  name           String
+  triggerType    AutomationTriggerType
+  triggerConfig  Json // { cron: "0 8 * * 1" } o { event: "document.indexed" }
+  actions        Json // pasos ordenados: [{ type, config }, ...]
+  status         AutomationStatus      @default(ACTIVE)
+  lastRunAt      DateTime?
+  createdById    String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         AutomationRun[]
+
+  @@index([organizationId])
+}
+
+model AutomationRun {
+  id           String    @id @default(cuid())
+  automationId String
+  status       RunStatus @default(PENDING)
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  logs         Json      @default("[]")
+  error        String?
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Informes
+// ─────────────────────────────────────────────────────────────────────────
+
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  format         ReportFormat @default(PDF)
+  template       Json // definición de secciones/queries del informe
+  schedule       Json? // cron opcional para generación periódica
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         ReportRun[]
+
+  @@index([organizationId])
+}
+
+model ReportRun {
+  id          String    @id @default(cuid())
+  reportId    String
+  status      RunStatus @default(PENDING)
+  fileUrl     String?
+  generatedAt DateTime  @default(now())
+  error       String?
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Integraciones externas
+// ─────────────────────────────────────────────────────────────────────────
+
+model Integration {
+  id              String              @id @default(cuid())
+  organizationId  String
+  provider        IntegrationProvider
+  status          ConnectionStatus    @default(PENDING)
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  scope           String?
+  expiresAt       DateTime?
+  connectedById   String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Notificaciones, auditoría, acceso API, uso/facturación
+// ─────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String?
+  type           NotificationType @default(INFO)
+  title          String
+  body           String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actorId        String?
+  action         String // "user.banned", "agent.created", "data_source.connected", ...
+  targetType     String?
+  targetId       String?
+  metadata       Json     @default("{}")
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?         @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([actorId])
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  keyPrefix      String
+  hashedKey      String
+  createdById    String
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  metric         String // "ai_tokens" | "documents_indexed" | "agent_runs" | ...
+  value          Int
+  periodStart    DateTime
+  periodEnd      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, metric, periodStart])
+}

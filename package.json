@@ -1,0 +1,12 @@
+{
+  "name": "businessbrain",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "rxjs": "^7.8.2"
+  }
+}

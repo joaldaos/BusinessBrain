@@ -1,3 +1,5 @@
+import { canonicalizeContent } from '../domain/content-canonicalization';
+
 const SHINGLE_SIZE = 5;
 
 /**
@@ -8,11 +10,16 @@ const SHINGLE_SIZE = 5;
  * shingles da la misma calidad de detección que una aproximación, sin la complejidad ni la
  * pérdida de precisión de MinHash, y sin ningún coste que importe a este volumen (§16 solo exige
  * acotar candidatos, no aproximar la propia comparación, a partir de ~10.000 documentos).
+ *
+ * Opera siempre sobre `canonicalizeContent(text)`, nunca sobre el texto crudo — es el contrato
+ * de §3.12 ("Contenido canónico"): nivel 1 (hash) y nivel 2 (esta función) deben coincidir en
+ * qué cuenta como "el mismo texto", o dos formas distintas de interpretar un documento producen
+ * resultados de deduplicación contradictorios entre sí (defecto real encontrado y corregido en
+ * la auditoría de implementación de la Subfase 2.2).
  */
 export function computeShingles(text: string, k = SHINGLE_SIZE): Set<string> {
-  const words = text
-    .toLowerCase()
-    .split(/\s+/)
+  const words = canonicalizeContent(text)
+    .split(' ')
     .filter((word) => word.length > 0);
 
   if (words.length === 0) return new Set();

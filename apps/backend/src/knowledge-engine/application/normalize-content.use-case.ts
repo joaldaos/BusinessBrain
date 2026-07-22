@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { computeContentHash } from '../domain/content-canonicalization';
 
 export interface NormalizedContent {
   text: string;
@@ -30,9 +30,10 @@ export class EmptyNormalizedContentError extends Error {
 
 /**
  * Normalización básica (KNOWLEDGE_ENGINE_DESIGN.md §4, §11): convierte el contenido crudo a
- * texto plano estructurado, independiente del formato de origen, y calcula el hash del
- * contenido YA normalizado (no del binario original) — base de la deduplicación futura (§7,
- * subfase 2.2), sin consumidor todavía en esta subfase.
+ * texto plano estructurado, independiente del formato de origen. `text` es lo que se ALMACENA
+ * (legible, conserva formato humano — citas y chunking futuro lo necesitan tal cual). El hash se
+ * calcula sobre el contenido CANÓNICO de ese texto (§3.12, `computeContentHash`), nunca sobre
+ * `text` directamente — es el único punto de entrada admitido para nivel 1 de deduplicación (§7).
  *
  * Soporta en esta subfase texto plano, Markdown (se indexa tal cual, sin renderizar) y HTML
  * (se descartan las etiquetas de forma básica). Cualquier otro tipo MIME se rechaza de forma
@@ -59,7 +60,7 @@ export function normalizeContent(
 
   return {
     text: trimmed,
-    contentHash: createHash('sha256').update(trimmed).digest('hex'),
+    contentHash: computeContentHash(trimmed),
   };
 }
 

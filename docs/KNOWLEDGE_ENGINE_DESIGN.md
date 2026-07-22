@@ -204,6 +204,26 @@ Este modelo describe entidades conceptuales, no tablas. No se especifican tipos 
 
 **Ciclo de vida.** Se genera al crear el chunk y se regenera completa (nunca se "actualiza parcialmente") cuando cambia el modelo de embeddings de la organización.
 
+### 3.12 Contenido canónico
+
+**Responsabilidad** (contrato arquitectónico añadido en la auditoría de implementación de la Subfase 2.2, tras encontrar y cerrar un defecto real). Es la única representación de un `KnowledgeItem` que cualquier mecanismo de deduplicación o de identidad de contenido —presente o futuro— puede usar para decidir si dos contenidos son "el mismo texto". No es una entidad ni un campo persistido propio: es una función pura, determinista, recalculable en cualquier momento a partir de `contentText`. Existe exactamente **una** función de canonicalización en todo el sistema; ningún mecanismo define su propia noción independiente de equivalencia.
+
+**Por qué existe.** El nivel 1 (hash exacto, §7) y el nivel 2 (similitud estructural, §7) evaluaban "¿es el mismo contenido?" con dos criterios de normalización distintos entre sí — el hash trataba el espacio en blanco como significativo, la huella de similitud lo ignoraba por completo. Esa asimetría producía "versiones falsas": una reingesta que solo cambiaba de formato (espacios, tabuladores, saltos de línea, mayúsculas) no la detectaba el nivel 1, llegaba al nivel 2, y ahí se malinterpretaba como "contenido cambiado", generando una versión nueva espuria. La corrección no es un parche sobre espacios y saltos de línea: es que nivel 1 y nivel 2 —y cualquier mecanismo de identidad de contenido que se añada después— comparten obligatoriamente la misma noción de equivalencia.
+
+**Transformaciones consideradas equivalentes** (no cambian el significado del documento):
+- Normalización de saltos de línea (CR, CRLF → LF).
+- Colapso de cualquier secuencia de espacios, tabuladores y saltos de línea a un único espacio.
+- Recorte de espacio en blanco al principio y al final del documento completo.
+- Normalización Unicode a forma canónica de composición (NFC) — mismo carácter, misma codificación, sin importar cómo llegó codificado.
+- Eliminación de caracteres invisibles de formato (espacio de ancho cero, BOM, marcadores de unión/no-unión de ancho cero) — artefactos de copiar/pegar entre editores, sin carácter visible ni significado.
+- Plegado de mayúsculas/minúsculas — la identidad del conocimiento no depende de la capitalización.
+
+**Qué no se toca nunca**, para no alterar el significado del documento: palabras, números, puntuación, símbolos, tildes y caracteres acentuados como tales (solo se normaliza su codificación Unicode, nunca se eliminan ni se sustituyen por su equivalente sin acento), y el orden de palabras o frases. No hay lematización, no hay sinónimos, no hay eliminación de palabras vacías — canonicalizar es una operación de formato, nunca de interpretación semántica.
+
+**Relaciones.** `contentText` (el texto almacenado, legible, el que se cita y se usará para chunking consciente de estructura, §11) nunca se sustituye por su forma canónica — la canonicalización es un paso derivado, calculado únicamente para comparar identidad, no para decidir qué se guarda ni qué se le muestra al usuario. `contentHash` (§3.5) se define como el hash del contenido canónico, nunca del texto crudo.
+
+**Ciclo de vida.** No tiene uno propio — se deriva de `contentText` en cada cálculo, nunca se persiste ni se versiona por separado. Cuando la propia función de canonicalización cambia (una corrección, una ampliación), el `contentHash` ya almacenado de todo `KnowledgeItem` existente deja de ser comparable con el que produciría el código actual — exige una migración de datos (recálculo de `contentHash` para todos los ítems existentes, cualquier estado, no solo los activos), nunca una migración de esquema. Un recálculo que revele que dos `KnowledgeItem` activos coinciden en contenido canónico donde antes no coincidían no se resuelve automáticamente — se registra para revisión humana, coherente con que BusinessBrain nunca modifica conocimiento por su cuenta sin aprobación explícita.
+
 ---
 
 ## 4. Flujo completo del conocimiento
@@ -327,9 +347,9 @@ El versionado resuelve un único problema: **el mismo documento lógico existió
 
 **Estrategia en tres niveles**, aplicados en orden creciente de coste computacional (se detiene en el primer nivel que da una resolución con confianza suficiente):
 
-1. **Hash exacto de contenido.** Se calcula un hash sobre el contenido ya normalizado (no sobre el binario original, para que dos formatos distintos del mismo texto —p. ej. un `.docx` y su exportación a `.pdf`— puedan coincidir). Un hash idéntico dentro de la misma organización es un duplicado exacto: se descarta sin más procesamiento. Este nivel es barato y resuelve la mayoría de resincronizaciones sin cambios. La comprobación debe ser correcta bajo ingesta concurrente (§2, "Idempotencia de la ingesta"; Revisión formal — Subfase 2.2, hallazgo D): no basta con una lectura previa a la escritura si dos ingestas del mismo contenido pueden solaparse en el tiempo.
+1. **Hash exacto de contenido.** Se calcula un hash sobre el **contenido canónico** (§3.12) del contenido ya normalizado (no sobre el binario original, para que dos formatos distintos del mismo texto —p. ej. un `.docx` y su exportación a `.pdf`— puedan coincidir; tampoco sobre diferencias de formato, mayúsculas o espacio en blanco, que la canonicalización ya hace equivalentes). Un hash idéntico dentro de la misma organización es un duplicado exacto: se descarta sin más procesamiento. Este nivel es barato y resuelve la mayoría de resincronizaciones sin cambios. La comprobación debe ser correcta bajo ingesta concurrente (§2, "Idempotencia de la ingesta"; Revisión formal — Subfase 2.2, hallazgo D): no basta con una lectura previa a la escritura si dos ingestas del mismo contenido pueden solaparse en el tiempo.
 
-2. **Similitud estructural (casi-duplicados).** Para contenido con hash distinto pero candidato a ser "el mismo documento con cambios menores" (mismo título, mismo origen, tamaño similar), se compara mediante una huella de similitud de baja dimensionalidad (tipo shingling/minhash) que tolera pequeñas ediciones sin necesitar el coste de un embedding completo. Un resultado por encima de un umbral alto de similitud estructural se trata como "misma línea documental, contenido cambiado" → dispara versionado (§6), no deduplicación pura.
+2. **Similitud estructural (casi-duplicados).** Para contenido con hash distinto pero candidato a ser "el mismo documento con cambios menores" (mismo título, mismo origen, tamaño similar), se compara mediante una huella de similitud de baja dimensionalidad (tipo shingling/minhash) que tolera pequeñas ediciones sin necesitar el coste de un embedding completo — calculada, igual que el nivel 1, sobre el **contenido canónico** (§3.12), nunca sobre el texto crudo. Un resultado por encima de un umbral alto de similitud estructural se trata como "misma línea documental, contenido cambiado" → dispara versionado (§6), no deduplicación pura.
 
 3. **Similitud semántica (duplicados entre fuentes).** Para contenido sin relación estructural evidente pero que puede describir el mismo hecho de negocio desde una fuente distinta (el mismo dato de cliente en el CRM y en un correo, por ejemplo), se compara mediante similitud de embeddings a nivel de documento (no de chunk) contra los candidatos más próximos ya indexados. Un resultado por encima del umbral de similitud semántica no se descarta ni se versiona: se marca como candidato a **canonicalización** (§10), porque son dos piezas de conocimiento legítimamente distintas (fuentes distintas) que compiten por describir lo mismo.
 
@@ -619,6 +639,27 @@ Antes de iniciar la implementación de la subfase 2.2, y con la subfase 2.1 ya c
 | E | Principio nuevo (no ligado a un defecto) | — | Se añade a §2 el principio permanente "toda decisión se evalúa por su aporte a la comprensión del negocio": ninguna solución, por elegante que sea técnicamente, se implementa si no mejora lo que BusinessBrain entiende de la empresa. Aplica a todo el proyecto, no solo al Knowledge Engine. |
 
 Ningún hallazgo de esta revisión contradice el modelo de dominio central (grafo de linaje tipado, deduplicación en tres niveles, canonicalización como entidad separada del versionado) — son correcciones de alcance de subfase, de una justificación textual imprecisa, y de un requisito no funcional ausente, no un rediseño.
+
+---
+
+## Auditoría de implementación — Subfase 2.2 (2026-07-23)
+
+Con el bloque de deduplicación, linaje e idempotencia bajo concurrencia ya implementado y commiteado, se realizó una auditoría adversarial exclusivamente sobre la implementación (no sobre el diseño): demostrar, con pruebas reales contra la base de datos, que el código puede fallar — no solo releerlo. Se revisaron seis puntos:
+
+| # | Punto auditado | Resultado |
+|---|---|---|
+| 1 | Dos `KnowledgeItem` activos con el mismo contenido | Sin defecto. Toda vía de creación pasa por la misma restricción de unicidad, sin importar qué rama del código la produjo; verificado con una carrera real de contenido idéntico. |
+| 2 | Ciclos, doble predecesor o estados inconsistentes en el grafo de linaje | Sin defecto. Verificado con una carrera real (dos transacciones Postgres genuinas) de dos ediciones distintas compitiendo por el mismo predecesor: exactamente una arista `UPDATES`, sin doble supersesión. |
+| 3 | Herencia de colecciones huérfana o duplicada | Sin defecto — la restricción de unicidad ya existente sobre `KnowledgeItemCollection` lo impide por construcción. |
+| 4 | Concurrencia con varios workers/instancias | Sin defecto. Ninguna garantía depende de estado en memoria de proceso; todas viven en Postgres (índice único, bloqueo de fila), indistinguible entre una o varias instancias. |
+| 5 | Versiones falsas por diferencias de formato/espacios/saltos de línea | **Defecto real, confirmado empíricamente**: nivel 1 y nivel 2 normalizaban el espacio en blanco de forma distinta entre sí, produciendo versiones espurias ante reingestas sin cambio de contenido real. Ver hallazgo F. |
+| 6 | Excepción dejando la base de datos a medias | Sin defecto en el código de esta subfase — todas las escrituras de `resolveAndPersist` pasan por el mismo cliente transaccional. Se anota, sin contarlo como defecto de esta subfase por ser una característica ya heredada de la 2.1, el riesgo de que un `IngestionJob` quede en `RUNNING` si ambas actualizaciones finales de estado (fuera de cualquier transacción) fallasen de forma catastrófica. |
+
+| # | Categoría | Hallazgo | Resolución |
+|---|---|---|---|
+| F | Contradicción real (defecto de implementación) | El nivel 1 (hash) trataba el espacio en blanco como significativo; el nivel 2 (shingling) lo ignoraba por completo al tokenizar. Esa asimetría entre "dos formas distintas de interpretar un documento" hacía que una reingesta sin ningún cambio de contenido, solo de formato, no la detectara el nivel 1 y el nivel 2 la malinterpretara como "contenido cambiado", generando una versión nueva espuria. | Se introduce el contrato arquitectónico de **contenido canónico** (§3.12): una única función de canonicalización, usada obligatoriamente por nivel 1 y nivel 2 —y por cualquier mecanismo de identidad de contenido futuro—, con un test de contrato que rompe en CI si alguna vez dejan de coincidir. Incluye plegado de mayúsculas/minúsculas (decisión explícita del usuario: "la identidad del conocimiento no debe depender de la capitalización"). Requirió una migración de datos (recálculo de `contentHash` para los `KnowledgeItem` ya existentes, sin migración de esquema). |
+
+**Conclusión de la auditoría**: cerrado el hallazgo F, no quedan defectos conocidos en la implementación de la subfase 2.2 frente a los seis puntos auditados.
 
 ---
 

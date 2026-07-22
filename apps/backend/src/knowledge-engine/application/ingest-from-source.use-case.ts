@@ -3,16 +3,33 @@ import {
   ConnectionStatus,
   IngestionTriggerType,
   KnowledgeItemStatus,
+  Prisma,
   RunStatus,
-  type Prisma,
+  type KnowledgeItem,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
-import { normalizeContent } from './normalize-content.use-case';
+import {
+  normalizeContent,
+  type NormalizedContent,
+} from './normalize-content.use-case';
+import {
+  computeShingles,
+  jaccardSimilarity,
+} from './structural-similarity.use-case';
+import { getStructuralSimilarityThreshold } from '../domain/deduplication-config';
+import { TERMINAL_KNOWLEDGE_ITEM_STATUSES } from '../domain/knowledge-item-status.classification';
+import {
+  NoopSemanticDeduplication,
+  type SemanticDeduplicationPort,
+} from '../domain/ports/semantic-deduplication.port';
+import type { ExtractedContent } from '../domain/ports/connector.port';
 
 export interface IngestionStats {
   itemsFound: number;
   itemsCreated: number;
+  itemsUpdated: number;
+  itemsSkippedDuplicate: number;
   itemsFailed: number;
 }
 
@@ -30,17 +47,33 @@ export interface IngestFromSourceResult {
   knowledgeItemIds: string[];
 }
 
+type IngestOutcome =
+  | { type: 'created'; knowledgeItemId: string }
+  | { type: 'updated'; knowledgeItemId: string }
+  | { type: 'duplicate'; knowledgeItemId: string };
+
+const ACTIVE_STATUS_FILTER = {
+  notIn: TERMINAL_KNOWLEDGE_ITEM_STATUSES as KnowledgeItemStatus[],
+};
+
 /**
- * Orquesta un ciclo de ingesta completo para la subfase 2.1 (KNOWLEDGE_ENGINE_DESIGN.md §4:
- * Connector → IngestionJob → Normalización → KnowledgeItem candidato). Deduplicación,
- * versionado, clasificación, confianza, canonicalización, chunking y embeddings son
- * responsabilidad de subfases posteriores (§19) — por eso el KnowledgeItem creado aquí queda
- * en estado PROCESSING, no INDEXED: el pipeline completo (§3.5, "ciclo de vida") todavía no ha
- * corrido sobre él.
+ * Orquesta un ciclo de ingesta completo (KNOWLEDGE_ENGINE_DESIGN.md §4: Connector → IngestionJob
+ * → Normalización → Deduplicación/Versionado → KnowledgeItem). Subfase 2.2: implementa con
+ * lógica real los niveles 1 (hash exacto) y 2 (similitud estructural) de deduplicación (§7) y el
+ * grafo de linaje (§3.7, §6) para el escenario de actualización automática (arista `UPDATES`). El
+ * nivel 3 se invoca como puerto preparado, sin producir candidatos todavía (hallazgo C de la
+ * Revisión formal — Subfase 2.2). Clasificación, confianza, canonicalización, chunking y
+ * embeddings siguen sin implementar (subfases 2.3-2.6) — por eso el KnowledgeItem creado o
+ * versionado aquí queda en PROCESSING, no INDEXED.
  */
 @Injectable()
 export class IngestFromSourceUseCase {
   private readonly logger = new Logger(IngestFromSourceUseCase.name);
+  // Campo de clase, no parámetro de constructor: SemanticDeduplicationPort es una interfaz TS,
+  // sin representación en tiempo de ejecución — NestJS no puede resolverla por tipo. Evita
+  // depender de un token de inyección para una única implementación no-operativa (hallazgo C).
+  private readonly semanticDeduplication: SemanticDeduplicationPort =
+    new NoopSemanticDeduplication();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -59,6 +92,14 @@ export class IngestFromSourceUseCase {
     if (!knowledgeSource) {
       throw new NotFoundException('KnowledgeSource no encontrada');
     }
+
+    const organization = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: params.organizationId },
+      select: { settings: true },
+    });
+    const structuralSimilarityThreshold = getStructuralSimilarityThreshold(
+      organization.settings,
+    );
 
     const job = await this.prisma.ingestionJob.create({
       data: {
@@ -82,6 +123,8 @@ export class IngestFromSourceUseCase {
       const stats: IngestionStats = {
         itemsFound: extracted.length,
         itemsCreated: 0,
+        itemsUpdated: 0,
+        itemsSkippedDuplicate: 0,
         itemsFailed: 0,
       };
       const knowledgeItemIds: string[] = [];
@@ -93,36 +136,44 @@ export class IngestFromSourceUseCase {
             candidate.rawContent,
             candidate.mimeType,
           );
-          const item = await this.prisma.knowledgeItem.create({
-            data: {
-              organizationId: params.organizationId,
-              originKnowledgeSourceId: knowledgeSource.id,
-              originIngestionJobId: job.id,
-              currentKnowledgeSourceId: knowledgeSource.id,
-              title: candidate.title,
-              sourceUrl: candidate.sourceUrl,
-              mimeType: candidate.mimeType,
-              sizeBytes: candidate.sizeBytes,
-              contentText: normalized.text,
-              contentHash: normalized.contentHash,
-              status: KnowledgeItemStatus.PROCESSING,
-            },
+
+          // Nivel 3 (§7): puerto invocable, sin candidatos reales todavía (hallazgo C) — no
+          // afecta al resultado, se llama para que la capacidad quede genuinamente presente en
+          // el pipeline, no solo declarada como archivo sin uso.
+          await this.semanticDeduplication.findCandidates({
+            organizationId: params.organizationId,
+            contentText: normalized.text,
+            excludeKnowledgeSourceId: knowledgeSource.id,
           });
-          knowledgeItemIds.push(item.id);
-          stats.itemsCreated += 1;
+
+          const outcome = await this.resolveAndPersist({
+            organizationId: params.organizationId,
+            knowledgeSource,
+            job,
+            candidate,
+            normalized,
+            structuralSimilarityThreshold,
+          });
+
+          knowledgeItemIds.push(outcome.knowledgeItemId);
+          if (outcome.type === 'created') stats.itemsCreated += 1;
+          else if (outcome.type === 'updated') stats.itemsUpdated += 1;
+          else stats.itemsSkippedDuplicate += 1;
         } catch (error) {
           stats.itemsFailed += 1;
           const message =
             error instanceof Error ? error.message : String(error);
           itemErrors.push(`"${candidate.title}": ${message}`);
           this.logger.warn(
-            `Fallo al normalizar/crear KnowledgeItem de "${candidate.title}": ${message}`,
+            `Fallo al procesar KnowledgeItem de "${candidate.title}": ${message}`,
           );
         }
       }
 
-      const status =
-        stats.itemsCreated > 0 ? RunStatus.SUCCESS : RunStatus.FAILED;
+      const anySucceeded =
+        stats.itemsCreated + stats.itemsUpdated + stats.itemsSkippedDuplicate >
+        0;
+      const status = anySucceeded ? RunStatus.SUCCESS : RunStatus.FAILED;
       const jobError = itemErrors.length > 0 ? itemErrors.join('; ') : null;
 
       await this.prisma.ingestionJob.update({
@@ -163,5 +214,182 @@ export class IngestFromSourceUseCase {
       });
       throw error;
     }
+  }
+
+  /**
+   * Decide el resultado de deduplicación (nivel 1 → nivel 2 → contenido nuevo) y lo persiste
+   * como una única unidad atómica (KNOWLEDGE_ENGINE_DESIGN.md §7, "Especificación de
+   * idempotencia bajo concurrencia"). La comprobación de nivel 1 (lectura) más la escritura no
+   * son, por sí solas, seguras ante una carrera; la restricción de unicidad parcial a nivel de
+   * base de datos (`KnowledgeItem_org_contentHash_active_key`) es el backstop real — ver el catch
+   * de más abajo.
+   */
+  private async resolveAndPersist(params: {
+    organizationId: string;
+    knowledgeSource: { id: string };
+    job: { id: string };
+    candidate: ExtractedContent;
+    normalized: NormalizedContent;
+    structuralSimilarityThreshold: number;
+  }): Promise<IngestOutcome> {
+    const {
+      organizationId,
+      knowledgeSource,
+      job,
+      candidate,
+      normalized,
+      structuralSimilarityThreshold,
+    } = params;
+
+    const newItemData = {
+      organizationId,
+      originKnowledgeSourceId: knowledgeSource.id,
+      originIngestionJobId: job.id,
+      currentKnowledgeSourceId: knowledgeSource.id,
+      title: candidate.title,
+      sourceUrl: candidate.sourceUrl,
+      mimeType: candidate.mimeType,
+      sizeBytes: candidate.sizeBytes,
+      contentText: normalized.text,
+      contentHash: normalized.contentHash,
+      status: KnowledgeItemStatus.PROCESSING,
+    };
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Nivel 1 (§7): hash exacto dentro de la organización, solo contra ítems activos.
+        const exactDuplicate = await tx.knowledgeItem.findFirst({
+          where: {
+            organizationId,
+            contentHash: normalized.contentHash,
+            status: ACTIVE_STATUS_FILTER,
+          },
+        });
+        if (exactDuplicate) {
+          return {
+            type: 'duplicate' as const,
+            knowledgeItemId: exactDuplicate.id,
+          };
+        }
+
+        // Nivel 2 (§7): candidatos "mismo título, mismo origen" dentro de la misma
+        // KnowledgeSource actual; confirmación por similitud estructural (shingling + Jaccard).
+        const structuralCandidates = await tx.knowledgeItem.findMany({
+          where: {
+            organizationId,
+            currentKnowledgeSourceId: knowledgeSource.id,
+            title: candidate.title,
+            status: ACTIVE_STATUS_FILTER,
+          },
+        });
+
+        const newShingles = computeShingles(normalized.text);
+        let bestMatch: KnowledgeItem | null = null;
+        let bestScore = 0;
+        for (const existing of structuralCandidates) {
+          const score = jaccardSimilarity(
+            newShingles,
+            computeShingles(existing.contentText),
+          );
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = existing;
+          }
+        }
+
+        if (bestMatch && bestScore >= structuralSimilarityThreshold) {
+          // Bloqueo de fila sobre el predecesor: serializa dos actualizaciones concurrentes del
+          // mismo documento para que nunca se generen dos aristas UPDATES sobre el mismo origen
+          // (KNOWLEDGE_ENGINE_DESIGN.md §6, "Reglas transversales").
+          const locked = await tx.$queryRaw<
+            { id: string; status: KnowledgeItemStatus }[]
+          >(
+            Prisma.sql`SELECT "id", "status" FROM "KnowledgeItem" WHERE "id" = ${bestMatch.id} FOR UPDATE`,
+          );
+          const predecessor = locked[0];
+          const predecessorStillActive =
+            predecessor &&
+            !(
+              TERMINAL_KNOWLEDGE_ITEM_STATUSES as KnowledgeItemStatus[]
+            ).includes(predecessor.status);
+
+          if (predecessorStillActive) {
+            const newItem = await tx.knowledgeItem.create({
+              data: newItemData,
+            });
+
+            await tx.knowledgeItemLineageEdge.create({
+              data: {
+                organizationId,
+                fromKnowledgeItemId: newItem.id,
+                toKnowledgeItemId: predecessor.id,
+                type: 'UPDATES',
+              },
+            });
+
+            await tx.knowledgeItem.update({
+              where: { id: predecessor.id },
+              data: { status: KnowledgeItemStatus.SUPERSEDED },
+            });
+
+            // Herencia de colecciones del anterior (§6), salvo indicación contraria — ninguna
+            // se da todavía en esta subfase.
+            const inheritedCollections =
+              await tx.knowledgeItemCollection.findMany({
+                where: { knowledgeItemId: predecessor.id },
+              });
+            if (inheritedCollections.length > 0) {
+              await tx.knowledgeItemCollection.createMany({
+                data: inheritedCollections.map((membership) => ({
+                  knowledgeItemId: newItem.id,
+                  knowledgeCollectionId: membership.knowledgeCollectionId,
+                  organizationId,
+                })),
+              });
+            }
+
+            return { type: 'updated' as const, knowledgeItemId: newItem.id };
+          }
+          // El predecesor dejó de estar activo entre la lectura y el bloqueo (otra transacción
+          // concurrente ya lo reemplazó) — se trata como contenido nuevo, no como actualización
+          // de un predecesor que ya no es la cabeza de la cadena de versiones.
+        }
+
+        const newItem = await tx.knowledgeItem.create({ data: newItemData });
+        return { type: 'created' as const, knowledgeItemId: newItem.id };
+      });
+    } catch (error) {
+      if (this.isContentHashUniqueViolation(error)) {
+        // Carrera de nivel 1: otra ingesta concurrente del mismo contenido ganó la creación
+        // mientras esta transacción decidía (KNOWLEDGE_ENGINE_DESIGN.md §7, "Especificación de
+        // idempotencia bajo concurrencia"). Se relee fuera de la transacción abortada y se trata
+        // como duplicado exacto — mismo resultado que si hubiera llegado después en el tiempo.
+        const winner = await this.prisma.knowledgeItem.findFirst({
+          where: {
+            organizationId,
+            contentHash: normalized.contentHash,
+            status: ACTIVE_STATUS_FILTER,
+          },
+        });
+        if (winner) {
+          return { type: 'duplicate' as const, knowledgeItemId: winner.id };
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Dentro de `resolveAndPersist`, la única restricción única que puede violar la creación de un
+   * KnowledgeItem es `KnowledgeItem_org_contentHash_active_key` (nivel 1) — el `id` es un cuid
+   * generado, sin colisión posible. Por eso basta con reconocer el código de error de Prisma
+   * (P2002) en este contexto, sin depender de que Prisma pueda mapear el nombre de un índice
+   * parcial creado por SQL manual (no declarado en schema.prisma) a un campo conocido.
+   */
+  private isContentHashUniqueViolation(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

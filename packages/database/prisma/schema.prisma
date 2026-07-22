@@ -78,6 +78,10 @@ enum IngestionTriggerType {
   EVENT
 }
 
+// KNOWLEDGE_ENGINE_DESIGN.md §3.5: PENDING/PROCESSING/INDEXED son estados activos; SUPERSEDED/
+// FAILED/DELETED son terminales. Todo valor nuevo que se añada aquí debe clasificarse
+// explícitamente en apps/backend/src/knowledge-engine/domain/knowledge-item-status.classification.ts
+// — un valor sin clasificar hace fallar ese test en CI (regla arquitectónica de §3.5).
 enum KnowledgeItemStatus {
   PENDING
   PROCESSING
@@ -85,6 +89,18 @@ enum KnowledgeItemStatus {
   FAILED
   SUPERSEDED // reemplazado por una versión más reciente del mismo KnowledgeItem (§6)
   DELETED // baja lógica — KNOWLEDGE_ENGINE_DESIGN.md §5, no implementado todavía en Fase 2.1
+}
+
+// Grafo de linaje de KnowledgeItem — KNOWLEDGE_ENGINE_DESIGN.md §3.7, §6. Nombres en inglés para
+// consistencia con el resto de enums del schema; corresponden 1:1 a los términos en español del
+// documento de diseño: UPDATES=ACTUALIZA, SPLIT_FROM=DIVIDIDO_DESDE, MERGED_FROM=FUSIONADO_DESDE,
+// DUPLICATE_OF=DUPLICADO_DE, RESTORED_FROM=RESTAURADO_DESDE.
+enum KnowledgeItemLineageEdgeType {
+  UPDATES
+  SPLIT_FROM
+  MERGED_FROM
+  DUPLICATE_OF
+  RESTORED_FROM
 }
 
 enum LlmProviderName {
@@ -214,24 +230,25 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships          Membership[]
-  invitations          Invitation[]
-  subscription         Subscription?
-  knowledgeSources     KnowledgeSource[]
-  knowledgeItems       KnowledgeItem[]
-  knowledgeCollections KnowledgeCollection[]
-  agents               Agent[]
-  agentTemplates       AgentTemplate[] // plantillas publicadas por esta organización (si visibility != PRIVATE)
-  llmProfiles          LlmProfile[]
-  conversations        Conversation[]
-  automations          Automation[]
-  reports              Report[]
-  integrations         Integration[]
-  apiKeys              ApiKey[]
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  recommendations      Recommendation[]
-  usageRecords         UsageRecord[]
+  memberships               Membership[]
+  invitations               Invitation[]
+  subscription              Subscription?
+  knowledgeSources          KnowledgeSource[]
+  knowledgeItems            KnowledgeItem[]
+  knowledgeCollections      KnowledgeCollection[]
+  knowledgeItemLineageEdges KnowledgeItemLineageEdge[]
+  agents                    Agent[]
+  agentTemplates            AgentTemplate[] // plantillas publicadas por esta organización (si visibility != PRIVATE)
+  llmProfiles               LlmProfile[]
+  conversations             Conversation[]
+  automations               Automation[]
+  reports                   Report[]
+  integrations              Integration[]
+  apiKeys                   ApiKey[]
+  notifications             Notification[]
+  auditLogs                 AuditLog[]
+  recommendations           Recommendation[]
+  usageRecords              UsageRecord[]
 
   @@index([slug])
 }
@@ -302,7 +319,7 @@ model KnowledgeSource {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization            Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Dos relaciones distintas y no intercambiables a KnowledgeItem — ver KNOWLEDGE_ENGINE_DESIGN.md
   // §3.5 (procedencia inmutable vs. ubicación actual mutable), corrección de la auditoría previa
   // a la congelación, hallazgo #1.
@@ -376,12 +393,17 @@ model KnowledgeItem {
   createdAt DateTime            @default(now())
   indexedAt DateTime?
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  originKnowledgeSource    KnowledgeSource?          @relation("KnowledgeItemOriginSource", fields: [originKnowledgeSourceId], references: [id], onDelete: SetNull)
-  originIngestionJob       IngestionJob?             @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
-  currentKnowledgeSource   KnowledgeSource?          @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originKnowledgeSource    KnowledgeSource?           @relation("KnowledgeItemOriginSource", fields: [originKnowledgeSourceId], references: [id], onDelete: SetNull)
+  originIngestionJob       IngestionJob?              @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
+  currentKnowledgeSource   KnowledgeSource?           @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
   knowledgeItemCollections KnowledgeItemCollection[]
   chunks                   KnowledgeChunk[]
+  // Grafo de linaje (§3.7, §6): "From" es el ítem que narra la relación (el nuevo/el duplicado/el
+  // restaurado), "To" es el ítem de destino (el reemplazado/el principal/el estado eliminado
+  // previo) — dirección fijada por cada escenario de §6, no simétrica.
+  lineageEdgesAsFrom       KnowledgeItemLineageEdge[] @relation("LineageEdgeFrom")
+  lineageEdgesAsTo         KnowledgeItemLineageEdge[] @relation("LineageEdgeTo")
 
   @@index([organizationId])
   @@index([originKnowledgeSourceId])
@@ -406,6 +428,30 @@ model KnowledgeItemCollection {
   @@unique([knowledgeItemId, knowledgeCollectionId])
   @@index([knowledgeCollectionId])
   @@index([organizationId])
+}
+
+// Grafo de linaje de conocimiento — KNOWLEDGE_ENGINE_DESIGN.md §3.7, §6. Solo-anexado: ninguna
+// arista se edita ni se borra nunca (aplicado a nivel de aplicación; no hay UPDATE/DELETE sobre
+// esta tabla en ningún caso de uso). Subfase 2.2 dispara automáticamente `UPDATES` desde el
+// pipeline de ingesta (nivel 2 de deduplicación, §7); `SPLIT_FROM`/`MERGED_FROM` quedan
+// disponibles como capacidad de dominio para disparo manual/explícito (§20), sin superficie de
+// API dedicada todavía; `DUPLICATE_OF` (detección retroactiva) y `RESTORED_FROM` (depende de un
+// flujo de eliminación no construido todavía) quedan solo como tipo de arista disponible.
+model KnowledgeItemLineageEdge {
+  id                  String                       @id @default(cuid())
+  organizationId      String
+  fromKnowledgeItemId String
+  toKnowledgeItemId   String
+  type                KnowledgeItemLineageEdgeType
+  createdAt           DateTime                     @default(now())
+
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromKnowledgeItem KnowledgeItem @relation("LineageEdgeFrom", fields: [fromKnowledgeItemId], references: [id], onDelete: Cascade)
+  toKnowledgeItem   KnowledgeItem @relation("LineageEdgeTo", fields: [toKnowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([fromKnowledgeItemId])
+  @@index([toKnowledgeItemId])
 }
 
 model KnowledgeChunk {

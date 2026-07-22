@@ -1,8 +1,13 @@
 // packages/database/prisma/schema.prisma
 //
-// Fuente de verdad: docs/BUSINESSBRAIN_MIGRATION_PLAN.md §6 (aprobado, congelado).
-// Este archivo debe ser una copia exacta de ese schema. Cualquier cambio de modelo
-// pasa primero por el documento — no se edita aquí de forma independiente.
+// Fuente de verdad: docs/BUSINESSBRAIN_MIGRATION_PLAN.md §6 (aprobado, congelado) para todo
+// modelo que no sea del Knowledge Engine. Para KnowledgeSource, IngestionJob, KnowledgeItem,
+// KnowledgeCollection y KnowledgeChunk, la fuente de verdad es docs/KNOWLEDGE_ENGINE_DESIGN.md
+// (Arquitectura Congelada), que reemplaza y profundiza el §6-7 de aquel documento. Cualquier
+// cambio de modelo pasa primero por el documento correspondiente — no se edita aquí de forma
+// independiente. Los modelos del Knowledge Engine se migran de forma incremental, una subfase
+// del roadmap (§19 de KNOWLEDGE_ENGINE_DESIGN.md) a la vez — ver ese documento para el estado
+// de cada subfase.
 //
 // Vive en un paquete de workspace propio (no dentro de apps/backend) para que
 // futuros workers o servicios (ver roadmap, fase de extracción de microservicios)
@@ -78,7 +83,8 @@ enum KnowledgeItemStatus {
   PROCESSING
   INDEXED
   FAILED
-  SUPERSEDED // reemplazado por una versión más reciente del mismo KnowledgeItem
+  SUPERSEDED // reemplazado por una versión más reciente del mismo KnowledgeItem (§6)
+  DELETED // baja lógica — KNOWLEDGE_ENGINE_DESIGN.md §5, no implementado todavía en Fase 2.1
 }
 
 enum LlmProviderName {
@@ -286,7 +292,7 @@ model KnowledgeSource {
   id             String              @id @default(cuid())
   organizationId String
   type           KnowledgeSourceType
-  connectorKey   String // identifica la implementación del conector, p.ej. "google_drive_v1"
+  connectorKey   String // identifica la implementación del conector, p.ej. "file_upload_v1"
   name           String
   configEnc      String // JSON cifrado: credenciales/config específica del conector
   status         ConnectionStatus    @default(PENDING)
@@ -296,9 +302,13 @@ model KnowledgeSource {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  knowledgeItems KnowledgeItem[]
-  ingestionJobs  IngestionJob[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Dos relaciones distintas y no intercambiables a KnowledgeItem — ver KNOWLEDGE_ENGINE_DESIGN.md
+  // §3.5 (procedencia inmutable vs. ubicación actual mutable), corrección de la auditoría previa
+  // a la congelación, hallazgo #1.
+  knowledgeItemsAsOrigin  KnowledgeItem[] @relation("KnowledgeItemOriginSource")
+  knowledgeItemsAsCurrent KnowledgeItem[] @relation("KnowledgeItemCurrentSource")
+  ingestionJobs           IngestionJob[]
 
   @@index([organizationId])
 }
@@ -317,6 +327,7 @@ model IngestionJob {
   finishedAt        DateTime?
 
   knowledgeSource KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+  knowledgeItems  KnowledgeItem[]
 
   @@index([knowledgeSourceId])
   @@index([organizationId])
@@ -337,37 +348,48 @@ model KnowledgeCollection {
   @@index([organizationId])
 }
 
+// Fase 2.1 (KNOWLEDGE_ENGINE_DESIGN.md §19, subfase 2.1): solo ingesta + normalización básica.
+// Sin campos de clasificación/confianza/versionado/canonicalización todavía — llegan en las
+// subfases 2.2-2.5, cada una con su propia migración acotada. `knowledgeCollectionId` y `chunks`
+// quedan declarados pero sin uso hasta sus subfases correspondientes (Collections, 2.6).
 model KnowledgeItem {
-  id                    String              @id @default(cuid())
-  organizationId        String
-  knowledgeSourceId     String?
-  knowledgeCollectionId String?
-  title                 String
-  sourceUrl             String?
-  mimeType              String?
-  sizeBytes             Int?
-  contentHash           String // hash normalizado del contenido — base de la deduplicación
-  status                KnowledgeItemStatus @default(PENDING)
-  error                 String?
-  classification        Json? // { category, tags } generado por classify-content.use-case
-  confidenceScore       Float? // 0..1, generado por score-confidence.use-case
-  version               Int                 @default(1)
-  isCanonical           Boolean             @default(true) // false si una versión más nueva la reemplazó
-  supersedesId          String?             @unique
-  createdAt             DateTime            @default(now())
-  indexedAt             DateTime?
+  id             String @id @default(cuid())
+  organizationId String
 
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  knowledgeSource     KnowledgeSource?     @relation(fields: [knowledgeSourceId], references: [id], onDelete: SetNull)
-  knowledgeCollection KnowledgeCollection? @relation(fields: [knowledgeCollectionId], references: [id], onDelete: SetNull)
-  chunks              KnowledgeChunk[]
-  supersedes          KnowledgeItem?       @relation("KnowledgeItemVersions", fields: [supersedesId], references: [id])
-  supersededBy        KnowledgeItem?       @relation("KnowledgeItemVersions")
+  // Procedencia — inmutable, fijada en la creación, nunca se actualiza tras el alta. Ubicación
+  // actual — mutable (en Fase 2.1 siempre coincide con la procedencia: la operación de "mover"
+  // de §6 no se construye todavía). KNOWLEDGE_ENGINE_DESIGN.md §3.5, corrección de la auditoría
+  // previa a la congelación, hallazgo #1.
+  originKnowledgeSourceId  String?
+  originIngestionJobId     String?
+  currentKnowledgeSourceId String?
+
+  knowledgeCollectionId String?
+
+  title       String
+  sourceUrl   String?
+  mimeType    String?
+  sizeBytes   Int?
+  contentText String // contenido normalizado — KNOWLEDGE_ENGINE_DESIGN.md §4 "Normalización"
+  contentHash String // hash del contenido normalizado; base de la deduplicación (§7), sin consumidor todavía en 2.1
+
+  status    KnowledgeItemStatus @default(PENDING)
+  error     String?
+  createdAt DateTime            @default(now())
+  indexedAt DateTime?
+
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originKnowledgeSource  KnowledgeSource?     @relation("KnowledgeItemOriginSource", fields: [originKnowledgeSourceId], references: [id], onDelete: SetNull)
+  originIngestionJob     IngestionJob?        @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
+  currentKnowledgeSource KnowledgeSource?     @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
+  knowledgeCollection    KnowledgeCollection? @relation(fields: [knowledgeCollectionId], references: [id], onDelete: SetNull)
+  chunks                 KnowledgeChunk[]
 
   @@index([organizationId])
-  @@index([knowledgeSourceId])
+  @@index([originKnowledgeSourceId])
+  @@index([currentKnowledgeSourceId])
   @@index([knowledgeCollectionId])
-  @@index([organizationId, contentHash]) // lookup rápido de duplicados por organización
+  @@index([organizationId, contentHash]) // lookup rápido de duplicados por organización (§7, desde subfase 2.2)
 }
 
 model KnowledgeChunk {

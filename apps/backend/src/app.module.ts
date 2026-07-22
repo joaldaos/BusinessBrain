@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { AdminModule } from './admin/admin.module';
 import { LlmModule } from './llm/llm.module';
+import { KnowledgeEngineModule } from './knowledge-engine/knowledge-engine.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthModule } from './health/health.module';
     OrganizationsModule,
     AdminModule,
     LlmModule,
+    KnowledgeEngineModule,
     HealthModule,
   ],
   providers: [

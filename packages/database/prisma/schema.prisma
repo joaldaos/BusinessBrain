@@ -341,17 +341,17 @@ model KnowledgeCollection {
   area           AgentArea?
   createdAt      DateTime   @default(now())
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  knowledgeItems KnowledgeItem[]
-  agents         Agent[]         @relation("AgentKnowledgeScope")
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItemCollections KnowledgeItemCollection[]
+  agents                   Agent[]                   @relation("AgentKnowledgeScope")
 
   @@index([organizationId])
 }
 
 // Fase 2.1 (KNOWLEDGE_ENGINE_DESIGN.md §19, subfase 2.1): solo ingesta + normalización básica.
 // Sin campos de clasificación/confianza/versionado/canonicalización todavía — llegan en las
-// subfases 2.2-2.5, cada una con su propia migración acotada. `knowledgeCollectionId` y `chunks`
-// quedan declarados pero sin uso hasta sus subfases correspondientes (Collections, 2.6).
+// subfases 2.2-2.5, cada una con su propia migración acotada. `chunks` queda declarado pero sin
+// uso hasta su subfase correspondiente (2.6).
 model KnowledgeItem {
   id             String @id @default(cuid())
   organizationId String
@@ -364,32 +364,48 @@ model KnowledgeItem {
   originIngestionJobId     String?
   currentKnowledgeSourceId String?
 
-  knowledgeCollectionId String?
-
   title       String
   sourceUrl   String?
   mimeType    String?
   sizeBytes   Int?
   contentText String // contenido normalizado — KNOWLEDGE_ENGINE_DESIGN.md §4 "Normalización"
-  contentHash String // hash del contenido normalizado; base de la deduplicación (§7), sin consumidor todavía en 2.1
+  contentHash String // hash del contenido normalizado; base de la deduplicación (§7)
 
   status    KnowledgeItemStatus @default(PENDING)
   error     String?
   createdAt DateTime            @default(now())
   indexedAt DateTime?
 
-  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  originKnowledgeSource  KnowledgeSource?     @relation("KnowledgeItemOriginSource", fields: [originKnowledgeSourceId], references: [id], onDelete: SetNull)
-  originIngestionJob     IngestionJob?        @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
-  currentKnowledgeSource KnowledgeSource?     @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
-  knowledgeCollection    KnowledgeCollection? @relation(fields: [knowledgeCollectionId], references: [id], onDelete: SetNull)
-  chunks                 KnowledgeChunk[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originKnowledgeSource    KnowledgeSource?          @relation("KnowledgeItemOriginSource", fields: [originKnowledgeSourceId], references: [id], onDelete: SetNull)
+  originIngestionJob       IngestionJob?             @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
+  currentKnowledgeSource   KnowledgeSource?          @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
+  knowledgeItemCollections KnowledgeItemCollection[]
+  chunks                   KnowledgeChunk[]
 
   @@index([organizationId])
   @@index([originKnowledgeSourceId])
   @@index([currentKnowledgeSourceId])
-  @@index([knowledgeCollectionId])
   @@index([organizationId, contentHash]) // lookup rápido de duplicados por organización (§7, desde subfase 2.2)
+}
+
+// Pertenencia N:M de un KnowledgeItem a una o más KnowledgeCollection — KNOWLEDGE_ENGINE_DESIGN.md
+// §3.4 exige N:M ("un mismo KnowledgeItem puede pertenecer a más de una colección"); la subfase 2.1
+// lo había modelado por error como N:1 (`KnowledgeItem.knowledgeCollectionId` escalar). Corrección
+// de la Revisión formal — Subfase 2.2, hallazgo A, aplicada como prerrequisito de esta subfase.
+model KnowledgeItemCollection {
+  id                    String   @id @default(cuid())
+  knowledgeItemId       String
+  knowledgeCollectionId String
+  organizationId        String
+  createdAt             DateTime @default(now())
+
+  knowledgeItem       KnowledgeItem       @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  knowledgeCollection KnowledgeCollection @relation(fields: [knowledgeCollectionId], references: [id], onDelete: Cascade)
+
+  @@unique([knowledgeItemId, knowledgeCollectionId])
+  @@index([knowledgeCollectionId])
+  @@index([organizationId])
 }
 
 model KnowledgeChunk {

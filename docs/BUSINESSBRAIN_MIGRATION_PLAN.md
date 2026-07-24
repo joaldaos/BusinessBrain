@@ -126,6 +126,36 @@ El chat, los agentes, las automatizaciones y los informes son **consumidores del
 | Frontend | **React + TypeScript** (migración de JS a TS), Vite, TanStack Query para estado de servidor | TypeScript es necesario dado el volumen de tipos compartidos con el backend (DTOs); TanStack Query sustituye el fetch manual actual en `AppContext.jsx`. |
 | **Extensibilidad de agentes** *(v1.1)* | `AgentTemplate` modelado desde ahora (visibilidad `PRIVATE/ORGANIZATION/PUBLIC`, `publisherOrgId` opcional), sin construir marketplace todavía | Añadir esto después de tener `Agent` en producción obligaría a una migración de datos; modelarlo ahora tiene coste marginal. |
 
+### 3.2 Principios permanentes de producto
+
+Principios que aplican a BusinessBrain como producto completo — no a un módulo concreto — y que, como tales, se referencian desde cualquier documento de arquitectura de un subsistema en vez de repetirse en cada uno.
+
+#### Principio de Evolución Asistida
+
+BusinessBrain está diseñado para evolucionar continuamente junto con la empresa y con su entorno. No debe limitarse a ejecutar procesos existentes; debe ser capaz de detectar oportunidades objetivas de mejora en la organización, en sus procesos, en su conocimiento y en las tecnologías que utiliza.
+
+Para ello podrá analizar de forma continua, entre otros aspectos: cambios en el negocio, cambios legislativos, nuevas tecnologías, nuevas integraciones disponibles, cambios en los hábitos de clientes, cambios en procesos internos, pérdida de eficiencia, redundancias, conocimiento obsoleto y nuevas oportunidades detectadas.
+
+**Aislamiento multi-tenant.** Todo análisis que compare señales entre distintas organizaciones se realiza sobre datos agregados o anonimizados — nunca exponiendo el contexto específico de una organización a otra. Esto extiende a nivel de producto el mismo principio ya exigido como requisito de diseño del Knowledge Engine ("Multi-tenant por diseño", `KNOWLEDGE_ENGINE_DESIGN.md` §2): ninguna capacidad de análisis, ni siquiera una agregada, puede filtrar el contexto de una organización hacia otra.
+
+Cuando detecte una mejora relevante deberá:
+1. Explicar qué ha detectado.
+2. Justificar por qué considera que es una mejora.
+3. Estimar el impacto esperado.
+4. Explicar ventajas e inconvenientes.
+5. Indicar qué partes del sistema se verían afectadas.
+6. Proponer un plan de migración. Este apartado nunca se omite: si el cambio propuesto no requiere migración, el apartado se completa explícitamente como *"Plan de migración: no aplica (sin impacto estructural)"*, en vez de dejarse en blanco u omitirse. El formato de toda propuesta es siempre el mismo, precisamente para que decidir si el plan de migración "hace falta" nunca quede a criterio de quien genera la propuesta.
+
+**Regla fundamental.** BusinessBrain puede proponer mejoras en cualquier momento. BusinessBrain nunca modificará automáticamente la arquitectura, el modelo de conocimiento, los procesos, las reglas de negocio ni el comportamiento operativo sin aprobación explícita de la empresa. Debe existir siempre trazabilidad completa de cualquier evolución. Los criterios que determinan si una mejora es "relevante" son configuración explícita, ajustable por organización, con valores por defecto de plataforma — nunca constantes fijadas en el código, mismo criterio ya exigido para los umbrales cualitativos del Knowledge Engine (`KNOWLEDGE_ENGINE_DESIGN.md`, hallazgo #10 de la auditoría previa a la congelación).
+
+**Vehículo de producto.** La entidad `Recommendation` (`NEW`/`ACCEPTED`/`DISMISSED`, ver §6 y §7.2) es el vehículo por el que estas propuestas se presentan a la empresa. El mecanismo "Propuestas para Fase 3" del Knowledge Engine es su variante acotada al desarrollo interno, para hallazgos de arquitectura detectados por el propio equipo durante la implementación. Ambos son expresiones del mismo principio — proponer, nunca imponer, siempre trazable — no mecanismos independientes ni redundantes entre sí.
+
+**Filosofía.** BusinessBrain no pretende convertirse en un software estático. Su objetivo es convertirse en un sistema operativo empresarial capaz de evolucionar durante años sin quedarse obsoleto. La evolución continua es una capacidad del sistema. La decisión de evolucionar siempre pertenece a la empresa.
+
+Esto refleja el objetivo de fondo de todo el producto, más allá de la capacidad concreta de proponer mejoras: **BusinessBrain no tiene como objetivo responder preguntas — tiene como objetivo comprender el funcionamiento completo de una empresa y trabajar de forma proactiva para mejorarla.** Toda propuesta de mejora generada bajo este principio se evalúa según un único criterio: *¿ayuda a que BusinessBrain comprenda mejor la empresa y pueda trabajar mejor para ella?* Si la respuesta es no, esa funcionalidad no forma parte de la visión del producto, con independencia de su elegancia técnica o de lo sencilla que sea de construir.
+
+> **Relación con el principio ya existente en el Knowledge Engine.** `KNOWLEDGE_ENGINE_DESIGN.md` §2 fija un principio equivalente pero de alcance distinto: *"toda decisión [de diseño o implementación, de cualquier módulo] se evalúa por su aporte a la comprensión del negocio."* Ese principio gobierna las decisiones de quienes construyen BusinessBrain (en tiempo de desarrollo); el criterio de esta sección gobierna lo que el propio BusinessBrain, ya en producción, decide proponerle a la empresa (en tiempo de ejecución). Son dos aplicaciones del mismo valor de fondo, sobre dos actores y dos momentos distintos — quién decide qué construir, y qué decide proponer el sistema una vez construido — no una duplicación.
+
 ---
 
 ## 4. Estructura definitiva del backend (NestJS)

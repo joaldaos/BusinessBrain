@@ -32,5 +32,6 @@ import { LlmModule } from '../llm/llm.module';
     ConnectorRegistry,
     EncryptionService,
   ],
+  exports: [RetrieveContextUseCase],
 })
 export class KnowledgeEngineModule {}

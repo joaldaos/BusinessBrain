@@ -30,11 +30,14 @@ La división es estricta y no debe difuminarse:
 | Subfase | Estado | Contenido |
 |---|---|---|
 | 3.1 | ✅ | `AnalysisRun` + `Insight` con identidad de sujeto, estrategia simbólica sobre señales, idempotencia bajo concurrencia |
-| 3.2 | ⬜ | `BusinessObjective` y el gate de Riesgo/Oportunidad |
-| 3.3 | ⬜ | Razonamiento generativo con traza obligatoria |
-| 3.4 | ⬜ | Confianza compuesta viva y frescura derivada |
-| 3.5 | ⬜ | Curación humana y puente a `Recommendation` |
-| 3.6 | ⬜ | `RetrieveInsights`, sin consumidores conectados |
+| 3.2 | ✅ | `BusinessObjective` y el gate de Riesgo/Oportunidad |
+| 3.3 | ✅ | Razonamiento generativo con traza obligatoria |
+| 3.4 | ✅ | Confianza viva y `EvidenceFreshness` como proyección en lectura |
+| 3.5 | ✅ | Curación humana y puente a `Recommendation` |
+| 3.6 | ✅ | `RetrieveInsights`, sin consumidores conectados |
+
+**Fase 3 completa.** El siguiente paso es la Fase 4: superficies conversacionales sobre
+`RetrieveInsights`, nunca directamente sobre el Retriever.
 
 ## Invariantes que ya sostiene el código
 
@@ -50,14 +53,22 @@ La división es estricta y no debe difuminarse:
   frescura es una proyección derivada en lectura, nunca un estado persistido.
 - **El tipo nunca forma parte de la identidad de sujeto** (§8): un mismo asunto pasa de
   `ANOMALY` a `RISK` cuando aparece un `BusinessObjective` confirmado que lo hace relevante.
+- **La obsolescencia se evalúa, nunca se propaga** (§3.4): la frescura se determina
+  consultando el estado actual de la evidencia en el momento de leer. Un modelo de
+  propagación se degrada silenciosamente ante un evento perdido o una cascada truncada, y
+  el estado erróneo resultante es indistinguible del correcto.
+- **Crear una `Recommendation` no ejecuta nada** (§11): solo la registra en estado `NEW`
+  para revisión humana. El plan de migración nunca se omite: si no aplica, se declara.
+- **La curación humana es pegajosa** (§3.7): tiene prioridad sobre cualquier recálculo
+  automático hasta que se revoca. Revocar crea una entrada nueva, nunca borra la anterior.
 
-## Prerrequisitos bloqueantes de subfases futuras
+## Bloqueante resuelto
 
-- **Subfase 3.5** — el esquema de `Recommendation` no preserva el contrato del dominio: le
-  faltan los campos estructurados del Principio de Evolución Asistida, el
-  `EffectiveCollectionScope` y la referencia al `Insight` de origen. Es una única migración,
-  propiedad del `RecommendationsModule`, y debe resolverse antes de tocar
-  `EscalateInsightToRecommendation`.
+- **El esquema de `Recommendation` ya preserva el contrato del dominio** (resuelto en la
+  subfase 3.5). Se añadieron los seis campos estructurados del Principio de Evolución
+  Asistida, el `effectiveCollectionScope` y el `sourceInsightId`. Sin ese alcance
+  propagado, escalar sería una vía de blanqueo: convertiría una conclusión sostenida por
+  evidencia restringida en una entidad de otro dominio sin ninguna acotación.
 
 ## Pendiente de entorno
 

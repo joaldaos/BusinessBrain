@@ -4,6 +4,13 @@ import { PrismaKnowledgeSignalsAdapter } from './infrastructure/prisma-knowledge
 import { KnowledgeSignalStrategy } from './infrastructure/strategies/knowledge-signal.strategy';
 import { TriggerAnalysisRunUseCase } from './application/trigger-analysis-run.use-case';
 import { BusinessObjectiveService } from './application/business-objective.service';
+import { KNOWLEDGE_RETRIEVAL_PORT } from './domain/ports/knowledge-retrieval.port';
+import { RetrieverKnowledgeRetrievalAdapter } from './infrastructure/retriever-knowledge-retrieval.adapter';
+import { GenerativeSynthesisStrategy } from './infrastructure/strategies/generative-synthesis.strategy';
+import { RetrieveInsightsUseCase } from './application/retrieve-insights.use-case';
+import { CurateInsightUseCase } from './application/curate-insight.use-case';
+import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
+import { LlmModule } from '../llm/llm.module';
 
 /**
  * Understanding Engine — Fase 3.
@@ -15,22 +22,38 @@ import { BusinessObjectiveService } from './application/business-objective.servi
  * (Retriever y la superficie de metadatos de KNOWLEDGE_ENGINE_DESIGN.md §13.1); nunca
  * accede a `KnowledgeChunk` ni al almacén vectorial por su cuenta.
  *
- * Subfase 3.1 completa: `AnalysisRun` + `Insight` con identidad de sujeto, una estrategia
- * simbólica sobre las señales del Knowledge Engine, y persistencia idempotente bajo
- * concurrencia. Sin controladores — `RetrieveInsights` se valida como capacidad interna en
- * la subfase 3.6 y no se expone a ninguna superficie de consumo en esta fase (§18).
+ * Fase 3 completa (3.1–3.6): razonamiento sobre señales y generativo, `BusinessObjective`
+ * con su gate, confianza viva con frescura derivada, curación humana, puente con
+ * `Recommendation` y `RetrieveInsights`.
+ *
+ * SIN CONTROLADORES, deliberadamente: `RetrieveInsights` se valida como capacidad interna y
+ * no se expone a ninguna superficie de consumo en esta fase (§18). El chat y el resto de
+ * superficies conversacionales se construyen sobre ella en la Fase 4.
  */
 @Module({
+  imports: [KnowledgeEngineModule, LlmModule],
   controllers: [],
   providers: [
     {
       provide: KNOWLEDGE_SIGNALS_PORT,
       useClass: PrismaKnowledgeSignalsAdapter,
     },
+    {
+      provide: KNOWLEDGE_RETRIEVAL_PORT,
+      useClass: RetrieverKnowledgeRetrievalAdapter,
+    },
     KnowledgeSignalStrategy,
+    GenerativeSynthesisStrategy,
     TriggerAnalysisRunUseCase,
     BusinessObjectiveService,
+    RetrieveInsightsUseCase,
+    CurateInsightUseCase,
   ],
-  exports: [TriggerAnalysisRunUseCase, BusinessObjectiveService],
+  exports: [
+    TriggerAnalysisRunUseCase,
+    BusinessObjectiveService,
+    RetrieveInsightsUseCase,
+    CurateInsightUseCase,
+  ],
 })
 export class UnderstandingEngineModule {}

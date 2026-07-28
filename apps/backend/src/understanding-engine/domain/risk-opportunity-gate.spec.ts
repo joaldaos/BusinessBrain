@@ -131,7 +131,7 @@ describe('applyRiskOpportunityGate (§8)', () => {
   it('es determinista: la misma entrada produce la misma decisión', () => {
     const input = {
       type: InsightType.RISK,
-      degradesTo: InsightType.ANOMALY as const,
+      degradesTo: InsightType.ANOMALY,
       confirmedObjectiveIds: ['obj-1'],
     };
 

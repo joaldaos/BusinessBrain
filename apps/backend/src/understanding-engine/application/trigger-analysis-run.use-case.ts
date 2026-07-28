@@ -16,6 +16,7 @@ import type {
 } from '../domain/ports/reasoning-strategy.port';
 import { KnowledgeSignalStrategy } from '../infrastructure/strategies/knowledge-signal.strategy';
 import { BusinessObjectiveService } from './business-objective.service';
+import { GenerativeSynthesisStrategy } from '../infrastructure/strategies/generative-synthesis.strategy';
 import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
 
 /**
@@ -57,6 +58,7 @@ export class TriggerAnalysisRunUseCase {
     private readonly knowledgeSignals: KnowledgeSignalsPort,
     private readonly signalStrategy: KnowledgeSignalStrategy,
     private readonly businessObjectives: BusinessObjectiveService,
+    private readonly generativeStrategy: GenerativeSynthesisStrategy,
   ) {}
 
   async execute(params: TriggerAnalysisRunParams): Promise<AnalysisRunResult> {
@@ -75,15 +77,25 @@ export class TriggerAnalysisRunUseCase {
         since: params.since,
       });
 
-      const strategies: ReasoningStrategyPort[] = [this.signalStrategy];
-      const candidates: InsightCandidate[] = [];
+      // Cada candidato conserva la estrategia que lo generó: su fiabilidad base entra en
+      // la composición de confianza (§9), y una conclusión generada no puede pesar lo
+      // mismo que un hecho verificado.
+      const strategies: ReasoningStrategyPort[] = [
+        this.signalStrategy,
+        this.generativeStrategy,
+      ];
+      const candidates: {
+        candidate: InsightCandidate;
+        strategy: ReasoningStrategyPort;
+      }[] = [];
 
       for (const strategy of strategies) {
+        const produced = await strategy.generate({
+          organizationId: params.organizationId,
+          signals,
+        });
         candidates.push(
-          ...(await strategy.generate({
-            organizationId: params.organizationId,
-            signals,
-          })),
+          ...produced.map((candidate) => ({ candidate, strategy })),
         );
       }
 
@@ -97,12 +109,12 @@ export class TriggerAnalysisRunUseCase {
       let created = 0;
       let alreadyKnown = 0;
 
-      for (const candidate of candidates) {
+      for (const { candidate, strategy } of candidates) {
         const persisted = await this.persistCandidate({
           organizationId: params.organizationId,
           analysisRunId: run.id,
           candidate,
-          strategy: this.signalStrategy,
+          strategy,
           confirmedObjectiveIds: confirmedObjectives.map((o) => o.id),
         });
         if (persisted) created += 1;

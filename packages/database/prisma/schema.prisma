@@ -744,10 +744,36 @@ model Recommendation {
   createdAt      DateTime             @default(now())
   resolvedAt     DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  agent        Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  // ── Contrato del Principio de Evolucion Asistida ────────────────────────
+  // BUSINESSBRAIN_MIGRATION_PLAN.md §3.2 exige SEIS puntos en toda propuesta. Hasta esta
+  // migracion solo cabian como texto libre en `description`, lo que contradecia la
+  // exigencia de estructura. Cierra el bloqueante documentado de la subfase 3.5.
+  detected          String? // que se ha detectado
+  justification     String? // por que se considera una mejora
+  estimatedImpact   String? // impacto esperado
+  advantages        String? // ventajas
+  drawbacks         String? // inconvenientes
+  affectedAreas     String? // que partes del sistema se verian afectadas
+  // NUNCA se omite: si el cambio no requiere migracion, se completa explicitamente como
+  // "no aplica", en vez de dejarse en blanco (§3.2).
+  migrationPlan     String?
+
+  // ── Trazabilidad hasta la comprension que la origino ────────────────────
+  // Sin esta referencia es imposible saber si una recomendacion pendiente se apoya en
+  // comprension que ya colapso (UNDERSTANDING_ENGINE_DESIGN.md §21, hallazgo 12).
+  sourceInsightId String?
+
+  // Alcance derivado heredado del Insight de origen (§3.4, §3.8). Sin el, escalar seria una
+  // via de blanqueo: convertiria una conclusion de evidencia restringida en una entidad sin
+  // ninguna acotacion.
+  effectiveCollectionScope String[] @default([])
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent         Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  sourceInsight Insight?     @relation(fields: [sourceInsightId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([sourceInsightId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1073,6 +1099,40 @@ model InsightObjectiveLink {
   @@index([businessObjectiveId])
 }
 
+// Tipo de curacion humana sobre un Insight — UNDERSTANDING_ENGINE_DESIGN.md §3.7.
+enum InsightFeedbackType {
+  CONFIRMATION // una persona valida el hallazgo
+  DISMISSAL // una persona lo rechaza
+  CORRECTION // una persona corrige su contenido o su clasificacion
+  REVOCATION // se revoca una curacion anterior; NO borra el registro previo
+}
+
+// Curacion humana sobre un Insight — UNDERSTANDING_ENGINE_DESIGN.md §3.7.
+//
+// Una vez registrada tiene PRIORIDAD sobre cualquier recalculo automatico posterior hasta
+// que se revoca explicitamente. Registro de solo-anexado: revocar crea una entrada nueva,
+// nunca borra la anterior — mismo principio de no sobrescribir que rige todo el sistema.
+model InsightFeedback {
+  id             String @id @default(cuid())
+  organizationId String
+  insightId      String
+
+  type    InsightFeedbackType
+  comment String?
+  // Entrada que esta revocacion deja sin efecto (solo para type = REVOCATION).
+  revokesFeedbackId String? @unique
+
+  actorUserId String
+  createdAt   DateTime @default(now())
+
+  insight  Insight          @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  revokes  InsightFeedback? @relation("FeedbackRevocation", fields: [revokesFeedbackId], references: [id], onDelete: SetNull)
+  revokedBy InsightFeedback? @relation("FeedbackRevocation")
+
+  @@index([insightId, createdAt])
+  @@index([organizationId])
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Understanding Engine — Fase 3, subfase 3.1
 // Especificación: docs/UNDERSTANDING_ENGINE_DESIGN.md (🧊 congelada v1.0)
@@ -1202,6 +1262,11 @@ model Insight {
 
   supersedesInsightId String? @unique
 
+  // Momento del ultimo calculo de confianza. Base del decaimiento (§9) Y de la frescura
+  // (§3.4): la evidencia que haya cambiado DESPUES de este instante hace que el Insight se
+  // lea como no fresco, sin depender de que ninguna cascada asincrona llegue.
+  confidenceComputedAt DateTime @default(now())
+
   createdAt DateTime @default(now())
 
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1211,6 +1276,8 @@ model Insight {
   evidence        InsightEvidence[]
   citedAsEvidence InsightEvidence[] @relation("InsightAsEvidence")
   objectiveLinks  InsightObjectiveLink[]
+  feedback        InsightFeedback[]
+  recommendations Recommendation[]
 
   @@index([organizationId])
   @@index([analysisRunId])

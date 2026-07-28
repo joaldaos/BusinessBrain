@@ -27,6 +27,7 @@ describe('IngestFromSourceUseCase', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
+    confidenceEvent: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let classifyContent: { execute: jest.Mock };
@@ -64,6 +65,7 @@ describe('IngestFromSourceUseCase', () => {
         findUnique: jest.fn().mockResolvedValue({ classificationSource: null }),
         update: jest.fn().mockResolvedValue({}),
       },
+      confidenceEvent: { create: jest.fn().mockResolvedValue({}) },
       $transaction: jest.fn(),
     };
     connectorRegistry = { get: jest.fn() };

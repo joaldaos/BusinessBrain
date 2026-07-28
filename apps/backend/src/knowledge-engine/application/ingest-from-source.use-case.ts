@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ClassificationSource,
+  ConfidenceEventType,
   ConnectionStatus,
   IngestionTriggerType,
   KnowledgeItemStatus,
@@ -436,6 +437,17 @@ export class IngestFromSourceUseCase {
       classificationCertainty: classification?.certainty ?? null,
       contentText: params.contentText,
       title: params.title,
+    });
+
+    await this.prisma.confidenceEvent.create({
+      data: {
+        organizationId: params.organizationId,
+        knowledgeItemId: params.knowledgeItemId,
+        type: ConfidenceEventType.INITIAL,
+        previousScore: null,
+        newScore: confidence.score,
+        detail: confidence.factors as unknown as Prisma.InputJsonValue,
+      },
     });
 
     await this.prisma.knowledgeItem.update({

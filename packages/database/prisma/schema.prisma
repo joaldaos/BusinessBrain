@@ -80,6 +80,17 @@ enum ClassificationSource {
   MANUAL
 }
 
+// Qué disparó un recálculo de confianza — KNOWLEDGE_ENGINE_DESIGN.md §8.2, §8.4.
+// La confianza es auditable: no solo su valor actual, también su historia y el motivo
+// de cada cambio.
+enum ConfidenceEventType {
+  INITIAL // cálculo al indexar (§8.1)
+  TEMPORAL_DECAY // barrido periódico de envejecimiento (§8.3)
+  SOURCE_DISCONNECTED // la KnowledgeSource de origen entró en ERROR o se deshabilitó (§8.2)
+  MANUAL_OVERRIDE // curación humana: fijación explícita del score (§8.2)
+  MANUAL_REVOKED // se revoca una fijación manual y el ítem vuelve al cálculo automático
+}
+
 enum IngestionTriggerType {
   MANUAL
   SCHEDULE
@@ -421,6 +432,12 @@ model KnowledgeItem {
   // ── Confianza (§3.9, §8.1) — subfase 2.3: solo el cálculo inicial ───────
   // Score normalizado [0,1]. Valor VIVO: en 2.4 se le añaden decaimiento y recálculo
   // por evento; aquí solo nace.
+  // Fijación manual (§8.2, "Curación humana"): tiene PRIORIDAD sobre cualquier recálculo
+  // automático hasta que se revoca explícitamente. El decaimiento no la toca.
+  confidenceIsManual   Boolean   @default(false)
+  confidenceManualById String?
+  confidenceManualAt   DateTime?
+
   confidenceScore   Float?
   // Factores que lo componen, visibles y auditables — la confianza es explicable, no
   // solo un número (§8.4: "auditable, no solo el número actual sino su historia").
@@ -432,6 +449,7 @@ model KnowledgeItem {
   originIngestionJob       IngestionJob?              @relation(fields: [originIngestionJobId], references: [id], onDelete: SetNull)
   currentKnowledgeSource   KnowledgeSource?           @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
   taxonomyNode             TaxonomyNode?              @relation(fields: [taxonomyNodeId], references: [id], onDelete: SetNull)
+  confidenceEvents         ConfidenceEvent[]
   knowledgeItemCollections KnowledgeItemCollection[]
   chunks                   KnowledgeChunk[]
   // Grafo de linaje (§3.7, §6): "From" es el ítem que narra la relación (el nuevo/el duplicado/el
@@ -446,6 +464,30 @@ model KnowledgeItem {
   @@index([organizationId, contentHash]) // lookup rápido de duplicados por organización (§7, desde subfase 2.2)
   @@index([taxonomyNodeId])
   @@index([organizationId, businessArea]) // alcance de agentes por área (§9)
+  // Barrido de decaimiento (§8.3): recorre ítems activos por fecha de último cálculo.
+  @@index([organizationId, confidenceComputedAt])
+}
+
+// Historial de la confianza — KNOWLEDGE_ENGINE_DESIGN.md §8.4: "Cada recálculo queda
+// registrado con la fecha y el factor que lo disparó — la confianza es auditable, no solo
+// el número actual sino su historia". Registro de solo-anexado: nunca se edita ni se borra.
+model ConfidenceEvent {
+  id              String @id @default(cuid())
+  organizationId  String
+  knowledgeItemId String
+
+  type          ConfidenceEventType
+  previousScore Float?
+  newScore      Float
+  // Factores que compusieron el nuevo score, o el motivo de la fijación manual.
+  detail        Json
+  actorUserId   String?
+  createdAt     DateTime            @default(now())
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeItemId, createdAt])
+  @@index([organizationId])
 }
 
 // Pertenencia N:M de un KnowledgeItem a una o más KnowledgeCollection — KNOWLEDGE_ENGINE_DESIGN.md

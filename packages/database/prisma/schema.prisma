@@ -248,6 +248,8 @@ model Organization {
   notifications             Notification[]
   auditLogs                 AuditLog[]
   recommendations           Recommendation[]
+  analysisRuns              AnalysisRun[]
+  insights                  Insight[]
   usageRecords              UsageRecord[]
 
   @@index([slug])
@@ -781,4 +783,176 @@ model UsageRecord {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, metric, periodStart])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Understanding Engine — Fase 3, subfase 3.1
+// Especificación: docs/UNDERSTANDING_ENGINE_DESIGN.md (🧊 congelada v1.0)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Qué disparó una ejecución de razonamiento — UNDERSTANDING_ENGINE_DESIGN.md §3.1, §4.
+enum AnalysisRunTrigger {
+  PERIODIC_SWEEP // barrido periódico sobre organizaciones con ReasoningProfile habilitado
+  KNOWLEDGE_SIGNAL // evento del Knowledge Engine observado vía KnowledgeSignalsPort (§13)
+  MANUAL // ejecución solicitada explícitamente
+}
+
+// Ciclo de vida de un AnalysisRun — §3.1. Equivalente exacto de IngestionJobStatus.
+enum AnalysisRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED // total o parcial: un fallo parcial registra qué falló sin descartar lo procesado
+}
+
+// Tipos de Insight — §3.4. Regla de clasificación: todo tipo nuevo debe declarar
+// explícitamente si exige un BusinessObjective CONFIRMED vinculado (§8). RISK y
+// OPPORTUNITY lo exigen; PATTERN y ANOMALY no (§7).
+enum InsightType {
+  PATTERN
+  ANOMALY
+  RISK
+  OPPORTUNITY
+}
+
+// Estatus EPISTÉMICO de un Insight — §5. Describe qué sabemos de la validez de la
+// conclusión, nunca la frescura de su cómputo: esa es EvidenceFreshness, una proyección
+// derivada en lectura (§3.4) que deliberadamente NO se persiste como estado.
+// Terminales: SUPERSEDED, DISCARDED, EXPIRED. Todo estado nuevo debe clasificarse
+// explícitamente como activo o terminal, verificado en CI — nunca por omisión.
+enum InsightStatus {
+  CANDIDATE // generado dentro de un AnalysisRun, aún no persistido como conocimiento vivo
+  ACTIVE // único estado activo persistido
+  SUPERSEDED // un Insight posterior con la misma subjectIdentity lo reemplazó
+  DISCARDED // curación humana (§3.7, subfase 3.5)
+  EXPIRED // un recálculo confirmó que el asunto ya no se sostiene
+}
+
+// Rol que juega una pieza de evidencia en el razonamiento — §3.5.
+enum InsightEvidenceRole {
+  BASELINE
+  DEVIATION
+  CORROBORATION
+  CONTRADICTION
+}
+
+// Naturaleza de la evidencia referenciada — §3.5. DERIVED_INSIGHT nunca es evidencia
+// primaria y degrada confianza en cada eslabón (§9).
+enum InsightEvidenceKind {
+  KNOWLEDGE_ITEM
+  KNOWLEDGE_CHUNK
+  CANONICAL_ENTITY // Canonical Knowledge Entity — modelado en subfase 2.5
+  DERIVED_INSIGHT
+}
+
+// Registra una única ejecución del pipeline de razonamiento para una organización — §3.1.
+// Varios AnalysisRun simultáneos por organización son legítimos y NO se serializan: la
+// corrección bajo concurrencia se obtiene de la unicidad de subjectIdentity y de que los
+// baselines sean derivados, no de restringir la ejecución (§3.1, §6, §12).
+model AnalysisRun {
+  id             String @id @default(cuid())
+  organizationId String
+
+  trigger AnalysisRunTrigger
+  status  AnalysisRunStatus  @default(PENDING)
+
+  // Estadísticas de cierre (§4). Nunca se modifican tras terminar: registro histórico inmutable.
+  candidatesGenerated Int @default(0)
+  insightsCreated     Int @default(0)
+  insightsSuperseded  Int @default(0)
+  insightsQueued      Int @default(0) // encolados para recálculo proactivo (§5)
+
+  error       String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  insights     Insight[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+// Unidad atómica de comprensión derivada — §3.4.
+model Insight {
+  id             String @id @default(cuid())
+  organizationId String
+  analysisRunId  String
+
+  // Identidad de sujeto (§3.4): declara DE QUÉ ASUNTO trata, y sostiene supersesión,
+  // corroboración, contradicción, agrupación e idempotencia. Es una declaración
+  // epistémica (continuidad entre afirmaciones), nunca una detección de la realidad.
+  // Ante duda, la estrategia acuña una identidad nueva: JAMÁS fusiona por aproximación.
+  // El tipo nunca forma parte de la identidad — un mismo sujeto pasa de ANOMALY a RISK
+  // cuando aparece un BusinessObjective CONFIRMED que lo hace relevante (§8).
+  subjectIdentity String
+
+  type    InsightType
+  summary String // resumen legible de la conclusión
+  status  InsightStatus @default(CANDIDATE)
+
+  // Mecanismo y versión que lo generó (§10) — obligatorio para trazabilidad, mismo
+  // criterio que un Embedding registra su modelo (KNOWLEDGE_ENGINE_DESIGN.md §3.11).
+  strategyKey     String
+  strategyVersion String
+
+  // Traza de razonamiento estructurada (§10), obligatoria y nunca texto libre sin
+  // estructura. Su forma depende de la categoría de estrategia (§6).
+  reasoningTrace Json
+
+  // Confianza compuesta (§9): mín(confianza de evidencia primaria) × fiabilidad de la
+  // estrategia. BusinessObjective NUNCA participa en este cálculo: es un gate booleano.
+  confidence Float
+
+  // Cierre transitivo de la evidencia (§3.4): conjunto plano e INMUTABLE de todo lo que
+  // sostiene el razonamiento — evidencia de conocimiento y los Insight citados. Es
+  // función pura de un grafo inmutable y acíclico, por eso puede materializarse. Sobre
+  // él se proyectan en lectura EffectiveCollectionScope y EvidenceFreshness, que nunca
+  // se persisten como fuente de verdad.
+  transitiveEvidenceClosure Json
+
+  supersedesInsightId String? @unique
+
+  createdAt DateTime @default(now())
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  analysisRun     AnalysisRun       @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  supersedes      Insight?          @relation("InsightSupersession", fields: [supersedesInsightId], references: [id], onDelete: SetNull)
+  supersededBy    Insight?          @relation("InsightSupersession")
+  evidence        InsightEvidence[]
+  citedAsEvidence InsightEvidence[] @relation("InsightAsEvidence")
+
+  @@index([organizationId])
+  @@index([analysisRunId])
+  @@index([organizationId, status])
+  // La unicidad real es PARCIAL — (organizationId, subjectIdentity) excluyendo estados
+  // terminales — y no es expresable en Prisma: se crea a mano en la migración SQL.
+  @@index([organizationId, subjectIdentity])
+}
+
+// Trazabilidad entre un Insight y lo que lo sostiene — §3.5. Inmutable: el grafo de
+// evidencia es acíclico por construcción (solo referencia Insight YA persistidos) y
+// ortogonal al linaje de supersesión; ambos nunca se recorren juntos.
+model InsightEvidence {
+  id        String @id @default(cuid())
+  insightId String
+
+  kind InsightEvidenceKind
+  role InsightEvidenceRole
+
+  // Referencia polimórfica a la pieza de evidencia. Exactamente una está informada,
+  // según `kind` — validado en dominio y por restricción CHECK en la migración.
+  knowledgeItemId  String?
+  knowledgeChunkId String?
+  derivedInsightId String?
+
+  createdAt DateTime @default(now())
+
+  insight        Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  derivedInsight Insight? @relation("InsightAsEvidence", fields: [derivedInsightId], references: [id], onDelete: Restrict)
+
+  @@index([insightId])
+  @@index([knowledgeItemId])
+  @@index([derivedInsightId])
 }

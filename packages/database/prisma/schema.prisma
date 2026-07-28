@@ -559,12 +559,28 @@ model KnowledgeChunk {
   embedding       Unsupported("vector(1536)")
   createdAt       DateTime                    @default(now())
 
+  // Modelo y versión que generaron el vector — OBLIGATORIO, no opcional
+  // (KNOWLEDGE_ENGINE_DESIGN.md §3.11, §12): vectores de modelos distintos no son
+  // comparables entre sí y nunca deben mezclarse en una misma búsqueda de similitud.
+  embeddingModel   String
+  embeddingVersion String
+
+  // Hash del contenido canónico del fragmento (§3.12). Permite reutilizar el CÓMPUTO del
+  // vector cuando un fragmento idéntico ya fue vectorizado (§7, "duplicados parciales") —
+  // se evita la llamada al proveedor, nunca se comparte el registro Embedding: cada chunk
+  // conserva el suyo (§3.11, hallazgo #4 de la auditoría).
+  contentHash String
+
   knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
   // Índice HNSW sobre `embedding` creado vía migración SQL manual:
   // CREATE INDEX ON "KnowledgeChunk" USING hnsw (embedding vector_cosine_ops);
 
   @@index([organizationId])
   @@index([knowledgeItemId])
+  // Un KnowledgeItem no puede tener dos fragmentos en la misma posición.
+  @@unique([knowledgeItemId, chunkIndex])
+  // Cache de cómputo de vectores por contenido idéntico dentro de la organización (§7).
+  @@index([organizationId, contentHash, embeddingModel])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

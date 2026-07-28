@@ -15,6 +15,8 @@ import type {
   ReasoningStrategyPort,
 } from '../domain/ports/reasoning-strategy.port';
 import { KnowledgeSignalStrategy } from '../infrastructure/strategies/knowledge-signal.strategy';
+import { BusinessObjectiveService } from './business-objective.service';
+import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
 
 /**
  * Ejecuta un ciclo completo de razonamiento — UNDERSTANDING_ENGINE_DESIGN.md §4, §12.
@@ -54,6 +56,7 @@ export class TriggerAnalysisRunUseCase {
     @Inject(KNOWLEDGE_SIGNALS_PORT)
     private readonly knowledgeSignals: KnowledgeSignalsPort,
     private readonly signalStrategy: KnowledgeSignalStrategy,
+    private readonly businessObjectives: BusinessObjectiveService,
   ) {}
 
   async execute(params: TriggerAnalysisRunParams): Promise<AnalysisRunResult> {
@@ -84,6 +87,13 @@ export class TriggerAnalysisRunUseCase {
         );
       }
 
+      // Objetivos que pueden anclar un juicio de valor: CONFIRMADOS y vigentes (§3.6).
+      // Se resuelven una vez por ejecución, no por candidato.
+      const confirmedObjectives =
+        await this.businessObjectives.listConfirmedAndCurrent(
+          params.organizationId,
+        );
+
       let created = 0;
       let alreadyKnown = 0;
 
@@ -93,6 +103,7 @@ export class TriggerAnalysisRunUseCase {
           analysisRunId: run.id,
           candidate,
           strategy: this.signalStrategy,
+          confirmedObjectiveIds: confirmedObjectives.map((o) => o.id),
         });
         if (persisted) created += 1;
         else alreadyKnown += 1;
@@ -150,8 +161,17 @@ export class TriggerAnalysisRunUseCase {
     analysisRunId: string;
     candidate: InsightCandidate;
     strategy: ReasoningStrategyPort;
+    confirmedObjectiveIds: string[];
   }): Promise<boolean> {
     const { candidate, strategy } = params;
+
+    // Gate de Riesgo/Oportunidad (§8): se aplica en el PIPELINE, nunca como convención de
+    // las estrategias — ninguna, presente o futura, puede saltárselo.
+    const gate = applyRiskOpportunityGate({
+      type: candidate.type,
+      degradesTo: candidate.degradesTo,
+      confirmedObjectiveIds: params.confirmedObjectiveIds,
+    });
 
     // Confianza compuesta (§9): mín(confianza de la evidencia) × fiabilidad de la
     // estrategia. Un Insight nunca puede valer más que su fuente más débil ni más de lo
@@ -174,16 +194,33 @@ export class TriggerAnalysisRunUseCase {
             organizationId: params.organizationId,
             analysisRunId: params.analysisRunId,
             subjectIdentity: candidate.subjectIdentity,
-            type: candidate.type,
+            type: gate.resolvedType,
             summary: candidate.summary,
             status: InsightStatus.ACTIVE,
             strategyKey: strategy.key,
             strategyVersion: strategy.version,
-            reasoningTrace: candidate.reasoningTrace as Prisma.InputJsonValue,
+            reasoningTrace: {
+              ...candidate.reasoningTrace,
+              // La decisión del gate forma parte de la traza: si el candidato se degradó,
+              // debe poder explicarse por qué (§10).
+              riskOpportunityGate: {
+                proposedType: candidate.type,
+                resolvedType: gate.resolvedType,
+                degraded: gate.degraded,
+                rationale: gate.rationale,
+              },
+            },
             confidence,
             transitiveEvidenceClosure: transitiveEvidenceClosure,
           },
         });
+
+        // Ancla de negocio (§3.8): relación propia, JAMÁS una pieza más de evidencia.
+        for (const objectiveId of gate.objectiveIdsToLink) {
+          await tx.insightObjectiveLink.create({
+            data: { insightId: insight.id, businessObjectiveId: objectiveId },
+          });
+        }
 
         for (const evidence of candidate.evidence) {
           await tx.insightEvidence.create({

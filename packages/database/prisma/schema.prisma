@@ -91,6 +91,24 @@ enum ConfidenceEventType {
   MANUAL_REVOKED // se revoca una fijación manual y el ítem vuelve al cálculo automático
 }
 
+// Ciclo de vida de un BusinessObjective — UNDERSTANDING_ENGINE_DESIGN.md §3.6.
+// La VIGENCIA no es un estado: se deriva de ser la version mas reciente de la cadena
+// UPDATES. Una version predecesora conserva el estado que tenia entonces, como registro
+// historico honesto de que se confirmo y cuando.
+enum BusinessObjectiveStatus {
+  INFERRED // candidato propuesto por el sistema; NO puede sostener un RISK/OPPORTUNITY
+  CONFIRMED // respaldado por una persona: unico estado que habilita un juicio de valor (§8)
+  DISCARDED // rechazado explicitamente
+}
+
+// De donde nace una version de BusinessObjective. Determina el estado de la version nueva
+// al versionarse (§3.6): una edicion manual conserva CONFIRMED; una re-inferencia
+// automatica nace siempre INFERRED, aunque reemplace a una version confirmada.
+enum BusinessObjectiveOrigin {
+  MANUAL_DECLARATION
+  AUTOMATIC_INFERENCE
+}
+
 // Estado de resolución de un Canonical Knowledge Entity — KNOWLEDGE_ENGINE_DESIGN.md §10.
 enum CanonicalResolutionStatus {
   RESOLVED // hay un ganador claro: diferencia de score por encima del umbral
@@ -281,6 +299,7 @@ model Organization {
   auditLogs                 AuditLog[]
   recommendations           Recommendation[]
   canonicalEntities         CanonicalKnowledgeEntity[]
+  businessObjectives        BusinessObjective[]
   analysisRuns              AnalysisRun[]
   insights                  Insight[]
   usageRecords              UsageRecord[]
@@ -997,6 +1016,63 @@ model CanonicalDecision {
   @@index([canonicalKnowledgeEntityId, createdAt])
 }
 
+// Algo que la organizacion ha declarado que le importa: una meta, un KPI, una prioridad,
+// una restriccion — UNDERSTANDING_ENGINE_DESIGN.md §3.6, subfase 3.2.
+//
+// Es la entidad que ancla RISK y OPPORTUNITY a algo verificable en vez de a una estimacion
+// libre del sistema. El Understanding Engine posee su ciclo de vida OPERATIVO (declaracion,
+// inferencia de candidatos, confirmacion) pero NUNCA la decision de que objetivo es valido:
+// esa decision es siempre humana (§1.4).
+model BusinessObjective {
+  id             String @id @default(cuid())
+  organizationId String
+
+  statement   String // "el churn debe mantenerse por debajo del 5%"
+  description String?
+
+  status BusinessObjectiveStatus @default(INFERRED)
+  origin BusinessObjectiveOrigin
+
+  // Confianza reducida para un candidato inferido; plena para una declaracion humana.
+  confidence Float @default(0.5)
+
+  // Version anterior de la cadena UPDATES (§3.6). El objetivo no se edita en sitio: se
+  // versiona, preservando el historial de que le importaba a la empresa en cada momento.
+  supersedesObjectiveId String? @unique
+
+  confirmedById String?
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supersedes   BusinessObjective?   @relation("ObjectiveVersioning", fields: [supersedesObjectiveId], references: [id], onDelete: SetNull)
+  supersededBy BusinessObjective?   @relation("ObjectiveVersioning")
+  insightLinks InsightObjectiveLink[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+// Ancla de negocio de un Insight — UNDERSTANDING_ENGINE_DESIGN.md §3.8.
+//
+// Relacion DELIBERADAMENTE distinta de InsightEvidence: la evidencia sostiene que un hecho
+// existe; este vinculo justifica por que ese hecho, ya sostenido por su propia evidencia,
+// merece el juicio de valor de riesgo u oportunidad. Mezclarlas difuminaria exactamente la
+// distincion que motivo introducir BusinessObjective.
+model InsightObjectiveLink {
+  id                  String @id @default(cuid())
+  insightId           String
+  businessObjectiveId String
+
+  createdAt DateTime @default(now())
+
+  insight           Insight           @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  businessObjective BusinessObjective @relation(fields: [businessObjectiveId], references: [id], onDelete: Restrict)
+
+  @@unique([insightId, businessObjectiveId])
+  @@index([businessObjectiveId])
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Understanding Engine — Fase 3, subfase 3.1
 // Especificación: docs/UNDERSTANDING_ENGINE_DESIGN.md (🧊 congelada v1.0)
@@ -1134,6 +1210,7 @@ model Insight {
   supersededBy    Insight?          @relation("InsightSupersession")
   evidence        InsightEvidence[]
   citedAsEvidence InsightEvidence[] @relation("InsightAsEvidence")
+  objectiveLinks  InsightObjectiveLink[]
 
   @@index([organizationId])
   @@index([analysisRunId])

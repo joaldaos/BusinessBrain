@@ -3,6 +3,7 @@ import { KNOWLEDGE_SIGNALS_PORT } from './domain/ports/knowledge-signals.port';
 import { PrismaKnowledgeSignalsAdapter } from './infrastructure/prisma-knowledge-signals.adapter';
 import { KnowledgeSignalStrategy } from './infrastructure/strategies/knowledge-signal.strategy';
 import { TriggerAnalysisRunUseCase } from './application/trigger-analysis-run.use-case';
+import { BusinessObjectiveService } from './application/business-objective.service';
 
 /**
  * Understanding Engine — Fase 3.
@@ -28,7 +29,8 @@ import { TriggerAnalysisRunUseCase } from './application/trigger-analysis-run.us
     },
     KnowledgeSignalStrategy,
     TriggerAnalysisRunUseCase,
+    BusinessObjectiveService,
   ],
-  exports: [TriggerAnalysisRunUseCase],
+  exports: [TriggerAnalysisRunUseCase, BusinessObjectiveService],
 })
 export class UnderstandingEngineModule {}

@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@businessbrain/database';
+import { ClassifyContentUseCase } from './classify-content.use-case';
 import { IngestFromSourceUseCase } from './ingest-from-source.use-case';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
@@ -21,9 +22,14 @@ describe('IngestFromSourceUseCase', () => {
     knowledgeSource: { findFirst: jest.Mock; update: jest.Mock };
     organization: { findUniqueOrThrow: jest.Mock };
     ingestionJob: { create: jest.Mock; update: jest.Mock };
-    knowledgeItem: { findFirst: jest.Mock };
+    knowledgeItem: {
+      findFirst: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
+  let classifyContent: { execute: jest.Mock };
   let connectorRegistry: { get: jest.Mock };
   let useCase: IngestFromSourceUseCase;
 
@@ -53,7 +59,11 @@ describe('IngestFromSourceUseCase', () => {
       knowledgeSource: { findFirst: jest.fn(), update: jest.fn() },
       organization: { findUniqueOrThrow: jest.fn() },
       ingestionJob: { create: jest.fn(), update: jest.fn() },
-      knowledgeItem: { findFirst: jest.fn() },
+      knowledgeItem: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ classificationSource: null }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       $transaction: jest.fn(),
     };
     connectorRegistry = { get: jest.fn() };
@@ -67,9 +77,23 @@ describe('IngestFromSourceUseCase', () => {
       fn(tx),
     );
 
+    // Doble de la clasificación: la subfase 2.3 la ejecuta tras deduplicar, y estos tests
+    // verifican deduplicación y versionado (2.2), no el clasificador — que tiene su propia
+    // suite. Devuelve un resultado sin clasificar, el mismo camino que un fallo de proveedor.
+    classifyContent = {
+      execute: jest.fn().mockResolvedValue({
+        taxonomyNodeId: null,
+        taxonomyKey: null,
+        businessArea: null,
+        tags: [],
+        certainty: 0,
+      }),
+    };
+
     useCase = new IngestFromSourceUseCase(
       prisma as unknown as PrismaService,
       connectorRegistry as unknown as ConnectorRegistry,
+      classifyContent as unknown as ClassifyContentUseCase,
     );
   });
 

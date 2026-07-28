@@ -1,14 +1,18 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  ClassificationSource,
   ConnectionStatus,
   IngestionTriggerType,
   KnowledgeItemStatus,
   Prisma,
   RunStatus,
   type KnowledgeItem,
+  type KnowledgeSourceType,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
+import { ClassifyContentUseCase } from './classify-content.use-case';
+import { computeInitialConfidence } from '../domain/confidence';
 import {
   normalizeContent,
   type NormalizedContent,
@@ -62,9 +66,10 @@ const ACTIVE_STATUS_FILTER = {
  * lógica real los niveles 1 (hash exacto) y 2 (similitud estructural) de deduplicación (§7) y el
  * grafo de linaje (§3.7, §6) para el escenario de actualización automática (arista `UPDATES`). El
  * nivel 3 se invoca como puerto preparado, sin producir candidatos todavía (hallazgo C de la
- * Revisión formal — Subfase 2.2). Clasificación, confianza, canonicalización, chunking y
- * embeddings siguen sin implementar (subfases 2.3-2.6) — por eso el KnowledgeItem creado o
- * versionado aquí queda en PROCESSING, no INDEXED.
+ * Revisión formal — Subfase 2.2). Subfase 2.3: clasificación automática contra la taxonomía de
+ * la organización (§9) y cálculo inicial del confidence score (§8.1), ambos sobre contenido ya
+ * deduplicado (§4, paso 5) — con ellos el KnowledgeItem alcanza INDEXED. Canonicalización,
+ * chunking y embeddings siguen sin implementar (subfases 2.5-2.6).
  */
 @Injectable()
 export class IngestFromSourceUseCase {
@@ -78,6 +83,7 @@ export class IngestFromSourceUseCase {
   constructor(
     private readonly prisma: PrismaService,
     private readonly connectorRegistry: ConnectorRegistry,
+    private readonly classifyContent: ClassifyContentUseCase,
   ) {}
 
   async execute(
@@ -154,6 +160,18 @@ export class IngestFromSourceUseCase {
             normalized,
             structuralSimilarityThreshold,
           });
+
+          // Clasificación y confianza se calculan sobre contenido YA deduplicado (§4,
+          // paso 5): no se gasta cómputo clasificando duplicados que se descartan.
+          if (outcome.type === 'created' || outcome.type === 'updated') {
+            await this.classifyAndScore({
+              organizationId: params.organizationId,
+              knowledgeItemId: outcome.knowledgeItemId,
+              title: candidate.title,
+              contentText: normalized.text,
+              sourceType: knowledgeSource.type,
+            });
+          }
 
           knowledgeItemIds.push(outcome.knowledgeItemId);
           if (outcome.type === 'created') stats.itemsCreated += 1;
@@ -377,6 +395,72 @@ export class IngestFromSourceUseCase {
       }
       throw error;
     }
+  }
+
+  /**
+   * Clasifica el contenido, calcula su confianza inicial y deja el ítem INDEXADO —
+   * KNOWLEDGE_ENGINE_DESIGN.md §9, §8.1, subfase 2.3.
+   *
+   * La certeza que reporta la clasificación es insumo directo del score (§8.1), por eso el
+   * orden importa: primero clasificar, después puntuar.
+   *
+   * Un `KnowledgeItem` corregido manualmente NO se reclasifica: una corrección manual es
+   * pegajosa y un reprocesamiento automático posterior no la sobrescribe salvo confirmación
+   * explícita del usuario (§9, "Asignación").
+   */
+  private async classifyAndScore(params: {
+    organizationId: string;
+    knowledgeItemId: string;
+    title: string;
+    contentText: string;
+    sourceType: KnowledgeSourceType;
+  }): Promise<void> {
+    const existing = await this.prisma.knowledgeItem.findUnique({
+      where: { id: params.knowledgeItemId },
+      select: { classificationSource: true },
+    });
+
+    const keepManual =
+      existing?.classificationSource === ClassificationSource.MANUAL;
+
+    const classification = keepManual
+      ? null
+      : await this.classifyContent.execute({
+          organizationId: params.organizationId,
+          title: params.title,
+          contentText: params.contentText,
+        });
+
+    const confidence = computeInitialConfidence({
+      sourceType: params.sourceType,
+      classificationCertainty: classification?.certainty ?? null,
+      contentText: params.contentText,
+      title: params.title,
+    });
+
+    await this.prisma.knowledgeItem.update({
+      where: { id: params.knowledgeItemId },
+      data: {
+        ...(classification
+          ? {
+              taxonomyNodeId: classification.taxonomyNodeId,
+              businessArea: classification.businessArea,
+              tags: classification.tags,
+              classificationCertainty: classification.certainty,
+              classificationSource: ClassificationSource.AUTOMATIC,
+              classifiedAt: new Date(),
+            }
+          : {}),
+        confidenceScore: confidence.score,
+        confidenceFactors:
+          confidence.factors as unknown as Prisma.InputJsonValue,
+        confidenceComputedAt: new Date(),
+        // El ítem queda recuperable: ya tiene clasificación y confianza. Chunking y
+        // embeddings (2.6) operan sobre ítems ya indexados y no bloquean este estado.
+        status: KnowledgeItemStatus.INDEXED,
+        indexedAt: new Date(),
+      },
+    });
   }
 
   /**

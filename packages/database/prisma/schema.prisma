@@ -91,6 +91,18 @@ enum ConfidenceEventType {
   MANUAL_REVOKED // se revoca una fijación manual y el ítem vuelve al cálculo automático
 }
 
+// Estado de resolución de un Canonical Knowledge Entity — KNOWLEDGE_ENGINE_DESIGN.md §10.
+enum CanonicalResolutionStatus {
+  RESOLVED // hay un ganador claro: diferencia de score por encima del umbral
+  IN_CONFLICT // empate o diferencia insuficiente: NO se resuelve automáticamente (§10)
+}
+
+// Por qué un candidato fue vinculado al grupo (§10, "Cómo se agrupan los candidatos").
+enum CanonicalCandidateOrigin {
+  SEMANTIC_DEDUPLICATION // detectado por el nivel 3 de deduplicación (§7) — operativo desde 2.6
+  MANUAL_LINK // un usuario vinculó dos documentos: "estos hablan de lo mismo"
+}
+
 enum IngestionTriggerType {
   MANUAL
   SCHEDULE
@@ -268,6 +280,7 @@ model Organization {
   notifications             Notification[]
   auditLogs                 AuditLog[]
   recommendations           Recommendation[]
+  canonicalEntities         CanonicalKnowledgeEntity[]
   analysisRuns              AnalysisRun[]
   insights                  Insight[]
   usageRecords              UsageRecord[]
@@ -450,6 +463,8 @@ model KnowledgeItem {
   currentKnowledgeSource   KnowledgeSource?           @relation("KnowledgeItemCurrentSource", fields: [currentKnowledgeSourceId], references: [id], onDelete: SetNull)
   taxonomyNode             TaxonomyNode?              @relation(fields: [taxonomyNodeId], references: [id], onDelete: SetNull)
   confidenceEvents         ConfidenceEvent[]
+  canonicalMemberships     CanonicalCandidate[]
+  canonicalEntitiesWon     CanonicalKnowledgeEntity[] @relation("CanonicalWinner")
   knowledgeItemCollections KnowledgeItemCollection[]
   chunks                   KnowledgeChunk[]
   // Grafo de linaje (§3.7, §6): "From" es el ítem que narra la relación (el nuevo/el duplicado/el
@@ -895,6 +910,75 @@ model TaxonomyNode {
   @@unique([organizationId, key])
   @@index([organizationId])
   @@index([parentId])
+}
+
+// Agrupa KnowledgeItem que describen el MISMO HECHO de negocio y determina cuál prevalece
+// — KNOWLEDGE_ENGINE_DESIGN.md §3.10, §10.
+//
+// Eje ORTOGONAL al versionado (§3.7): el linaje resuelve "cuál es la última versión de este
+// documento"; la canonicalización resuelve "cuál es la verdad cuando el CRM dice una cosa y
+// el ERP dice otra". Nunca se mezclan ni comparten aristas.
+model CanonicalKnowledgeEntity {
+  id             String @id @default(cuid())
+  organizationId String
+
+  status CanonicalResolutionStatus @default(IN_CONFLICT)
+
+  // Miembro actualmente canónico. Nulo mientras el grupo esté en conflicto: la recuperación
+  // puede entonces devolver varios candidatos con señal explícita de desacuerdo, en vez de
+  // fingir una certeza que no existe (§10).
+  winnerKnowledgeItemId String?
+
+  // Margen con el que ganó, para poder explicar la decisión sin recalcularla.
+  winnerMargin Float?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  winner       KnowledgeItem?       @relation("CanonicalWinner", fields: [winnerKnowledgeItemId], references: [id], onDelete: SetNull)
+  candidates   CanonicalCandidate[]
+  decisions    CanonicalDecision[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+// Pertenencia de un KnowledgeItem a un grupo canónico. Un ítem no canónico permanece
+// consultable pero excluido de recuperación por defecto (§10, §13 paso 4).
+model CanonicalCandidate {
+  id                         String @id @default(cuid())
+  canonicalKnowledgeEntityId String
+  knowledgeItemId            String
+
+  origin    CanonicalCandidateOrigin
+  addedAt   DateTime                 @default(now())
+
+  canonicalKnowledgeEntity CanonicalKnowledgeEntity @relation(fields: [canonicalKnowledgeEntityId], references: [id], onDelete: Cascade)
+  knowledgeItem            KnowledgeItem            @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  // Un KnowledgeItem no puede pertenecer dos veces al mismo grupo.
+  @@unique([canonicalKnowledgeEntityId, knowledgeItemId])
+  @@index([knowledgeItemId])
+}
+
+// Historial de qué fue canónico antes y por qué cambió (§3.10). Solo-anexado: la decisión
+// de canonicidad es auditable, igual que la confianza.
+model CanonicalDecision {
+  id                         String @id @default(cuid())
+  canonicalKnowledgeEntityId String
+
+  previousWinnerId String?
+  newWinnerId      String?
+  status           CanonicalResolutionStatus
+  // Ranking completo evaluado y el porqué de la decisión.
+  rationale        Json
+  actorUserId      String?
+  createdAt        DateTime                  @default(now())
+
+  canonicalKnowledgeEntity CanonicalKnowledgeEntity @relation(fields: [canonicalKnowledgeEntityId], references: [id], onDelete: Cascade)
+
+  @@index([canonicalKnowledgeEntityId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

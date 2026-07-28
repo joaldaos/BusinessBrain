@@ -10,6 +10,7 @@ import { EncryptionService } from '../common/utils/encryption.util';
 import { TaxonomyService } from './application/taxonomy.service';
 import { ClassifyContentUseCase } from './application/classify-content.use-case';
 import { ScoreConfidenceUseCase } from './application/score-confidence.use-case';
+import { CanonicalizeUseCase } from './application/canonicalize.use-case';
 import { LlmModule } from '../llm/llm.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { LlmModule } from '../llm/llm.module';
     TaxonomyService,
     ClassifyContentUseCase,
     ScoreConfidenceUseCase,
+    CanonicalizeUseCase,
     FileUploadConnector,
     ConnectorRegistry,
     EncryptionService,

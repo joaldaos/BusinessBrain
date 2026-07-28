@@ -35,7 +35,7 @@ Todas las rutas resuelven la organización activa por el header `x-org-id` (no p
 
 ## Decisiones de diseño
 - **Ingesta síncrona dentro del request, sin cola todavía.** Para un único archivo subido manualmente, encolar en BullMQ/Redis (ya previsto en la arquitectura general para conectores más pesados) habría sido ceremonia sin beneficio en esta subfase. `IngestFromSourceUseCase` no asume ejecución síncrona en su contrato (devuelve una `Promise` con el resultado del job ya cerrado) — mover su invocación detrás de una cola en una subfase posterior no le exige cambios.
-- **`ConnectorPort.extract()` devuelve una lista** aunque el único conector de esta subfase (`FileUploadConnector`) siempre devuelva un elemento — el contrato ya está listo para conectores que produzcan varios `KnowledgeItem` por sincronización (p. ej. una carpeta de Drive, Fase 6) sin tener que romperlo entonces.
+- **`ConnectorPort.extract()` devuelve una lista** aunque el único conector de esta subfase (`FileUploadConnector`) siempre devuelva un elemento — el contrato ya está listo para conectores que produzcan varios `KnowledgeItem` por sincronización (p. ej. una carpeta de Drive, Fase 7) sin tener que romperlo entonces.
 - **`UploadedFilePayload` propio en vez de `Express.Multer.File`**: `@types/multer` no está instalado; se declaró localmente la forma mínima que este conector necesita, evitando una dependencia nueva solo para un tipo.
 - **`configEnc` nunca se selecciona en las respuestas** (`PUBLIC_SELECT` en `KnowledgeSourcesService`): aunque está cifrado, no hay motivo para exponer el ciphertext a un cliente.
 - **`KnowledgeItem` queda en `PROCESSING`, no `INDEXED`, al terminar esta subfase.** Por diseño (KNOWLEDGE_ENGINE_DESIGN.md §3.5): `INDEXED` significa recuperable, y la recuperación (§13) exige clasificación, confianza, canonicalización, chunking y embeddings, ninguno implementado todavía. Marcar el ítem `INDEXED` aquí sería falso.
@@ -54,4 +54,4 @@ Todas las rutas resuelven la organización activa por el header `x-org-id` (no p
 - 2.5: canonicalización (`Canonical Knowledge Entity`).
 - 2.6: chunking y embeddings.
 - 2.7: pipeline de retrieval (`retrieve-context`), sin consumidores todavía.
-- Conectores adicionales (Google Drive, Gmail, CRM, ERP...) — Fase 6 del plan de migración general, no de esta subfase.
+- Conectores adicionales (Google Drive, Gmail, CRM, ERP...) — Fase 7 del plan de migración general, no de esta subfase.

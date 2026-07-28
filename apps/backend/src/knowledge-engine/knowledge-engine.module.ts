@@ -12,6 +12,7 @@ import { ClassifyContentUseCase } from './application/classify-content.use-case'
 import { ScoreConfidenceUseCase } from './application/score-confidence.use-case';
 import { CanonicalizeUseCase } from './application/canonicalize.use-case';
 import { ChunkAndEmbedUseCase } from './application/chunk-and-embed.use-case';
+import { RetrieveContextUseCase } from './application/retrieve-context.use-case';
 import { LlmModule } from '../llm/llm.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { LlmModule } from '../llm/llm.module';
     ScoreConfidenceUseCase,
     CanonicalizeUseCase,
     ChunkAndEmbedUseCase,
+    RetrieveContextUseCase,
     FileUploadConnector,
     ConnectorRegistry,
     EncryptionService,

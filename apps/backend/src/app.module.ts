@@ -10,6 +10,7 @@ import { AdminModule } from './admin/admin.module';
 import { LlmModule } from './llm/llm.module';
 import { KnowledgeEngineModule } from './knowledge-engine/knowledge-engine.module';
 import { UnderstandingEngineModule } from './understanding-engine/understanding-engine.module';
+import { ConversationsModule } from './conversations/conversations.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { HealthModule } from './health/health.module';
     LlmModule,
     KnowledgeEngineModule,
     UnderstandingEngineModule,
+    ConversationsModule,
     HealthModule,
   ],
   providers: [

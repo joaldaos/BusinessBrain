@@ -5,6 +5,9 @@ import { LlmModule } from '../llm/llm.module';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { SendMessageUseCase } from './send-message.use-case';
+import { StreamMessageUseCase } from './stream-message.use-case';
+import { ConversationTurnService } from './conversation-turn.service';
+import { PromptBuilderService } from './prompt-builder.service';
 
 /**
  * Superficie de consumo conversacional — Fase 4.
@@ -17,7 +20,13 @@ import { SendMessageUseCase } from './send-message.use-case';
 @Module({
   imports: [KnowledgeEngineModule, UnderstandingEngineModule, LlmModule],
   controllers: [ConversationsController],
-  providers: [ConversationsService, SendMessageUseCase],
+  providers: [
+    ConversationsService,
+    PromptBuilderService,
+    ConversationTurnService,
+    SendMessageUseCase,
+    StreamMessageUseCase,
+  ],
   exports: [ConversationsService],
 })
 export class ConversationsModule {}

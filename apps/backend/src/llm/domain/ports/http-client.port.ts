@@ -14,4 +14,17 @@ export interface HttpClientPort {
     body: unknown,
     headers: Record<string, string>,
   ): Promise<TResponse>;
+
+  /**
+   * Igual que `postJson` pero para respuestas `text/event-stream`: devuelve el payload
+   * de cada evento SSE (lo que sigue a `data: `) a medida que llega, sin esperar al final.
+   *
+   * Emite el payload en crudo, sin interpretarlo: cada proveedor tiene su propio formato
+   * de evento y es él quien sabe leerlo. Este puerto solo resuelve el transporte.
+   */
+  postSse(
+    url: string,
+    body: unknown,
+    headers: Record<string, string>,
+  ): AsyncIterable<string>;
 }

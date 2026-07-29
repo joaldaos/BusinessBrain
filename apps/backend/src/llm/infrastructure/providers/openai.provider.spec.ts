@@ -3,7 +3,10 @@ import type { HttpClientPort } from '../../domain/ports/http-client.port';
 import type { ConfigService } from '@nestjs/config';
 
 describe('OpenAiProvider', () => {
-  const fakeHttp: jest.Mocked<HttpClientPort> = { postJson: jest.fn() };
+  const fakeHttp: jest.Mocked<HttpClientPort> = {
+    postJson: jest.fn(),
+    postSse: jest.fn(),
+  };
   const fakeConfig = {
     get: jest.fn().mockReturnValue('sk-openai-fake-key'),
   } as unknown as ConfigService;
@@ -86,5 +89,84 @@ describe('OpenAiProvider', () => {
     await expect(
       providerWithoutKey.complete({ messages: [] }, 'gpt-4.1'),
     ).rejects.toThrow(/API key/);
+  });
+
+  /** Consume un flujo entero cuando lo que se verifica es la llamada, no lo emitido. */
+  const drain = async (stream: AsyncIterable<string>): Promise<void> => {
+    for await (const chunk of stream) void chunk;
+  };
+
+  describe('stream', () => {
+    const events = async function* (payloads: string[]): AsyncIterable<string> {
+      for (const payload of payloads) yield await Promise.resolve(payload);
+    };
+
+    it('emite solo los INCREMENTOS de texto, nunca el acumulado', async () => {
+      fakeHttp.postSse.mockReturnValue(
+        events([
+          JSON.stringify({ choices: [{ delta: { role: 'assistant' } }] }),
+          JSON.stringify({ choices: [{ delta: { content: 'Hola' } }] }),
+          JSON.stringify({ choices: [{ delta: { content: ' mundo' } }] }),
+          '[DONE]',
+        ]),
+      );
+
+      const chunks: string[] = [];
+      for await (const chunk of provider.stream(
+        { messages: [{ role: 'user', content: 'hola' }] },
+        'gpt-4.1',
+      )) {
+        chunks.push(chunk);
+      }
+
+      // Concatenar lo emitido debe dar la misma respuesta que habría devuelto complete().
+      expect(chunks).toEqual(['Hola', ' mundo']);
+      expect(chunks.join('')).toBe('Hola mundo');
+    });
+
+    it('cierra el flujo al recibir [DONE] sin emitirlo como texto', async () => {
+      fakeHttp.postSse.mockReturnValue(
+        events([
+          JSON.stringify({ choices: [{ delta: { content: 'a' } }] }),
+          '[DONE]',
+          JSON.stringify({
+            choices: [{ delta: { content: 'no debería llegar' } }],
+          }),
+        ]),
+      );
+
+      const chunks: string[] = [];
+      for await (const chunk of provider.stream({ messages: [] }, 'gpt-4.1')) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual(['a']);
+    });
+
+    it('pide el stream a la API y antepone el system prompt igual que complete()', async () => {
+      fakeHttp.postSse.mockReturnValue(events(['[DONE]']));
+
+      await drain(
+        provider.stream(
+          {
+            systemPrompt: 'eres útil',
+            messages: [{ role: 'user', content: 'hola' }],
+          },
+          'gpt-4.1',
+        ),
+      );
+
+      expect(fakeHttp.postSse).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          stream: true,
+          messages: [
+            { role: 'system', content: 'eres útil' },
+            { role: 'user', content: 'hola' },
+          ],
+        }),
+        expect.any(Object),
+      );
+    });
   });
 });

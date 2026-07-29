@@ -18,6 +18,11 @@ interface AnthropicMessagesResponse {
   usage?: { input_tokens: number; output_tokens: number };
 }
 
+interface AnthropicStreamEvent {
+  type: string;
+  delta?: { text?: string };
+}
+
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_VERSION = '2023-06-01';
 const DEFAULT_MAX_TOKENS = 1024;
@@ -40,14 +45,7 @@ export class AnthropicProvider implements LlmProviderPort {
     modelName: string,
     apiKey?: string,
   ): Promise<LlmCompletionResult> {
-    const key =
-      apiKey ??
-      this.configService.get('llmPlatformKeys.anthropic', { infer: true });
-    if (!key) {
-      throw new Error(
-        'No hay API key de Anthropic disponible (ni LlmProfile.apiKeyEnc de la organización ni ANTHROPIC_API_KEY de plataforma)',
-      );
-    }
+    const key = this.resolveApiKey(apiKey);
 
     const response = await this.http.postJson<AnthropicMessagesResponse>(
       ANTHROPIC_MESSAGES_URL,
@@ -74,5 +72,50 @@ export class AnthropicProvider implements LlmProviderPort {
           }
         : undefined,
     };
+  }
+
+  /**
+   * Formato de Anthropic: el texto llega en eventos `content_block_delta` con
+   * `delta.text`. El resto de tipos de evento (arranque de bloque, uso de tokens, fin)
+   * no aportan texto y se ignoran.
+   */
+  async *stream(
+    request: LlmCompletionRequest,
+    modelName: string,
+    apiKey?: string,
+  ): AsyncIterable<string> {
+    const key = this.resolveApiKey(apiKey);
+
+    const events = this.http.postSse(
+      ANTHROPIC_MESSAGES_URL,
+      {
+        model: modelName,
+        max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+        system: request.systemPrompt,
+        temperature: request.temperature,
+        messages: request.messages,
+        stream: true,
+      },
+      { 'x-api-key': key, 'anthropic-version': ANTHROPIC_API_VERSION },
+    );
+
+    for await (const payload of events) {
+      const event = JSON.parse(payload) as AnthropicStreamEvent;
+      if (event.type === 'content_block_delta' && event.delta?.text) {
+        yield event.delta.text;
+      }
+    }
+  }
+
+  private resolveApiKey(apiKey?: string): string {
+    const key =
+      apiKey ??
+      this.configService.get('llmPlatformKeys.anthropic', { infer: true });
+    if (!key) {
+      throw new Error(
+        'No hay API key de Anthropic disponible (ni LlmProfile.apiKeyEnc de la organización ni ANTHROPIC_API_KEY de plataforma)',
+      );
+    }
+    return key;
   }
 }

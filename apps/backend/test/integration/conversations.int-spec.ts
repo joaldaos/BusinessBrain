@@ -1,6 +1,12 @@
 import { MessageRole } from '@businessbrain/database';
 import { ConversationsService } from '../../src/conversations/conversations.service';
 import { SendMessageUseCase } from '../../src/conversations/send-message.use-case';
+import {
+  StreamMessageUseCase,
+  type MessageStreamEvent,
+} from '../../src/conversations/stream-message.use-case';
+import { ConversationTurnService } from '../../src/conversations/conversation-turn.service';
+import { PromptBuilderService } from '../../src/conversations/prompt-builder.service';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import type { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
@@ -28,8 +34,13 @@ describe('Conversations (integración)', () => {
   let org: TestOrg;
   let conversations: ConversationsService;
   let sendMessage: SendMessageUseCase;
+  let streamMessage: StreamMessageUseCase;
   let complete: jest.Mock<
     Promise<{ content: string }>,
+    [{ systemPrompt: string; messages: { content: string }[] }]
+  >;
+  let stream: jest.Mock<
+    AsyncIterable<string>,
     [{ systemPrompt: string; messages: { content: string }[] }]
   >;
   let retrievedChunks: unknown[];
@@ -45,7 +56,12 @@ describe('Conversations (integración)', () => {
     retrievedChunks = [];
     retrievedInsights = [];
 
-    sendMessage = new SendMessageUseCase(
+    stream = jest.fn<
+      AsyncIterable<string>,
+      [{ systemPrompt: string; messages: { content: string }[] }]
+    >(() => toStream(['Según ', '[1], ', 'son 23 días.']));
+
+    const turn = new ConversationTurnService(
       db,
       conversations,
       {
@@ -54,14 +70,18 @@ describe('Conversations (integración)', () => {
       {
         execute: () => Promise.resolve(retrievedInsights),
       } as unknown as RetrieveInsightsUseCase,
-      {
-        resolveForOrganization: () =>
-          Promise.resolve({
-            profile: { modelName: 'model-x', apiKeyEnc: null },
-            provider: { complete },
-          }),
-      } as unknown as ProviderRegistry,
+      new PromptBuilderService(),
     );
+    const registry = {
+      resolveForOrganization: () =>
+        Promise.resolve({
+          profile: { modelName: 'model-x', apiKeyEnc: null },
+          provider: { complete, stream },
+        }),
+    } as unknown as ProviderRegistry;
+
+    sendMessage = new SendMessageUseCase(turn, registry);
+    streamMessage = new StreamMessageUseCase(turn, registry);
   });
 
   afterEach(async () => {
@@ -71,6 +91,18 @@ describe('Conversations (integración)', () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
+
+  const toStream = async function* (parts: string[]): AsyncIterable<string> {
+    for (const part of parts) yield await Promise.resolve(part);
+  };
+
+  const collect = async (
+    events: AsyncIterable<MessageStreamEvent>,
+  ): Promise<MessageStreamEvent[]> => {
+    const collected: MessageStreamEvent[] = [];
+    for await (const event of events) collected.push(event);
+    return collected;
+  };
 
   const chunk = (id: string, content: string) => ({
     chunkId: id,
@@ -329,6 +361,196 @@ describe('Conversations (integración)', () => {
           conversationId: theirs.id,
           content: 'intruso',
         }),
+      ).rejects.toThrow();
+
+      await destroyTestOrg(other);
+    });
+  });
+
+  describe('streaming (SSE)', () => {
+    it('emite las citas ANTES del primer fragmento de texto', async () => {
+      retrievedChunks = [chunk('c1', 'Los empleados disponen de 23 días.')];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const events = await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: '¿Cuántos días tengo?',
+        }),
+      );
+
+      // El usuario ve sobre qué se apoya la respuesta mientras se escribe, no después.
+      expect(events[0].type).toBe('context');
+      const first = events[0];
+      if (first.type !== 'context')
+        throw new Error('se esperaba el evento context');
+      expect(first.citations).toHaveLength(1);
+      expect(events.findIndex((e) => e.type === 'token')).toBeGreaterThan(0);
+    });
+
+    it('lo que se persiste es la concatenación exacta de lo emitido', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const events = await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: 'pregunta',
+        }),
+      );
+
+      const emitted = events
+        .filter((e) => e.type === 'token')
+        .map((e) => (e.type === 'token' ? e.text : ''))
+        .join('');
+      const persisted = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, role: MessageRole.ASSISTANT },
+      });
+
+      expect(emitted).toBe('Según [1], son 23 días.');
+      expect(persisted?.content).toBe(emitted);
+    });
+
+    it('persiste UNA sola respuesta al terminar, nunca un mensaje a medias por fragmento', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: 'pregunta',
+        }),
+      );
+
+      const assistantMessages = await prisma.message.findMany({
+        where: { conversationId: conversation.id, role: MessageRole.ASSISTANT },
+      });
+      expect(assistantMessages).toHaveLength(1);
+    });
+
+    it('produce el MISMO prompt que la vía síncrona', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      retrievedInsights = [
+        {
+          id: 'i1',
+          summary: 'algo comprendido',
+          confidence: 0.7,
+          freshness: 'FRESH',
+        },
+      ];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'la misma pregunta',
+      });
+
+      const otra = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+      await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: otra.id,
+          content: 'la misma pregunta',
+        }),
+      );
+
+      // Si divergieran, la misma pregunta daría respuestas distintas según cómo se pida.
+      expect(stream.mock.calls[0][0]).toEqual(complete.mock.calls[0][0]);
+    });
+
+    it('un fallo a mitad de flujo conserva lo ya emitido y avisa', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      stream.mockReturnValue(
+        (async function* () {
+          yield await Promise.resolve('parte buena');
+          throw new Error('503 Service Unavailable');
+        })(),
+      );
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const events = await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: 'pregunta',
+        }),
+      );
+
+      expect(events.some((e) => e.type === 'error')).toBe(true);
+      const persisted = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, role: MessageRole.ASSISTANT },
+      });
+      // Lo que el usuario ya leyó no se descarta.
+      expect(persisted?.content).toContain('parte buena');
+      expect(persisted?.content).toMatch(/no he podido generar/i);
+    });
+
+    it('sin conocimiento ni comprensión no llama al modelo y lo declara', async () => {
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const events = await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: 'algo no indexado',
+        }),
+      );
+
+      expect(stream).not.toHaveBeenCalled();
+      const done = events.find((e) => e.type === 'done');
+      expect(done?.type === 'done' && done.content).toMatch(
+        /no tengo conocimiento/i,
+      );
+    });
+
+    it('no permite hacer streaming sobre la conversación de otro usuario', async () => {
+      const other = await createTestOrg('conv-int-d');
+      const theirs = await conversations.create({
+        organizationId: other.orgId,
+        userId: other.userId,
+      });
+
+      await expect(
+        collect(
+          streamMessage.execute({
+            organizationId: org.orgId,
+            userId: org.userId,
+            conversationId: theirs.id,
+            content: 'intruso',
+          }),
+        ),
       ).rejects.toThrow();
 
       await destroyTestOrg(other);

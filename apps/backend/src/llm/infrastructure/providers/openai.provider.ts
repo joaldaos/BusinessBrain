@@ -19,6 +19,10 @@ interface OpenAiChatCompletionResponse {
   usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
+interface OpenAiStreamEvent {
+  choices: Array<{ delta?: { content?: string } }>;
+}
+
 interface OpenAiEmbeddingResponse {
   data: Array<{ embedding: number[] }>;
 }
@@ -71,6 +75,43 @@ export class OpenAiProvider implements LlmProviderPort, EmbeddingProviderPort {
           }
         : undefined,
     };
+  }
+
+  /**
+   * Formato de OpenAI: cada evento trae `choices[0].delta.content` con el incremento, y el
+   * literal `[DONE]` cierra el flujo. Un evento sin contenido (el primero, que solo trae el
+   * rol) no aporta texto y se ignora.
+   */
+  async *stream(
+    request: LlmCompletionRequest,
+    modelName: string,
+    apiKey?: string,
+  ): AsyncIterable<string> {
+    const key = this.resolveApiKey(apiKey);
+
+    const messages = request.systemPrompt
+      ? [{ role: 'system', content: request.systemPrompt }, ...request.messages]
+      : request.messages;
+
+    const events = this.http.postSse(
+      OPENAI_CHAT_URL,
+      {
+        model: modelName,
+        messages,
+        max_tokens: request.maxTokens,
+        temperature: request.temperature,
+        stream: true,
+      },
+      { Authorization: `Bearer ${key}` },
+    );
+
+    for await (const payload of events) {
+      if (payload === '[DONE]') return;
+
+      const delta = (JSON.parse(payload) as OpenAiStreamEvent).choices[0]?.delta
+        ?.content;
+      if (delta) yield delta;
+    }
   }
 
   async embed(

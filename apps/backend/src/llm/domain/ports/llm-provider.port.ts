@@ -31,4 +31,17 @@ export interface LlmProviderPort {
     modelName: string,
     apiKey?: string,
   ): Promise<LlmCompletionResult>;
+
+  /**
+   * Misma petición que `complete`, entregada por fragmentos según los genera el modelo.
+   *
+   * Emite únicamente los incrementos de texto, nunca el acumulado: quien consume decide
+   * si concatena. El resultado completo debe ser idéntico a concatenar todo lo emitido,
+   * de modo que lo que se persiste al terminar es lo mismo que habría devuelto `complete`.
+   */
+  stream(
+    request: LlmCompletionRequest,
+    modelName: string,
+    apiKey?: string,
+  ): AsyncIterable<string>;
 }

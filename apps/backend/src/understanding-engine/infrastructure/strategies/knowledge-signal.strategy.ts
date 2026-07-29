@@ -44,6 +44,16 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
     );
   }
 
+  /**
+   * Los `facts` de una señal son datos objetivos de tipo abierto: convertirlos a texto sin
+   * comprobar produciría "[object Object]" en un resumen que un humano va a leer.
+   */
+  private text(value: unknown, fallback: string): string {
+    return typeof value === 'string' || typeof value === 'number'
+      ? String(value)
+      : fallback;
+  }
+
   private interpret(signal: KnowledgeSignal): InsightCandidate | null {
     switch (signal.kind) {
       case 'CONFIDENCE_DECAYED':
@@ -60,7 +70,7 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
   }
 
   private decayAnomaly(signal: KnowledgeSignal): InsightCandidate {
-    const title = String(signal.facts.title ?? 'documento sin título');
+    const title = this.text(signal.facts.title, 'documento sin título');
     const score = Number(signal.facts.confidenceScore ?? 0);
     const floor = Number(signal.facts.floor ?? 0);
 
@@ -93,14 +103,14 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
   }
 
   private disconnectedSourceAnomaly(signal: KnowledgeSignal): InsightCandidate {
-    const name = String(signal.facts.name ?? 'fuente sin nombre');
+    const name = this.text(signal.facts.name, 'fuente sin nombre');
     const affected = Number(signal.facts.affectedKnowledgeItems ?? 0);
 
     return {
       subjectIdentity: `source-disconnected:knowledge-source:${signal.subjectId}`,
       type: InsightType.ANOMALY,
       summary:
-        `La fuente "${name}" está en estado ${String(signal.facts.status)} y ha dejado de ` +
+        `La fuente "${name}" está en estado ${this.text(signal.facts.status, 'desconocido')} y ha dejado de ` +
         `actualizar el conocimiento que originó (${affected} documento(s) afectados).`,
       evidence: [
         {

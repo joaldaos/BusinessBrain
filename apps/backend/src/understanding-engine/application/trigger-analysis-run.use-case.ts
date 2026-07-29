@@ -3,6 +3,7 @@ import {
   AnalysisRunStatus,
   AnalysisRunTrigger,
   InsightStatus,
+  InsightType,
   Prisma,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -18,6 +19,10 @@ import { KnowledgeSignalStrategy } from '../infrastructure/strategies/knowledge-
 import { BusinessObjectiveService } from './business-objective.service';
 import { GenerativeSynthesisStrategy } from '../infrastructure/strategies/generative-synthesis.strategy';
 import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
+import {
+  resolveInsightConflict,
+  type ConflictParty,
+} from '../domain/resolve-insight-conflict';
 
 /**
  * Ejecuta un ciclo completo de razonamiento — UNDERSTANDING_ENGINE_DESIGN.md §4, §12.
@@ -259,14 +264,120 @@ export class TriggerAnalysisRunUseCase {
       return true;
     } catch (error) {
       if (this.isSubjectUniquenessViolation(error)) {
-        // Otro AnalysisRun ganó la creación de este sujeto mientras esta transacción lo
-        // evaluaba. No es un fallo: el asunto ya está representado por un Insight activo.
-        // Reconciliar contradicciones o corroboraciones entre ambos es responsabilidad de
-        // `ResolveInsightConflict` (§12), que llega en la subfase 3.4.
+        // El asunto ya está representado por un Insight activo: otra estrategia, u otro
+        // AnalysisRun concurrente, ganó su creación. No es un fallo — se reconcilian ambas
+        // afirmaciones (§12, `ResolveInsightConflict`).
+        await this.reconcileWithExisting({
+          organizationId: params.organizationId,
+          candidate,
+          strategy,
+          resolvedType: gate.resolvedType,
+          confidence,
+        });
         return false;
       }
       throw error;
     }
+  }
+
+  /**
+   * `ResolveInsightConflict` (§12): reconcilia un candidato con el `Insight` activo que ya
+   * representa su mismo asunto.
+   *
+   * Aplica la regla de independencia de §9 antes de tratar dos afirmaciones como
+   * corroboración: dos cadenas que comparten evidencia dependen de la misma fuente y no
+   * pueden "lavar" su confianza por convergencia aparente. Una contradicción, en cambio,
+   * nunca se ignora en silencio — baja la confianza y queda registrada en la traza.
+   *
+   * La reconciliación no falla nunca la ejecución: si algo va mal aquí, el `Insight`
+   * existente conserva su estado y el `AnalysisRun` continúa.
+   */
+  private async reconcileWithExisting(params: {
+    organizationId: string;
+    candidate: InsightCandidate;
+    strategy: ReasoningStrategyPort;
+    resolvedType: InsightType;
+    confidence: number;
+  }): Promise<void> {
+    const existing = await this.prisma.insight.findFirst({
+      where: {
+        organizationId: params.organizationId,
+        subjectIdentity: params.candidate.subjectIdentity,
+        status: InsightStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        type: true,
+        confidence: true,
+        strategyKey: true,
+        reasoningTrace: true,
+        transitiveEvidenceClosure: true,
+      },
+    });
+    if (!existing) return;
+
+    const existingParty: ConflictParty = {
+      type: existing.type,
+      confidence: existing.confidence,
+      strategyKey: existing.strategyKey,
+      evidenceRefIds: this.closureRefIds(existing.transitiveEvidenceClosure),
+    };
+    const incomingParty: ConflictParty = {
+      type: params.resolvedType,
+      confidence: params.confidence,
+      strategyKey: params.strategy.key,
+      evidenceRefIds: params.candidate.evidence.map((e) => e.refId),
+    };
+
+    const resolution = resolveInsightConflict(existingParty, incomingParty);
+
+    if (resolution.outcome === 'NOT_INDEPENDENT') {
+      // Nada que registrar: reconocer el asunto como ya conocido no cambia lo que sabemos.
+      return;
+    }
+
+    const previousTrace = (existing.reasoningTrace ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const history = Array.isArray(previousTrace.reconciliations)
+      ? (previousTrace.reconciliations as unknown[])
+      : [];
+
+    await this.prisma.insight.update({
+      where: { id: existing.id },
+      data: {
+        confidence: resolution.resolvedConfidence,
+        // La reconciliación forma parte de la traza: por qué cambió la confianza debe
+        // poder explicarse igual que cualquier otra decisión (§10).
+        reasoningTrace: {
+          ...previousTrace,
+          reconciliations: [
+            ...history,
+            {
+              outcome: resolution.outcome,
+              withStrategy: params.strategy.key,
+              previousConfidence: existing.confidence,
+              resolvedConfidence: resolution.resolvedConfidence,
+              sharedEvidenceRefIds: resolution.sharedEvidenceRefIds,
+              rationale: resolution.rationale,
+              at: new Date().toISOString(),
+            },
+          ],
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    this.logger.log(
+      `Reconciliación sobre "${params.candidate.subjectIdentity}": ${resolution.outcome} — ` +
+        `${resolution.rationale}`,
+    );
+  }
+
+  private closureRefIds(closure: Prisma.JsonValue): string[] {
+    return Array.isArray(closure)
+      ? (closure as unknown as { refId: string }[]).map((c) => c.refId)
+      : [];
   }
 
   /**

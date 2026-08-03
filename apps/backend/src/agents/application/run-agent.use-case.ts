@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 import { RetrieveContextUseCase } from '../../knowledge-engine/application/retrieve-context.use-case';
 import { RetrieveInsightsUseCase } from '../../understanding-engine/application/retrieve-insights.use-case';
 import {
@@ -10,6 +10,16 @@ import {
 } from '../../knowledge-engine/domain/context-builder';
 import { parseAgentConfiguration } from '../domain/agent-configuration';
 import { executableTools, guardrailDirective } from '../domain/agent-policy';
+import {
+  memoryBlock,
+  memoryRecallLimit,
+  selectMemories,
+} from '../domain/agent-memory';
+import {
+  MEMORY_STORE_PORT,
+  type MemoryEntry,
+  type MemoryStorePort,
+} from '../domain/ports/memory-store.port';
 import { AgentsService, type AgentWithScope } from './agents.service';
 
 /**
@@ -38,7 +48,14 @@ const MAX_INSIGHTS = 5;
 export interface RunAgentParams {
   organizationId: string;
   agentId: string;
+  /**
+   * Obligatorio: la memoria del agente es privada de cada usuario y no hay forma correcta
+   * de resolverla sin saber de quien es el turno.
+   */
+  userId: string;
   query: string;
+  /** Conversacion en curso. Acota la memoria de corto plazo a su propia conversacion. */
+  conversationId?: string;
 }
 
 export interface AgentRunContext {
@@ -61,6 +78,8 @@ export interface AgentRunContext {
   droppedChunkIds: string[];
   /** `false` si no hay ni comprensión ni conocimiento: no hay nada sobre lo que responder. */
   hasMaterial: boolean;
+  /** Cuantos recuerdos del propio usuario entraron en el prompt. */
+  memoriesUsed: number;
 }
 
 @Injectable()
@@ -71,6 +90,8 @@ export class RunAgentUseCase {
     private readonly agents: AgentsService,
     private readonly retrieveContext: RetrieveContextUseCase,
     private readonly retrieveInsights: RetrieveInsightsUseCase,
+    @Inject(MEMORY_STORE_PORT)
+    private readonly memoryStore: MemoryStorePort,
   ) {}
 
   async execute(params: RunAgentParams): Promise<AgentRunContext> {
@@ -116,6 +137,25 @@ export class RunAgentUseCase {
       DEFAULT_KNOWLEDGE_TOKEN_BUDGET,
     );
 
+    // Memoria PRIVADA de este usuario con este agente. El alcance viaja completo: una
+    // consulta sin `userId` devolveria recuerdos de otras personas del mismo tenant.
+    const recallLimit = memoryRecallLimit(configuration.memoryConfig);
+    const memories =
+      recallLimit === 0
+        ? []
+        : selectMemories(
+            await this.memoryStore.recall(
+              {
+                organizationId: params.organizationId,
+                agentId: agent.id,
+                userId: params.userId,
+              },
+              recallLimit,
+            ),
+            configuration.memoryConfig,
+            params.conversationId,
+          );
+
     const insightsUsed = insights.map((insight) => ({
       id: insight.id,
       summary: insight.summary,
@@ -130,6 +170,7 @@ export class RunAgentUseCase {
         configuration,
         context,
         insights: insightsUsed,
+        memories,
       }),
       citations: context.pieces.map((piece) => ({
         ordinal: piece.ordinal,
@@ -141,6 +182,7 @@ export class RunAgentUseCase {
       availableTools: executableTools(configuration),
       droppedChunkIds: context.droppedChunkIds,
       hasMaterial: context.pieces.length > 0 || insightsUsed.length > 0,
+      memoriesUsed: memories.length,
     };
   }
 
@@ -179,6 +221,7 @@ export class RunAgentUseCase {
     configuration: ReturnType<typeof parseAgentConfiguration>;
     context: BuiltContext;
     insights: { summary: string; confidence: number; freshness: string }[];
+    memories: MemoryEntry[];
   }): string {
     const understanding =
       params.insights.length > 0
@@ -200,6 +243,7 @@ export class RunAgentUseCase {
       '',
       GROUNDING_DIRECTIVE,
       guardrailDirective(params.configuration),
+      memoryBlock(params.memories),
       understanding,
       '',
       'Contexto recuperado:',

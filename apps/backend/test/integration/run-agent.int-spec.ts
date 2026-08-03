@@ -1,5 +1,6 @@
 import { AgentsService } from '../../src/agents/application/agents.service';
 import { RunAgentUseCase } from '../../src/agents/application/run-agent.use-case';
+import { PrismaMemoryStoreAdapter } from '../../src/agents/infrastructure/prisma-memory-store.adapter';
 import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -27,16 +28,19 @@ describe('RunAgent (integración)', () => {
   let agents: AgentsService;
   let runAgent: RunAgentUseCase;
   let retrieveContextSpy: jest.Mock;
+  let memoryStore: PrismaMemoryStoreAdapter;
 
   beforeEach(async () => {
     org = await createTestOrg('run-agent-int');
     agents = new AgentsService(db);
     retrieveContextSpy = jest.fn().mockResolvedValue([]);
 
+    memoryStore = new PrismaMemoryStoreAdapter(db);
     runAgent = new RunAgentUseCase(
       agents,
       { execute: retrieveContextSpy } as unknown as RetrieveContextUseCase,
       new RetrieveInsightsUseCase(db),
+      memoryStore,
     );
   });
 
@@ -85,6 +89,7 @@ describe('RunAgent (integración)', () => {
         runAgent.execute({
           organizationId: org.orgId,
           agentId: agent.id,
+          userId: org.userId,
           query: 'cualquier cosa',
         }),
       ).rejects.toThrow(/alcance de conocimiento/i);
@@ -99,6 +104,7 @@ describe('RunAgent (integración)', () => {
         runAgent.execute({
           organizationId: org.orgId,
           agentId: agent.id,
+          userId: org.userId,
           query: 'hola',
         }),
       ).rejects.toThrow(/desactivado/i);
@@ -111,6 +117,7 @@ describe('RunAgent (integración)', () => {
       await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'presupuesto',
       });
 
@@ -137,6 +144,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: '¿qué pasa en la empresa?',
       });
 
@@ -156,6 +164,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: '¿qué pasa en ventas?',
       });
 
@@ -177,6 +186,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'dame contexto',
       });
 
@@ -200,6 +210,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'dame contexto',
       });
 
@@ -218,6 +229,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'hola',
       });
 
@@ -239,6 +251,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'hola',
       });
 
@@ -252,6 +265,7 @@ describe('RunAgent (integración)', () => {
       const result = await runAgent.execute({
         organizationId: org.orgId,
         agentId: agent.id,
+        userId: org.userId,
         query: 'algo no indexado',
       });
 
@@ -271,6 +285,7 @@ describe('RunAgent (integración)', () => {
         runAgent.execute({
           organizationId: org.orgId,
           agentId: theirs.id,
+          userId: org.userId,
           query: 'hola',
         }),
       ).rejects.toThrow();

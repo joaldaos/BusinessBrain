@@ -250,6 +250,7 @@ model User {
 
   memberships      Membership[]
   conversations    Conversation[]
+  agentMemories    AgentMemory[]
   notifications    Notification[]
   auditLogsAsActor AuditLog[]     @relation("AuditActor")
   createdApiKeys   ApiKey[]
@@ -288,6 +289,7 @@ model Organization {
   knowledgeItemLineageEdges KnowledgeItemLineageEdge[]
   taxonomyNodes             TaxonomyNode[]
   agents                    Agent[]
+  agentMemories             AgentMemory[]
   agentTemplates            AgentTemplate[] // plantillas publicadas por esta organización (si visibility != PRIVATE)
   llmProfiles               LlmProfile[]
   conversations             Conversation[]
@@ -450,11 +452,11 @@ model KnowledgeItem {
   // ── Clasificación (§3.8, §9) — subfase 2.3 ──────────────────────────────
   // Categoría principal: un ítem pertenece a UN solo nodo de la taxonomía, siempre el
   // más específico posible. La pertenencia implica los ancestros de forma implícita.
-  taxonomyNodeId       String?
+  taxonomyNodeId          String?
   // Área de negocio derivada, para compatibilidad con el alcance de agentes (§9).
-  businessArea         AgentArea?
+  businessArea            AgentArea?
   // Etiquetas libres, no jerárquicas (§9 "Etiquetas").
-  tags                 String[]              @default([])
+  tags                    String[]              @default([])
   // Certeza del propio proceso de clasificación. Insumo directo del confidence score
   // (§8.1) y señal de contenido heterogéneo para el refinamiento por chunk (§9, §3.6).
   classificationCertainty Float?
@@ -470,10 +472,10 @@ model KnowledgeItem {
   confidenceManualById String?
   confidenceManualAt   DateTime?
 
-  confidenceScore   Float?
+  confidenceScore      Float?
   // Factores que lo componen, visibles y auditables — la confianza es explicable, no
   // solo un número (§8.4: "auditable, no solo el número actual sino su historia").
-  confidenceFactors Json?
+  confidenceFactors    Json?
   confidenceComputedAt DateTime?
 
   organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -594,10 +596,10 @@ model KnowledgeChunk {
   // Índice HNSW sobre `embedding` creado vía migración SQL manual:
   // CREATE INDEX ON "KnowledgeChunk" USING hnsw (embedding vector_cosine_ops);
 
-  @@index([organizationId])
-  @@index([knowledgeItemId])
   // Un KnowledgeItem no puede tener dos fragmentos en la misma posición.
   @@unique([knowledgeItemId, chunkIndex])
+  @@index([organizationId])
+  @@index([knowledgeItemId])
   // Cache de cómputo de vectores por contenido idéntico dentro de la organización (§7).
   @@index([organizationId, contentHash, embeddingModel])
 }
@@ -676,19 +678,34 @@ model Agent {
 // Memoria persistente del agente, independiente del historial de una conversación concreta
 // (p. ej. "el cliente X prefiere que se le contacte por email", aprendido en una conversación
 // y reutilizable en cualquier interacción futura con ese agente).
+// La memoria es PRIVADA DE CADA USUARIO, no de la organización. Las conversaciones ya están
+// aisladas por organización y usuario (Fase 4); una memoria compartida entre usuarios del
+// mismo tenant rompería ese aislamiento por la puerta de atrás: lo que el agente aprendiera
+// de la conversación de una persona afloraría en la de otra.
+//
+// Por eso el alcance completo es `agentId + organizationId + userId`, y `userId` es
+// OBLIGATORIO: no existe memoria organizacional compartida en esta fase.
 model AgentMemory {
   id             String   @id @default(cuid())
   agentId        String
   organizationId String
-  conversationId String? // null = memoria de largo plazo del agente, no ligada a una conversación
+  userId         String
+  conversationId String? // null = memoria de largo plazo del usuario con este agente
   key            String
   value          Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  // Sin estas dos claves ajenas, `organizationId` y `userId` serían columnas de filtrado sin
+  // garantía: podrían desincronizarse de la organización real del agente.
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([agentId, organizationId])
+  // Una clave de memoria identifica un hecho por usuario y agente: sin unicidad, recordar
+  // algo dos veces crearía dos verdades simultáneas sin criterio de desempate.
+  @@unique([agentId, userId, key])
+  @@index([agentId, organizationId, userId])
 }
 
 // Groundwork de marketplace: una plantilla instalable de agente. No se construye el
@@ -748,15 +765,15 @@ model Recommendation {
   // BUSINESSBRAIN_MIGRATION_PLAN.md §3.2 exige SEIS puntos en toda propuesta. Hasta esta
   // migracion solo cabian como texto libre en `description`, lo que contradecia la
   // exigencia de estructura. Cierra el bloqueante documentado de la subfase 3.5.
-  detected          String? // que se ha detectado
-  justification     String? // por que se considera una mejora
-  estimatedImpact   String? // impacto esperado
-  advantages        String? // ventajas
-  drawbacks         String? // inconvenientes
-  affectedAreas     String? // que partes del sistema se verian afectadas
+  detected        String? // que se ha detectado
+  justification   String? // por que se considera una mejora
+  estimatedImpact String? // impacto esperado
+  advantages      String? // ventajas
+  drawbacks       String? // inconvenientes
+  affectedAreas   String? // que partes del sistema se verian afectadas
   // NUNCA se omite: si el cambio no requiere migracion, se completa explicitamente como
   // "no aplica", en vez de dejarse en blanco (§3.2).
-  migrationPlan     String?
+  migrationPlan   String?
 
   // ── Trazabilidad hasta la comprension que la origino ────────────────────
   // Sin esta referencia es imposible saber si una recomendacion pendiente se apoya en
@@ -1012,8 +1029,8 @@ model CanonicalCandidate {
   canonicalKnowledgeEntityId String
   knowledgeItemId            String
 
-  origin    CanonicalCandidateOrigin
-  addedAt   DateTime                 @default(now())
+  origin  CanonicalCandidateOrigin
+  addedAt DateTime                 @default(now())
 
   canonicalKnowledgeEntity CanonicalKnowledgeEntity @relation(fields: [canonicalKnowledgeEntityId], references: [id], onDelete: Cascade)
   knowledgeItem            KnowledgeItem            @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
@@ -1070,9 +1087,9 @@ model BusinessObjective {
   confirmedAt   DateTime?
   createdAt     DateTime  @default(now())
 
-  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  supersedes   BusinessObjective?   @relation("ObjectiveVersioning", fields: [supersedesObjectiveId], references: [id], onDelete: SetNull)
-  supersededBy BusinessObjective?   @relation("ObjectiveVersioning")
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supersedes   BusinessObjective?     @relation("ObjectiveVersioning", fields: [supersedesObjectiveId], references: [id], onDelete: SetNull)
+  supersededBy BusinessObjective?     @relation("ObjectiveVersioning")
   insightLinks InsightObjectiveLink[]
 
   @@index([organizationId])
@@ -1117,16 +1134,16 @@ model InsightFeedback {
   organizationId String
   insightId      String
 
-  type    InsightFeedbackType
-  comment String?
+  type              InsightFeedbackType
+  comment           String?
   // Entrada que esta revocacion deja sin efecto (solo para type = REVOCATION).
-  revokesFeedbackId String? @unique
+  revokesFeedbackId String?             @unique
 
   actorUserId String
   createdAt   DateTime @default(now())
 
-  insight  Insight          @relation(fields: [insightId], references: [id], onDelete: Cascade)
-  revokes  InsightFeedback? @relation("FeedbackRevocation", fields: [revokesFeedbackId], references: [id], onDelete: SetNull)
+  insight   Insight          @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  revokes   InsightFeedback? @relation("FeedbackRevocation", fields: [revokesFeedbackId], references: [id], onDelete: SetNull)
   revokedBy InsightFeedback? @relation("FeedbackRevocation")
 
   @@index([insightId, createdAt])
@@ -1269,12 +1286,12 @@ model Insight {
 
   createdAt DateTime @default(now())
 
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  analysisRun     AnalysisRun       @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
-  supersedes      Insight?          @relation("InsightSupersession", fields: [supersedesInsightId], references: [id], onDelete: SetNull)
-  supersededBy    Insight?          @relation("InsightSupersession")
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  analysisRun     AnalysisRun            @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  supersedes      Insight?               @relation("InsightSupersession", fields: [supersedesInsightId], references: [id], onDelete: SetNull)
+  supersededBy    Insight?               @relation("InsightSupersession")
   evidence        InsightEvidence[]
-  citedAsEvidence InsightEvidence[] @relation("InsightAsEvidence")
+  citedAsEvidence InsightEvidence[]      @relation("InsightAsEvidence")
   objectiveLinks  InsightObjectiveLink[]
   feedback        InsightFeedback[]
   recommendations Recommendation[]

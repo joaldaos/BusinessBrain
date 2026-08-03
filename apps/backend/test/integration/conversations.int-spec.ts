@@ -7,6 +7,10 @@ import {
 } from '../../src/conversations/stream-message.use-case';
 import { ConversationTurnService } from '../../src/conversations/conversation-turn.service';
 import { PromptBuilderService } from '../../src/conversations/prompt-builder.service';
+import { AgentsService } from '../../src/agents/application/agents.service';
+import { RunAgentUseCase } from '../../src/agents/application/run-agent.use-case';
+import { PrismaMemoryStoreAdapter } from '../../src/agents/infrastructure/prisma-memory-store.adapter';
+import { RetrieveInsightsUseCase as RealRetrieveInsights } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import type { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
@@ -45,6 +49,9 @@ describe('Conversations (integración)', () => {
   >;
   let retrievedChunks: unknown[];
   let retrievedInsights: unknown[];
+  let agents: AgentsService;
+  let memoryStore: PrismaMemoryStoreAdapter;
+  let resolvedProfileIds: (string | null)[];
 
   beforeEach(async () => {
     org = await createTestOrg('conv-int');
@@ -61,6 +68,17 @@ describe('Conversations (integración)', () => {
       [{ systemPrompt: string; messages: { content: string }[] }]
     >(() => toStream(['Según ', '[1], ', 'son 23 días.']));
 
+    agents = new AgentsService(db);
+    memoryStore = new PrismaMemoryStoreAdapter(db);
+    const runAgent = new RunAgentUseCase(
+      agents,
+      {
+        execute: () => Promise.resolve(retrievedChunks),
+      } as unknown as RetrieveContextUseCase,
+      new RealRetrieveInsights(db),
+      memoryStore,
+    );
+
     const turn = new ConversationTurnService(
       db,
       conversations,
@@ -71,13 +89,24 @@ describe('Conversations (integración)', () => {
         execute: () => Promise.resolve(retrievedInsights),
       } as unknown as RetrieveInsightsUseCase,
       new PromptBuilderService(),
+      runAgent,
     );
+    resolvedProfileIds = [];
     const registry = {
       resolveForOrganization: () =>
         Promise.resolve({
           profile: { modelName: 'model-x', apiKeyEnc: null },
           provider: { complete, stream },
         }),
+      // Registra con qué perfil se resolvió cada turno: es como se comprueba que el chat
+      // usa REALMENTE el LlmProfile del agente y no el de la organización.
+      resolveForAgent: (_orgId: string, llmProfileId: string | null) => {
+        resolvedProfileIds.push(llmProfileId);
+        return Promise.resolve({
+          profile: { modelName: 'model-x', apiKeyEnc: null },
+          provider: { complete, stream },
+        });
+      },
     } as unknown as ProviderRegistry;
 
     sendMessage = new SendMessageUseCase(turn, registry);
@@ -554,6 +583,264 @@ describe('Conversations (integración)', () => {
       ).rejects.toThrow();
 
       await destroyTestOrg(other);
+    });
+  });
+
+  describe('conversación con Agent (5.6)', () => {
+    /** Crea una colección, un agente acotado a ella y una conversación atendida por él. */
+    const withAgent = async (agentOverrides: Record<string, unknown> = {}) => {
+      const coleccion = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      const agent = await agents.create({
+        organizationId: org.orgId,
+        createdById: org.userId,
+        name: 'Agente comercial',
+        systemPrompt: 'Eres el agente de ventas de ACME.',
+        knowledgeCollectionIds: [coleccion.id],
+        ...agentOverrides,
+      });
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+        agentId: agent.id,
+      });
+      return { agent, conversation, coleccion };
+    };
+
+    it('usa REALMENTE el systemPrompt del agente', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withAgent();
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(complete.mock.calls[0][0].systemPrompt).toContain(
+        'Eres el agente de ventas de ACME.',
+      );
+    });
+
+    it('usa el LlmProfile del agente, no el de la organización', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const perfil = await prisma.llmProfile.create({
+        data: {
+          organizationId: org.orgId,
+          provider: 'OPENAI',
+          modelName: 'gpt-4.1',
+        },
+      });
+      const { conversation } = await withAgent({ llmProfileId: perfil.id });
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(resolvedProfileIds).toEqual([perfil.id]);
+    });
+
+    it('aplica los guardrails del agente al prompt', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withAgent({
+        guardrails: { forbiddenTopics: ['nóminas'] },
+      });
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(complete.mock.calls[0][0].systemPrompt).toContain('nóminas');
+    });
+
+    it('agentId NO es una puerta trasera: respeta el alcance de colecciones', async () => {
+      const rrhh = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'RR. HH.' },
+      });
+      const item = await createKnowledgeItem(org);
+      await prisma.knowledgeItemCollection.create({
+        data: {
+          knowledgeItemId: item.id,
+          knowledgeCollectionId: rrhh.id,
+          organizationId: org.orgId,
+        },
+      });
+      await createInsight(org, {
+        subjectIdentity: 'asunto-de-rrhh',
+        evidenceItemIds: [item.id],
+      });
+      retrievedChunks = [chunk('c1', 'contenido')];
+
+      const { conversation } = await withAgent();
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: '¿qué pasa en la empresa?',
+      });
+
+      // El agente está acotado a Ventas: una conclusión de RR. HH. no le llega, aunque la
+      // conversación sin agente sí la habría recibido.
+      expect(result.insightsUsed).toEqual([]);
+      expect(complete.mock.calls[0][0].systemPrompt).not.toContain(
+        'asunto-de-rrhh',
+      );
+    });
+
+    it('un agente SIN alcance declarado no responde, no accede a todo', async () => {
+      const agent = await agents.create({
+        organizationId: org.orgId,
+        createdById: org.userId,
+        name: 'Sin alcance',
+        systemPrompt: 'x',
+      });
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+        agentId: agent.id,
+      });
+
+      await expect(
+        sendMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: conversation.id,
+          content: 'hola',
+        }),
+      ).rejects.toThrow(/alcance de conocimiento/i);
+    });
+
+    it('la memoria del agente es privada de cada usuario también desde el chat', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withAgent({
+        memoryConfig: { strategy: 'long_term', windowSize: 10 },
+      });
+
+      const otroUsuario = await prisma.user.create({
+        data: {
+          email: `vecino-${Date.now()}${Math.random()}@t.local`,
+          passwordHash: 'x',
+          name: 'Vecino',
+        },
+      });
+      await memoryStore.remember(
+        {
+          organizationId: org.orgId,
+          agentId: agent.id,
+          userId: otroUsuario.id,
+        },
+        { key: 'secreto-del-vecino', value: 'no debe verse' },
+      );
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: '¿qué recuerdas?',
+      });
+
+      expect(complete.mock.calls[0][0].systemPrompt).not.toContain(
+        'secreto-del-vecino',
+      );
+
+      await prisma.agentMemory.deleteMany({
+        where: { userId: otroUsuario.id },
+      });
+      await prisma.user.delete({ where: { id: otroUsuario.id } });
+    });
+
+    it('el streaming con agente produce el MISMO prompt que la vía síncrona', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withAgent();
+      const otra = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+        agentId: conversation.agentId ?? undefined,
+      });
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'la misma pregunta',
+      });
+      await collect(
+        streamMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: otra.id,
+          content: 'la misma pregunta',
+        }),
+      );
+
+      expect(stream.mock.calls[0][0]).toEqual(complete.mock.calls[0][0]);
+    });
+
+    it('sigue aislando por usuario: no se responde en la conversación de otro', async () => {
+      const { agent } = await withAgent();
+      const otroUsuario = await prisma.user.create({
+        data: {
+          email: `intruso-${Date.now()}${Math.random()}@t.local`,
+          passwordHash: 'x',
+          name: 'Otro',
+        },
+      });
+      const suya = await conversations.create({
+        organizationId: org.orgId,
+        userId: otroUsuario.id,
+        agentId: agent.id,
+      });
+
+      await expect(
+        sendMessage.execute({
+          organizationId: org.orgId,
+          userId: org.userId,
+          conversationId: suya.id,
+          content: 'intruso',
+        }),
+      ).rejects.toThrow();
+
+      await prisma.conversation.deleteMany({
+        where: { userId: otroUsuario.id },
+      });
+      await prisma.user.delete({ where: { id: otroUsuario.id } });
+    });
+
+    it('sin agentId el comportamiento es exactamente el de la Fase 4', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      retrievedInsights = [
+        {
+          id: 'i1',
+          summary: 'algo comprendido',
+          confidence: 0.7,
+          freshness: 'FRESH',
+        },
+      ];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      // Prompt genérico de plataforma, comprensión sin acotar por agente y perfil de la
+      // organización: ninguna regresión respecto a la Fase 4.
+      expect(complete.mock.calls[0][0].systemPrompt).toContain('BusinessBrain');
+      expect(result.insightsUsed).toHaveLength(1);
+      expect(resolvedProfileIds).toEqual([null]);
     });
   });
 });

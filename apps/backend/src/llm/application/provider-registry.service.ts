@@ -82,4 +82,30 @@ export class ProviderRegistry {
 
     return { profile, provider: this.getLlmProvider(profile.provider) };
   }
+
+  /**
+   * Resuelve el perfil con el que responde un agente — §7.3: primero el `LlmProfile` del
+   * `Agent` si lo tiene, si no el de la organización.
+   *
+   * El perfil del agente se vuelve a validar contra la organización aunque `AgentsService`
+   * ya lo hiciera al asignarlo: entre aquella escritura y esta lectura, el perfil pudo
+   * cambiar de manos. Sin esta comprobación, un `llmProfileId` heredado podría gastar —o
+   * exponer— la clave BYO de otro cliente.
+   */
+  async resolveForAgent(organizationId: string, llmProfileId: string | null) {
+    if (!llmProfileId) return this.resolveForOrganization(organizationId);
+
+    const profile = await this.prisma.llmProfile.findFirst({
+      where: {
+        id: llmProfileId,
+        OR: [{ organizationId }, { organizationId: null }],
+      },
+    });
+
+    // Un perfil que ya no es utilizable degrada al de la organización, no rompe la
+    // conversación: el agente sigue pudiendo responder, solo que con el modelo por defecto.
+    if (!profile) return this.resolveForOrganization(organizationId);
+
+    return { profile, provider: this.getLlmProvider(profile.provider) };
+  }
 }

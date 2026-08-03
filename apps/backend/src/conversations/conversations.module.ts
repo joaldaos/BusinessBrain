@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { UnderstandingEngineModule } from '../understanding-engine/understanding-engine.module';
 import { LlmModule } from '../llm/llm.module';
+import { AgentsModule } from '../agents/agents.module';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { SendMessageUseCase } from './send-message.use-case';
@@ -18,7 +19,12 @@ import { PromptBuilderService } from './prompt-builder.service';
  * de fragmentos recuperados.
  */
 @Module({
-  imports: [KnowledgeEngineModule, UnderstandingEngineModule, LlmModule],
+  imports: [
+    KnowledgeEngineModule,
+    UnderstandingEngineModule,
+    LlmModule,
+    AgentsModule,
+  ],
   controllers: [ConversationsController],
   providers: [
     ConversationsService,

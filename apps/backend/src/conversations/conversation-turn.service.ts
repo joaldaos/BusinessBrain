@@ -9,6 +9,7 @@ import {
   citationLabel,
 } from '../knowledge-engine/domain/context-builder';
 import type { LlmCompletionRequest } from '../llm/domain/ports/llm-provider.port';
+import { RunAgentUseCase } from '../agents/application/run-agent.use-case';
 import { ConversationsService } from './conversations.service';
 import {
   PromptBuilderService,
@@ -32,10 +33,22 @@ import {
  *
  * No contiene lógica de RAG ni de razonamiento propia: no reordena, no filtra por confianza,
  * no decide qué es relevante. Todo eso ya ocurrió aguas arriba.
+ *
+ * **Con `agentId`, el turno lo prepara `RunAgentUseCase`** (subfase 5.6), no una copia de su
+ * lógica aquí. Eso importa por seguridad, no por limpieza: `RunAgentUseCase` es quien impone
+ * el alcance fail-closed y quien resuelve la memoria privada del usuario. Duplicar su
+ * preparación en el chat crearía un segundo camino al conocimiento con sus propias reglas —
+ * exactamente la puerta trasera que `agentId` no puede ser.
  */
 
 const KNOWLEDGE_CHUNKS = 8;
 const MAX_INSIGHTS = 5;
+
+/**
+ * Contexto vacío para el camino del agente: su conocimiento ya viaja dentro del system
+ * prompt que compuso `RunAgentUseCase`, y volver a insertarlo aquí lo duplicaría.
+ */
+const EMPTY_CONTEXT = buildContext([], DEFAULT_KNOWLEDGE_TOKEN_BUDGET);
 
 export interface MessageCitation {
   ordinal: number;
@@ -47,6 +60,8 @@ export interface MessageCitation {
 export interface PreparedTurn {
   conversationId: string;
   userMessageId: string;
+  /** Perfil de LLM con el que responder: el del agente si lo declara (§7.3). */
+  llmProfileId: string | null;
   citations: MessageCitation[];
   insights: (PromptInsight & { id: string })[];
   droppedChunkIds: string[];
@@ -62,6 +77,7 @@ export class ConversationTurnService {
     private readonly retrieveContext: RetrieveContextUseCase,
     private readonly retrieveInsights: RetrieveInsightsUseCase,
     private readonly promptBuilder: PromptBuilderService,
+    private readonly runAgent: RunAgentUseCase,
   ) {}
 
   /**
@@ -88,6 +104,18 @@ export class ConversationTurnService {
         content: params.content,
       },
     });
+
+    // Con agente, TODA la preparación del turno la hace RunAgentUseCase: es quien impone el
+    // alcance fail-closed y la memoria privada del usuario. Aquí no se replica nada de eso.
+    if (conversation.agentId) {
+      return this.prepareWithAgent({
+        ...params,
+        conversationId: conversation.id,
+        agentId: conversation.agentId,
+        userMessageId: userMessage.id,
+        history: conversation.messages,
+      });
+    }
 
     // 1. COMPRENSIÓN primero: qué sabe ya la organización sobre este asunto.
     const insights = await this.retrieveInsights.execute({
@@ -129,6 +157,7 @@ export class ConversationTurnService {
     return {
       conversationId: conversation.id,
       userMessageId: userMessage.id,
+      llmProfileId: null,
       citations: context.pieces.map((piece) => ({
         ordinal: piece.ordinal,
         knowledgeItemId: piece.citation.knowledgeItemId,
@@ -145,6 +174,56 @@ export class ConversationTurnService {
       request: this.promptBuilder.hasMaterial(promptInput)
         ? this.promptBuilder.build(promptInput)
         : null,
+    };
+  }
+
+  /**
+   * Turno atendido por un `Agent`.
+   *
+   * `RunAgentUseCase` produce el system prompt completo —con el prompt del agente, sus
+   * guardrails, su memoria privada de este usuario, la comprensión y el conocimiento, todo
+   * acotado a las colecciones del agente— y aquí solo se le añaden los mensajes.
+   *
+   * El ensamblado de mensajes es el MISMO que sin agente. Lo que cambia es el system prompt
+   * y el alcance, nunca cómo se trata el historial.
+   */
+  private async prepareWithAgent(params: {
+    organizationId: string;
+    userId: string;
+    conversationId: string;
+    agentId: string;
+    userMessageId: string;
+    content: string;
+    history: { role: MessageRole; content: string }[];
+  }): Promise<PreparedTurn> {
+    const run = await this.runAgent.execute({
+      organizationId: params.organizationId,
+      agentId: params.agentId,
+      userId: params.userId,
+      query: params.content,
+      conversationId: params.conversationId,
+    });
+
+    return {
+      conversationId: params.conversationId,
+      userMessageId: params.userMessageId,
+      llmProfileId: run.agent.llmProfileId,
+      citations: run.citations,
+      insights: run.insightsUsed,
+      droppedChunkIds: run.droppedChunkIds,
+      // Un agente CON memoria pero sin conocimiento ni comprensión sigue teniendo algo que
+      // decir: lo que recuerda de esta persona.
+      request:
+        run.hasMaterial || run.memoriesUsed > 0
+          ? this.promptBuilder.buildFrom(run.systemPrompt, {
+              question: params.content,
+              // El contexto ya está dentro del system prompt que compuso el agente; aquí
+              // solo se ensamblan los mensajes.
+              context: EMPTY_CONTEXT,
+              insights: [],
+              history: params.history,
+            })
+          : null,
     };
   }
 

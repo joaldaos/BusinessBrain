@@ -56,8 +56,21 @@ export class PromptBuilderService {
   }
 
   build(input: PromptInput): LlmCompletionRequest {
+    return this.buildFrom(this.systemPrompt(input), input);
+  }
+
+  /**
+   * Igual que `build`, pero con un system prompt ya compuesto aguas arriba — el caso de un
+   * `Agent`, cuyo prompt lo arma `RunAgentUseCase` con su configuración, su memoria y sus
+   * guardrails.
+   *
+   * El ensamblado de MENSAJES (historial + turno actual) es idéntico en ambos caminos, y lo
+   * es a propósito: si divergiera, una conversación con agente y otra sin él tratarían el
+   * historial de forma distinta sin que nada lo justifique.
+   */
+  buildFrom(systemPrompt: string, input: PromptInput): LlmCompletionRequest {
     return {
-      systemPrompt: this.systemPrompt(input),
+      systemPrompt,
       messages: this.messages(input),
       temperature: 0.2,
       maxTokens: 1500,

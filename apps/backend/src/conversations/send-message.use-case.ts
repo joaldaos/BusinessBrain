@@ -73,8 +73,11 @@ export class SendMessageUseCase {
     if (!prepared.request) return this.turn.noKnowledgeAnswer();
 
     try {
-      const { profile, provider } =
-        await this.providerRegistry.resolveForOrganization(organizationId);
+      // Perfil del agente si la conversación lo tiene (§7.3); si no, el de la organización.
+      const { profile, provider } = await this.providerRegistry.resolveForAgent(
+        organizationId,
+        prepared.llmProfileId,
+      );
 
       const result = await provider.complete(
         prepared.request,

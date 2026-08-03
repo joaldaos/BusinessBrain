@@ -80,10 +80,11 @@ export class StreamMessageUseCase {
     let failed = false;
 
     try {
-      const { profile, provider } =
-        await this.providerRegistry.resolveForOrganization(
-          params.organizationId,
-        );
+      // Mismo perfil que en la via sincrona: el del agente si lo declara (§7.3).
+      const { profile, provider } = await this.providerRegistry.resolveForAgent(
+        params.organizationId,
+        prepared.llmProfileId,
+      );
 
       for await (const delta of provider.stream(
         prepared.request,

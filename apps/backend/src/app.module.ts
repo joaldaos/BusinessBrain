@@ -11,6 +11,7 @@ import { LlmModule } from './llm/llm.module';
 import { KnowledgeEngineModule } from './knowledge-engine/knowledge-engine.module';
 import { UnderstandingEngineModule } from './understanding-engine/understanding-engine.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { AgentsModule } from './agents/agents.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { HealthModule } from './health/health.module';
     KnowledgeEngineModule,
     UnderstandingEngineModule,
     ConversationsModule,
+    AgentsModule,
     HealthModule,
   ],
   providers: [

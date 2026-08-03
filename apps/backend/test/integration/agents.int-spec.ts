@@ -1,5 +1,6 @@
 import { AgentArea } from '@businessbrain/database';
 import { AgentsService } from '../../src/agents/application/agents.service';
+import { EnforceAgentPolicyUseCase } from '../../src/agents/application/enforce-agent-policy.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   createTestOrg,
@@ -20,10 +21,12 @@ describe('Agents (integración)', () => {
   const db = prisma as unknown as PrismaService;
   let org: TestOrg;
   let agents: AgentsService;
+  let policy: EnforceAgentPolicyUseCase;
 
   beforeEach(async () => {
     org = await createTestOrg('agents-int');
     agents = new AgentsService(db);
+    policy = new EnforceAgentPolicyUseCase(db);
   });
 
   afterEach(async () => {
@@ -283,6 +286,108 @@ describe('Agents (integración)', () => {
         strategy: 'none',
         windowSize: 10,
       });
+    });
+  });
+
+  describe('gate de políticas (5.2)', () => {
+    const enforce = (agentId: string, tool: string, toolCallsSoFar = 0) =>
+      policy.execute({
+        organizationId: org.orgId,
+        agentId,
+        tool,
+        toolCallsSoFar,
+      });
+
+    it('permite una herramienta READ_ONLY concedida', async () => {
+      const agent = await create({
+        tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+      });
+
+      expect(await enforce(agent.id, 'knowledge_search')).toEqual({
+        allowed: true,
+        tool: 'knowledge_search',
+        permission: 'READ_ONLY',
+      });
+    });
+
+    it('DENIEGA una herramienta no concedida y deja rastro en auditoría', async () => {
+      const agent = await create({
+        tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+      });
+
+      const decision = await enforce(agent.id, 'sql_query');
+      expect(decision.allowed).toBe(false);
+
+      // Un patrón de intentos denegados es la señal observable de que algo intenta usar el
+      // agente para lo que no debe. Sin rastro, el intento es invisible.
+      const logs = await prisma.auditLog.findMany({
+        where: { organizationId: org.orgId, action: 'agent.tool.denied' },
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].targetId).toBe(agent.id);
+      expect(logs[0].metadata).toMatchObject({
+        tool: 'sql_query',
+        reason: 'TOOL_NOT_GRANTED',
+      });
+    });
+
+    it('DENIEGA una herramienta con efectos aunque esté declarada AUTONOMOUS', async () => {
+      const agent = await create({
+        tools: [{ tool: 'send_email', permission: 'AUTONOMOUS' }],
+      });
+
+      const decision = await enforce(agent.id, 'send_email');
+
+      // La configuración concede como mucho; nunca amplía lo que la plataforma ejecuta.
+      expect(decision.allowed).toBe(false);
+      expect(decision.allowed === false && decision.reason).toBe(
+        'PERMISSION_NOT_EXECUTABLE',
+      );
+    });
+
+    it('DENIEGA a un agente desactivado', async () => {
+      const agent = await create({
+        tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+      });
+      await agents.deactivate({ organizationId: org.orgId, agentId: agent.id });
+
+      const decision = await enforce(agent.id, 'knowledge_search');
+      expect(decision.allowed === false && decision.reason).toBe(
+        'AGENT_INACTIVE',
+      );
+    });
+
+    it('DENIEGA usar el agente de otra organización sin revelar que existe', async () => {
+      const other = await createTestOrg('agents-int-g');
+      const theirs = await agents.create({
+        organizationId: other.orgId,
+        createdById: other.userId,
+        ...baseAgent,
+        tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+      });
+
+      const decision = await enforce(theirs.id, 'knowledge_search');
+      expect(decision.allowed).toBe(false);
+      expect(decision.allowed === false && decision.explanation).not.toContain(
+        'desactivado',
+      );
+
+      await destroyTestOrg(other);
+    });
+
+    it('DENIEGA al agotar el presupuesto de llamadas del turno', async () => {
+      const agent = await create({
+        tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+        guardrails: { maxToolCallsPerRun: 2 },
+      });
+
+      expect((await enforce(agent.id, 'knowledge_search', 1)).allowed).toBe(
+        true,
+      );
+      const exhausted = await enforce(agent.id, 'knowledge_search', 2);
+      expect(exhausted.allowed === false && exhausted.reason).toBe(
+        'TOOL_CALL_BUDGET_EXHAUSTED',
+      );
     });
   });
 });

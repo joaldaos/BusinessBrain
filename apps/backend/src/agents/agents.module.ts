@@ -6,6 +6,10 @@ import { AgentsService } from './application/agents.service';
 import { EnforceAgentPolicyUseCase } from './application/enforce-agent-policy.use-case';
 import { RunAgentUseCase } from './application/run-agent.use-case';
 import { MEMORY_STORE_PORT } from './domain/ports/memory-store.port';
+import { TOOL_REGISTRY, type ToolPort } from './domain/ports/tool.port';
+import { ExecuteAgentToolUseCase } from './application/execute-agent-tool.use-case';
+import { KnowledgeSearchTool } from './infrastructure/tools/knowledge-search.tool';
+import { InsightLookupTool } from './infrastructure/tools/insight-lookup.tool';
 import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.adapter';
 
 /**
@@ -14,8 +18,8 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
  * Un `Agent` no es un system prompt: es capacidades, herramientas con permiso individual,
  * memoria, guardrails y alcance de conocimiento explícito.
  *
- * Subfases 5.1-5.4: definición, ciclo de vida, gate de políticas, preparación del turno de
- * ejecución y memoria privada de cada usuario. Consume el Understanding Engine y el Knowledge Engine por sus contratos
+ * Subfases 5.1-5.5: definición, ciclo de vida, gate de políticas, preparación del turno,
+ * memoria privada de cada usuario y ejecución de herramientas de solo lectura. Consume el Understanding Engine y el Knowledge Engine por sus contratos
  * declarados, siempre acotado al alcance de conocimiento del agente.
  */
 @Module({
@@ -23,14 +27,26 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
   controllers: [AgentsController],
   providers: [
     { provide: MEMORY_STORE_PORT, useClass: PrismaMemoryStoreAdapter },
+    KnowledgeSearchTool,
+    InsightLookupTool,
+    {
+      // Registro CERRADO de herramientas ejecutables. Solo entran las de solo lectura:
+      // las que tienen efectos fuera del sistema no se implementan en la Fase 5, asi que
+      // no basta con que el gate las deniegue — es que no existe el codigo que las haria.
+      provide: TOOL_REGISTRY,
+      useFactory: (...tools: ToolPort[]): ToolPort[] => tools,
+      inject: [KnowledgeSearchTool, InsightLookupTool],
+    },
     AgentsService,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
+    ExecuteAgentToolUseCase,
   ],
   exports: [
     AgentsService,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
+    ExecuteAgentToolUseCase,
     MEMORY_STORE_PORT,
   ],
 })

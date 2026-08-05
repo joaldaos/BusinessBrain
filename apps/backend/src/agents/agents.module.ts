@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { UnderstandingEngineModule } from '../understanding-engine/understanding-engine.module';
 import { AgentsController } from './api/agents.controller';
+import { AgentTemplatesController } from './api/agent-templates.controller';
 import { AgentsService } from './application/agents.service';
+import { AgentTemplatesService } from './application/agent-templates.service';
+import { InstallAgentTemplateUseCase } from './application/install-agent-template.use-case';
 import { EnforceAgentPolicyUseCase } from './application/enforce-agent-policy.use-case';
 import { RunAgentUseCase } from './application/run-agent.use-case';
 import { MEMORY_STORE_PORT } from './domain/ports/memory-store.port';
@@ -21,10 +24,13 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
  * Subfases 5.1-5.5: definición, ciclo de vida, gate de políticas, preparación del turno,
  * memoria privada de cada usuario y ejecución de herramientas de solo lectura. Consume el Understanding Engine y el Knowledge Engine por sus contratos
  * declarados, siempre acotado al alcance de conocimiento del agente.
+ *
+ * Subfase 5.7: catálogo de `AgentTemplate` e instalación como `Agent`. El catálogo es de
+ * cada organización y no se distribuye: no hay marketplace ni PUBLIC cross-org en la Fase 5.
  */
 @Module({
   imports: [KnowledgeEngineModule, UnderstandingEngineModule],
-  controllers: [AgentsController],
+  controllers: [AgentsController, AgentTemplatesController],
   providers: [
     { provide: MEMORY_STORE_PORT, useClass: PrismaMemoryStoreAdapter },
     KnowledgeSearchTool,
@@ -38,12 +44,16 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
       inject: [KnowledgeSearchTool, InsightLookupTool],
     },
     AgentsService,
+    AgentTemplatesService,
+    InstallAgentTemplateUseCase,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
     ExecuteAgentToolUseCase,
   ],
   exports: [
     AgentsService,
+    AgentTemplatesService,
+    InstallAgentTemplateUseCase,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
     ExecuteAgentToolUseCase,

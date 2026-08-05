@@ -5,6 +5,7 @@ import {
   InsightStatus,
   InsightType,
   KnowledgeSourceType,
+  MembershipRole,
   PrismaClient,
 } from '@businessbrain/database';
 
@@ -21,9 +22,12 @@ export const prisma = new PrismaClient();
 
 export interface TestOrg {
   orgId: string;
+  /** Usuario principal. Tiene membresía OWNER en la organización. */
   userId: string;
   sourceId: string;
   analysisRunId: string;
+  /** Usuarios adicionales creados con `createMember`; se limpian con la organización. */
+  extraUserIds: string[];
 }
 
 /** Crea una organización aislada. Cada test siembra la suya y la elimina al terminar. */
@@ -38,6 +42,16 @@ export async function createTestOrg(prefix: string): Promise<TestOrg> {
       email: `${prefix}-${rnd}@test.local`,
       passwordHash: 'x',
       name: 'Test',
+    },
+  });
+  // La membresía es real, no implícita: desde la subfase 5.7 la autorización de operaciones
+  // privilegiadas (instalar o modificar plantillas) se resuelve leyendo el rol de membresía,
+  // no aceptándolo por parámetro.
+  await prisma.membership.create({
+    data: {
+      userId: user.id,
+      organizationId: org.id,
+      role: MembershipRole.OWNER,
     },
   });
   const source = await prisma.knowledgeSource.create({
@@ -64,13 +78,43 @@ export async function createTestOrg(prefix: string): Promise<TestOrg> {
     userId: user.id,
     sourceId: source.id,
     analysisRunId: run.id,
+    extraUserIds: [],
   };
+}
+
+/**
+ * Usuario adicional con un rol concreto en la organización.
+ *
+ * Existe para poder probar contra Postgres real que un rol insuficiente NO puede instalar ni
+ * modificar plantillas: con un rol pasado por parámetro esa prueba no demostraría nada.
+ */
+export async function createMember(
+  org: TestOrg,
+  role: MembershipRole,
+): Promise<string> {
+  const rnd = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+
+  const user = await prisma.user.create({
+    data: {
+      email: `member-${rnd}@test.local`,
+      passwordHash: 'x',
+      name: `Test ${role}`,
+    },
+  });
+  await prisma.membership.create({
+    data: { userId: user.id, organizationId: org.orgId, role },
+  });
+  org.extraUserIds.push(user.id);
+
+  return user.id;
 }
 
 /** El borrado en cascada de Organization arrastra todo lo demás. */
 export async function destroyTestOrg(org: TestOrg): Promise<void> {
   await prisma.organization.deleteMany({ where: { id: org.orgId } });
-  await prisma.user.deleteMany({ where: { id: org.userId } });
+  await prisma.user.deleteMany({
+    where: { id: { in: [org.userId, ...org.extraUserIds] } },
+  });
 }
 
 export async function createKnowledgeItem(

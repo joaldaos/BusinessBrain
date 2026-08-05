@@ -47,6 +47,8 @@ export class AgentsService {
     memoryConfig?: unknown;
     guardrails?: unknown;
     knowledgeCollectionIds?: string[];
+    /** Plantilla de origen, si se instaló desde el catálogo (subfase 5.7). */
+    templateId?: string;
   }): Promise<AgentWithScope> {
     const configuration = this.parseConfiguration(params);
     await this.assertCollectionsBelongToOrg(
@@ -57,11 +59,13 @@ export class AgentsService {
       params.organizationId,
       params.llmProfileId,
     );
+    await this.assertTemplateIsUsable(params.organizationId, params.templateId);
 
     return this.prisma.agent.create({
       data: {
         organizationId: params.organizationId,
         createdById: params.createdById,
+        templateId: params.templateId ?? null,
         name: params.name,
         area: params.area ?? AgentArea.GENERAL,
         systemPrompt: params.systemPrompt,
@@ -258,6 +262,31 @@ export class AgentsService {
     if (!profile) {
       throw new BadRequestException(
         'Perfil de LLM inexistente o de otra organización',
+      );
+    }
+  }
+
+  /**
+   * `templateId` apunta a una plantilla del catálogo de la propia organización.
+   *
+   * `InstallAgentTemplate` ya lo comprueba antes de llegar aquí, y aun así se repite: este
+   * servicio es el ÚNICO punto donde nace un `Agent`, y una referencia a una plantilla
+   * ajena dejaría un agente cuya procedencia apunta fuera del tenant. La trazabilidad de
+   * "de dónde salió este agente" solo vale si no puede cruzar la frontera de organización.
+   */
+  private async assertTemplateIsUsable(
+    organizationId: string,
+    templateId?: string,
+  ): Promise<void> {
+    if (!templateId) return;
+
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id: templateId, publisherOrgId: organizationId },
+      select: { id: true },
+    });
+    if (!template) {
+      throw new BadRequestException(
+        'Plantilla inexistente o de otra organización',
       );
     }
   }

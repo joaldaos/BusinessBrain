@@ -256,6 +256,10 @@ model User {
   createdApiKeys   ApiKey[]
   refreshTokens    RefreshToken[]
 
+  // Decisiones humanas sobre propuestas (subfase 5.8) y concesiones de acceso otorgadas.
+  resolvedRecommendations Recommendation[]            @relation("RecommendationResolver")
+  grantedCollectionAccess KnowledgeCollectionAccess[] @relation("CollectionAccessGrantedBy")
+
   @@index([email])
 }
 
@@ -319,6 +323,10 @@ model Membership {
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Colecciones concedidas a esta persona EN ESTA organizacion (subfase 5.8). Cuelgan de la
+  // membresia para que la baja las revoque en cascada.
+  collectionAccess KnowledgeCollectionAccess[]
 
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -414,11 +422,50 @@ model KnowledgeCollection {
   area           AgentArea?
   createdAt      DateTime   @default(now())
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization             Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   knowledgeItemCollections KnowledgeItemCollection[]
-  agents                   Agent[]                   @relation("AgentKnowledgeScope")
+  agents                   Agent[]                     @relation("AgentKnowledgeScope")
+  userAccess               KnowledgeCollectionAccess[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
+}
+
+// Acceso de una PERSONA a una coleccion de conocimiento (subfase 5.8).
+//
+// Hasta aqui el alcance de coleccion solo existia para agentes (`AgentKnowledgeScope`). El
+// Understanding Engine, en cambio, acota la comprension —y las `Recommendation` derivadas de
+// ella— por `EffectiveCollectionScope` (UNDERSTANDING_ENGINE_DESIGN.md §3.4, §12), y esa
+// regla se compara contra las colecciones a las que el CONSUMIDOR tiene acceso concedido.
+// Sin este modelo, ese consumidor no podia ser una persona: no habia forma de expresar que
+// alguien tiene acceso a Ventas pero no a RR. HH., asi que una `Recommendation` sostenida
+// por evidencia restringida habria sido visible para cualquier miembro de la organizacion.
+//
+// El acceso se concede, NUNCA se presupone: no tener ninguna fila aqui significa no tener
+// acceso a ninguna coleccion, no a todas (KNOWLEDGE_ENGINE_DESIGN.md §535).
+model KnowledgeCollectionAccess {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  knowledgeCollectionId String
+  userId                String
+  grantedById           String?
+  createdAt             DateTime @default(now())
+
+  // La concesion cuelga de la MEMBRESIA, no del usuario suelto: salir de la organizacion
+  // revoca en cascada todo lo concedido en ella. Un acceso que sobreviviera a la baja seria
+  // exactamente el permiso que nadie recuerda retirar.
+  membership Membership @relation(fields: [userId, organizationId], references: [userId, organizationId], onDelete: Cascade)
+
+  // FK COMPUESTA contra (id, organizationId) de la coleccion: hace imposible por
+  // construccion conceder una coleccion de otra organizacion. Comprobarlo solo en el
+  // servicio dejaria la garantia a merced de la siguiente via de escritura que se anada.
+  knowledgeCollection KnowledgeCollection @relation(fields: [knowledgeCollectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  grantedBy User? @relation("CollectionAccessGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@unique([knowledgeCollectionId, userId])
+  @@index([organizationId, userId])
+  @@index([userId])
 }
 
 // Fase 2.1 (KNOWLEDGE_ENGINE_DESIGN.md §19, subfase 2.1): solo ingesta + normalización básica.
@@ -759,7 +806,16 @@ model Recommendation {
   priority       Int                  @default(0)
   status         RecommendationStatus @default(NEW)
   createdAt      DateTime             @default(now())
-  resolvedAt     DateTime?
+
+  // ── Quien resolvio y cuando (subfase 5.8) ───────────────────────────────
+  // Aceptar o descartar una Recommendation es una DECISION HUMANA, no un cambio de estado
+  // administrativo. Sin `resolvedById` la traza quedaba coja: se sabia cuando se resolvio
+  // pero no quien lo decidio, y una propuesta que "requiere aprobacion explicita" (§11) sin
+  // aprobador registrado no es auditable.
+  // `SetNull` al borrar el usuario: la decision sobrevive a la baja de quien la tomo, igual
+  // que un `Agent` desactivado conserva la trazabilidad de lo que produjo.
+  resolvedById String?
+  resolvedAt   DateTime?
 
   // ── Contrato del Principio de Evolucion Asistida ────────────────────────
   // BUSINESSBRAIN_MIGRATION_PLAN.md §3.2 exige SEIS puntos en toda propuesta. Hasta esta
@@ -788,9 +844,11 @@ model Recommendation {
   organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   agent         Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
   sourceInsight Insight?     @relation(fields: [sourceInsightId], references: [id], onDelete: SetNull)
+  resolvedBy    User?        @relation("RecommendationResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([sourceInsightId])
+  @@index([resolvedById])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

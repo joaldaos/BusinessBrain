@@ -12,6 +12,7 @@ import { KnowledgeEngineModule } from './knowledge-engine/knowledge-engine.modul
 import { UnderstandingEngineModule } from './understanding-engine/understanding-engine.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { AgentsModule } from './agents/agents.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { HealthModule } from './health/health.module';
     UnderstandingEngineModule,
     ConversationsModule,
     AgentsModule,
+    RecommendationsModule,
     HealthModule,
   ],
   providers: [

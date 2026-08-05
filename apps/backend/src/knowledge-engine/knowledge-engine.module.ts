@@ -13,11 +13,17 @@ import { ScoreConfidenceUseCase } from './application/score-confidence.use-case'
 import { CanonicalizeUseCase } from './application/canonicalize.use-case';
 import { ChunkAndEmbedUseCase } from './application/chunk-and-embed.use-case';
 import { RetrieveContextUseCase } from './application/retrieve-context.use-case';
+import { CollectionAccessController } from './api/collection-access.controller';
+import { CollectionAccessService } from './application/collection-access.service';
 import { LlmModule } from '../llm/llm.module';
 
 @Module({
   imports: [LlmModule],
-  controllers: [KnowledgeSourcesController, KnowledgeItemsController],
+  controllers: [
+    KnowledgeSourcesController,
+    KnowledgeItemsController,
+    CollectionAccessController,
+  ],
   providers: [
     KnowledgeSourcesService,
     KnowledgeItemsService,
@@ -28,10 +34,11 @@ import { LlmModule } from '../llm/llm.module';
     CanonicalizeUseCase,
     ChunkAndEmbedUseCase,
     RetrieveContextUseCase,
+    CollectionAccessService,
     FileUploadConnector,
     ConnectorRegistry,
     EncryptionService,
   ],
-  exports: [RetrieveContextUseCase],
+  exports: [RetrieveContextUseCase, CollectionAccessService],
 })
 export class KnowledgeEngineModule {}

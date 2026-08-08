@@ -83,7 +83,10 @@ export interface TurnAgentContext {
   userId: string;
   agentId: string;
   configuration: AgentConfiguration;
-  allowedCollectionIds: string[];
+  // NO lleva `allowedCollectionIds` a propósito. `ExecuteAgentToolUseCase` vuelve a
+  // derivarlo del agente persistido en cada ejecución, y ese es el ÚNICO criterio válido.
+  // Arrastrar aquí una copia del alcance sería una trampa: parecería autoritativa, y quien
+  // la usara más adelante estaría saltándose la re-derivación sin darse cuenta.
 }
 
 export interface PreparedTurn {
@@ -343,9 +346,6 @@ export class ConversationTurnService {
         userId: params.userId,
         agentId: run.agent.id,
         configuration: run.configuration,
-        // El MISMO alcance con el que se preparó el prompt. Recalcularlo aguas abajo
-        // permitiría que ambos divergieran.
-        allowedCollectionIds: run.allowedCollectionIds,
       },
       // Un agente CON memoria pero sin conocimiento ni comprensión sigue teniendo algo que
       // decir: lo que recuerda de esta persona.

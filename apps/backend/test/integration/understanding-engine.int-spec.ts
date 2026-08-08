@@ -538,6 +538,45 @@ describe('Understanding Engine (integración)', () => {
       ).rejects.toThrow(/plan de migración/i);
     });
 
+    it('un contrato incompleto es 400, no 500: la peticion esta mal, no el servidor', async () => {
+      const insight = await createInsight(org, {
+        subjectIdentity: 'sin-plan-400',
+      });
+
+      // Devolver 500 presentaria como averia nuestra algo que quien llama puede corregir.
+      await expect(
+        curator.escalateToRecommendation({
+          organizationId: org.orgId,
+          insightId: insight.id,
+          contract: {
+            title: 't',
+            detected: 'd',
+            justification: 'j',
+            estimatedImpact: 'i',
+            advantages: 'a',
+            drawbacks: 'dr',
+            affectedAreas: 'ar',
+            migrationPlan: '',
+          },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('registrar una REVOCATION por la via equivocada es 400', async () => {
+      const insight = await createInsight(org, {
+        subjectIdentity: 'revoca-mal',
+      });
+
+      await expect(
+        curator.curate({
+          organizationId: org.orgId,
+          insightId: insight.id,
+          actorUserId: org.userId,
+          type: InsightFeedbackType.REVOCATION,
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
     it('un Insight no activo no puede escalarse', async () => {
       const insight = await createInsight(org, {
         subjectIdentity: 'expirado',
@@ -560,6 +599,31 @@ describe('Understanding Engine (integración)', () => {
           },
         }),
       ).rejects.toThrow();
+    });
+
+    it('escalar un Insight no activo es 409: conflicto de estado, no fallo del servidor', async () => {
+      const insight = await createInsight(org, {
+        subjectIdentity: 'expirado-409',
+        status: InsightStatus.EXPIRED,
+      });
+
+      // La MISMA llamada seria valida si el Insight siguiera activo: eso es 409, no 500.
+      await expect(
+        curator.escalateToRecommendation({
+          organizationId: org.orgId,
+          insightId: insight.id,
+          contract: {
+            title: 't',
+            detected: 'd',
+            justification: 'j',
+            estimatedImpact: 'i',
+            advantages: 'a',
+            drawbacks: 'dr',
+            affectedAreas: 'ar',
+            migrationPlan: 'no aplica',
+          },
+        }),
+      ).rejects.toMatchObject({ status: 409 });
     });
   });
 

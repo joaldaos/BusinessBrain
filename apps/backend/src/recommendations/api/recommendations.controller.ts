@@ -26,6 +26,13 @@ import { RecommendationsService } from '../application/recommendations.service';
  * negocio de quien trabaja con ella, y el acceso real lo acota el `effectiveCollectionScope`,
  * no el rol. Un VIEWER, en cambio, no resuelve nada — ni siquiera lo que puede leer.
  */
+/** Entero no negativo, o `undefined` si lo recibido no lo es. */
+function toPositiveInt(raw?: string): number | undefined {
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
 @Controller('recommendations')
 @UseGuards(OrgRoleGuard)
 export class RecommendationsController {
@@ -37,11 +44,17 @@ export class RecommendationsController {
     @CurrentOrg() org: RequestOrganization,
     @CurrentUser() user: RequestUser,
     @Query('status') status?: RecommendationStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     return this.recommendations.list({
       organizationId: org.id,
       userId: user.id,
       status,
+      // Un valor no numérico se ignora y manda el defecto: la paginación es una comodidad
+      // de lectura, no una vía para provocar un error del servidor con `?limit=abc`.
+      limit: toPositiveInt(limit),
+      offset: toPositiveInt(offset),
     });
   }
 

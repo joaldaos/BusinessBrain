@@ -832,6 +832,163 @@ describe('Recommendations (integración)', () => {
     });
   });
 
+  // ── Paginación aplicada en Postgres (5.9) ────────────────────────────────
+  describe('paginación', () => {
+    /** N recomendaciones legibles por `reader`, en la misma colección. */
+    const seedMany = async (count: number) => {
+      const ventas = await createCollection(org, 'Ventas');
+      const reader = await createMember(org, MembershipRole.MEMBER);
+      await access.grant({
+        organizationId: org.orgId,
+        knowledgeCollectionId: ventas.id,
+        userId: reader,
+        grantedById: org.userId,
+      });
+
+      const created: string[] = [];
+      for (let i = 0; i < count; i += 1) {
+        const rec = await escalateFromCollections(
+          org,
+          [ventas.id],
+          `Propuesta ${i}`,
+        );
+        created.push(rec.id);
+      }
+      return { reader, ventas, created };
+    };
+
+    it('el `limit` acota la página y el `offset` la desplaza', async () => {
+      const { reader } = await seedMany(5);
+
+      const firstPage = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        limit: 2,
+      });
+      const secondPage = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        limit: 2,
+        offset: 2,
+      });
+
+      expect(firstPage).toHaveLength(2);
+      expect(secondPage).toHaveLength(2);
+      // Páginas disjuntas: el desplazamiento ocurre en la consulta, no en memoria.
+      const ids = new Set([...firstPage, ...secondPage].map((r) => r.id));
+      expect(ids.size).toBe(4);
+    });
+
+    it('recorrer todas las páginas devuelve exactamente el conjunto accesible', async () => {
+      const { reader, created } = await seedMany(5);
+
+      const seen: string[] = [];
+      for (let offset = 0; offset < 10; offset += 2) {
+        const page = await recommendations.list({
+          organizationId: org.orgId,
+          userId: reader,
+          limit: 2,
+          offset,
+        });
+        seen.push(...page.map((r) => r.id));
+        if (page.length === 0) break;
+      }
+
+      expect([...new Set(seen)].sort()).toEqual([...created].sort());
+    });
+
+    it('la paginación NO abre acceso a lo que el alcance deniega', async () => {
+      const { reader, ventas } = await seedMany(2);
+      const rrhh = await createCollection(org, 'RR. HH.');
+      // Una recomendación que exige DOS colecciones; `reader` solo tiene una.
+      const restricted = await escalateFromCollections(org, [
+        ventas.id,
+        rrhh.id,
+      ]);
+
+      const all: string[] = [];
+      for (let offset = 0; offset < 10; offset += 1) {
+        const page = await recommendations.list({
+          organizationId: org.orgId,
+          userId: reader,
+          limit: 1,
+          offset,
+        });
+        if (page.length === 0) break;
+        all.push(...page.map((r) => r.id));
+      }
+
+      // Ninguna página, en ningún desplazamiento, la deja aparecer.
+      expect(all).not.toContain(restricted.id);
+    });
+
+    it('el alcance vacío sigue siendo inaccesible con paginación', async () => {
+      const { reader } = await seedMany(1);
+      const orphan = await escalateFromCollections(org, []);
+
+      const page = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        limit: 50,
+      });
+
+      expect(page.map((r) => r.id)).not.toContain(orphan.id);
+    });
+
+    it('la paginación nunca cruza la frontera de organización', async () => {
+      const { reader } = await seedMany(2);
+      const other = await createTestOrg('rec-int-pag');
+      const theirCollection = await createCollection(other, 'Ventas ajenas');
+      await escalateFromCollections(other, [theirCollection.id]);
+
+      const page = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        limit: 50,
+      });
+
+      expect(page.every((r) => r.organizationId === org.orgId)).toBe(true);
+
+      await destroyTestOrg(other);
+    });
+
+    it('un usuario sin concesiones no ve nada, pagine como pagine', async () => {
+      await seedMany(3);
+      const nobody = await createMember(org, MembershipRole.ADMIN);
+
+      expect(
+        await recommendations.list({
+          organizationId: org.orgId,
+          userId: nobody,
+          limit: 50,
+        }),
+      ).toHaveLength(0);
+    });
+
+    it('filtra por estado dentro de la propia página', async () => {
+      const { reader, created } = await seedMany(3);
+      await recommendations.accept({
+        organizationId: org.orgId,
+        userId: reader,
+        recommendationId: created[0],
+      });
+
+      const nuevas = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        status: RecommendationStatus.NEW,
+      });
+      const aceptadas = await recommendations.list({
+        organizationId: org.orgId,
+        userId: reader,
+        status: RecommendationStatus.ACCEPTED,
+      });
+
+      expect(nuevas).toHaveLength(2);
+      expect(aceptadas.map((r) => r.id)).toEqual([created[0]]);
+    });
+  });
+
   // ── Concesiones: garantías del modelo de acceso ──────────────────────────
   describe('concesión de acceso a colecciones', () => {
     it('conceder es idempotente y conserva la traza original', async () => {

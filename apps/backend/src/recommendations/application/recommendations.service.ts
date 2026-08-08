@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  Prisma,
   RecommendationStatus,
   type Recommendation,
 } from '@businessbrain/database';
@@ -46,6 +47,10 @@ export interface RecommendationView extends Recommendation {
   resolvedBy: { id: string; name: string; email: string } | null;
 }
 
+/** Tamaño de página por defecto y techo duro: una petición no puede pedir "todo". */
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
 @Injectable()
 export class RecommendationsService {
   private readonly logger = new Logger(RecommendationsService.name);
@@ -66,6 +71,7 @@ export class RecommendationsService {
     userId: string;
     status?: RecommendationStatus;
     limit?: number;
+    offset?: number;
   }): Promise<RecommendationView[]> {
     const allowedCollectionIds =
       await this.collectionAccess.accessibleCollectionIds({
@@ -73,26 +79,57 @@ export class RecommendationsService {
         userId: params.userId,
       });
 
+    const limit = Math.min(params.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const offset = Math.max(params.offset ?? 0, 0);
+
+    // El alcance se aplica EN POSTGRES, no en memoria. Antes se cargaban todas las
+    // recomendaciones de la organización y se recortaba después: la página era correcta pero
+    // el coste crecía con el tamaño del tenant, y el `limit` no acotaba nada del trabajo real.
+    //
+    // `<@` es "contenido en": el alcance efectivo debe ser un subconjunto de lo concedido, que
+    // es literalmente la regla de cobertura completa (§3.4). `cardinality(...) > 0` mantiene
+    // el fail-closed del alcance vacío. Ambas condiciones son las MISMAS que evalúa el
+    // dominio, expresadas en SQL — y por eso el resultado se vuelve a pasar por el dominio
+    // más abajo: si alguna vez divergieran, gana el dominio.
+    const ids = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "Recommendation"
+      WHERE "organizationId" = ${params.organizationId}
+        AND cardinality("effectiveCollectionScope") > 0
+        AND "effectiveCollectionScope" <@ ${allowedCollectionIds}::text[]
+        ${
+          params.status
+            ? Prisma.sql`AND "status"::text = ${params.status}`
+            : Prisma.empty
+        }
+      ORDER BY "priority" DESC, "createdAt" DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    if (ids.length === 0) return [];
+
     const recommendations = await this.prisma.recommendation.findMany({
       where: {
-        // Filtro de organización: primero y sin excepción.
+        id: { in: ids.map((row) => row.id) },
+        // El filtro de organización se repite: la consulta anterior ya lo aplicó, y aun así
+        // esta no debe poder devolver nada de otro tenant por su cuenta.
         organizationId: params.organizationId,
-        ...(params.status ? { status: params.status } : {}),
       },
       include: this.viewInclude,
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     });
 
-    const accessible = recommendations.filter(
-      (recommendation) =>
-        evaluateRecommendationAccess({
-          effectiveCollectionScope: recommendation.effectiveCollectionScope,
-          allowedCollectionIds,
-        }).allowed,
-    );
-
-    return accessible
-      .slice(0, params.limit ?? 50)
+    // Segunda pasada por el DOMINIO sobre la página ya acotada. No es redundancia inútil:
+    // es lo que garantiza que la autorización siga teniendo un único criterio aunque el SQL
+    // se toque en el futuro.
+    return recommendations
+      .filter(
+        (recommendation) =>
+          evaluateRecommendationAccess({
+            effectiveCollectionScope: recommendation.effectiveCollectionScope,
+            allowedCollectionIds,
+          }).allowed,
+      )
       .map((recommendation) => this.toView(recommendation));
   }
 

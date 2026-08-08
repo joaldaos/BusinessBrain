@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   InsightFeedbackType,
   InsightStatus,
@@ -39,7 +45,9 @@ export class CurateInsightUseCase {
     if (!insight) throw new NotFoundException('Insight no encontrado');
 
     if (params.type === InsightFeedbackType.REVOCATION) {
-      throw new Error(
+      // Petición mal formada, no fallo del servidor: quien llama ha usado la operación
+      // equivocada y puede corregirlo. Devolver 500 lo presentaría como una avería nuestra.
+      throw new BadRequestException(
         'Una revocación se registra con revokeCuration, que exige indicar qué entrada deja sin efecto',
       );
     }
@@ -147,7 +155,9 @@ export class CurateInsightUseCase {
     if (!insight) throw new NotFoundException('Insight no encontrado');
 
     if (insight.status !== InsightStatus.ACTIVE) {
-      throw new Error(
+      // Conflicto con el ESTADO del recurso, no con la petición: la misma llamada sería
+      // válida si el Insight siguiera activo. Es exactamente la semántica de 409.
+      throw new ConflictException(
         'Solo un Insight activo puede escalarse: una conclusión descartada, superada o ' +
           'expirada no sostiene una propuesta de acción',
       );
@@ -156,7 +166,7 @@ export class CurateInsightUseCase {
     if (params.contract.migrationPlan.trim().length === 0) {
       // El plan de migración nunca se omite ni se deja en blanco: si no aplica, se declara
       // explícitamente como "no aplica" (§3.2 del plan de migración).
-      throw new Error(
+      throw new BadRequestException(
         'El plan de migración nunca se omite: si el cambio no requiere migración, ' +
           'declárelo explícitamente como "no aplica (sin impacto estructural)"',
       );

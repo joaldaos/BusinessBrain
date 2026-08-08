@@ -1,6 +1,15 @@
 import { OpenAiProvider } from './openai.provider';
 import type { HttpClientPort } from '../../domain/ports/http-client.port';
 import type { ConfigService } from '@nestjs/config';
+import type { AppConfig } from '../../../config/configuration';
+
+/**
+ * El proveedor exige `ConfigService<AppConfig, true>` (inferencia activada). Un doble tipado
+ * como `ConfigService` a secas resuelve a `ConfigService<Record<string|symbol, unknown>,
+ * false>` y NO es asignable: era el origen de los 5 errores de typecheck que el gate no veia
+ * porque `tsconfig.build.json` excluye los specs.
+ */
+type TypedConfigService = ConfigService<AppConfig, true>;
 
 describe('OpenAiProvider', () => {
   const fakeHttp: jest.Mocked<HttpClientPort> = {
@@ -9,7 +18,7 @@ describe('OpenAiProvider', () => {
   };
   const fakeConfig = {
     get: jest.fn().mockReturnValue('sk-openai-fake-key'),
-  } as unknown as ConfigService;
+  } as unknown as TypedConfigService;
   const provider = new OpenAiProvider(fakeHttp, fakeConfig);
 
   beforeEach(() => jest.clearAllMocks());
@@ -83,7 +92,7 @@ describe('OpenAiProvider', () => {
   it('lanza un error claro si no hay API key disponible', async () => {
     const configWithoutKey = {
       get: jest.fn().mockReturnValue(undefined),
-    } as unknown as ConfigService;
+    } as unknown as TypedConfigService;
     const providerWithoutKey = new OpenAiProvider(fakeHttp, configWithoutKey);
 
     await expect(

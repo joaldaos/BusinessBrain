@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProviderRegistry } from '../llm/application/provider-registry.service';
 import {
+  DirectiveStreamFilter,
+  parseAgentDirectives,
+  type ParsedDirectives,
+} from '../agents/domain/agent-directives';
+import {
   ConversationTurnService,
   type MessageCitation,
 } from './conversation-turn.service';
@@ -78,6 +83,11 @@ export class StreamMessageUseCase {
 
     let accumulated = '';
     let failed = false;
+    // Las directivas NUNCA se emiten: sin este filtro la persona vería `[[BB_TOOL]]{...}`
+    // en pantalla. El camino síncrono no tiene el problema porque parsea la respuesta
+    // entera antes de devolverla; aquí hay que decidirlo token a token.
+    const filter = new DirectiveStreamFilter();
+    let parsed: ParsedDirectives = parseAgentDirectives('');
 
     try {
       // Mismo perfil que en la via sincrona: el del agente si lo declara (§7.3).
@@ -91,8 +101,11 @@ export class StreamMessageUseCase {
         profile.modelName,
         profile.apiKeyEnc ?? undefined,
       )) {
-        accumulated += delta;
-        yield { type: 'token', text: delta };
+        const visible = filter.push(delta);
+        if (visible.length > 0) {
+          accumulated += visible;
+          yield { type: 'token', text: visible };
+        }
       }
     } catch (error) {
       failed = true;
@@ -101,6 +114,27 @@ export class StreamMessageUseCase {
           `${(error as Error).message}`,
       );
     }
+
+    // Cierra el filtro: emite lo retenido si al final no era una directiva y entrega el
+    // análisis de todo lo recibido. Se hace también si el proveedor falló, para no perder lo
+    // que ya se había filtrado.
+    const closed = filter.flush();
+    parsed = closed.parsed;
+    if (closed.emitted.length > 0) {
+      accumulated += closed.emitted;
+      yield { type: 'token', text: closed.emitted };
+    }
+
+    // Mismo cierre que en la vía síncrona: anotar en memoria lo que el agente declaró
+    // haber aprendido. Si los dos caminos divergieran aquí, la misma conversación
+    // recordaría cosas distintas según cómo se hubiera pedido.
+    await this.turn.recordAgentMemories({
+      organizationId: params.organizationId,
+      userId: params.userId,
+      conversationId: prepared.conversationId,
+      agentContext: prepared.agentContext,
+      parsed,
+    });
 
     // Un fallo tras haber emitido texto no lo descarta: lo que el usuario ya leyó se
     // persiste, y el aviso se añade para que el historial explique por qué se corta.

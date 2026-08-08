@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProviderRegistry } from '../llm/application/provider-registry.service';
+import { parseAgentDirectives } from '../agents/domain/agent-directives';
 import {
   ConversationTurnService,
   type MessageCitation,
@@ -34,6 +35,8 @@ export interface SendMessageResult {
     freshness: string;
   }[];
   droppedChunkIds: string[];
+  /** Cuántas anotaciones de memoria dejó el agente en este turno (5.9). */
+  memoriesRecorded: number;
 }
 
 @Injectable()
@@ -47,21 +50,41 @@ export class SendMessageUseCase {
 
   async execute(params: SendMessageParams): Promise<SendMessageResult> {
     const prepared = await this.turn.prepare(params);
-    const answer = await this.generateAnswer(prepared, params.organizationId);
+    const raw = await this.generateAnswer(prepared, params.organizationId);
+
+    // Las directivas se separan SIEMPRE, también sin agente: si el protocolo se colara en
+    // una respuesta, la persona vería el andamiaje interno del sistema. Sin agente no habrá
+    // ninguna, y separarlas no cuesta nada.
+    const parsed = parseAgentDirectives(raw);
+
+    // Anotar va después de responder: la respuesta ya está decidida y ningún fallo al
+    // escribir memoria puede degradarla.
+    const memoriesRecorded = await this.turn.recordAgentMemories({
+      organizationId: params.organizationId,
+      userId: params.userId,
+      conversationId: prepared.conversationId,
+      agentContext: prepared.agentContext,
+      parsed,
+    });
+
+    // Se persiste el texto LIMPIO: el historial no debe arrastrar el protocolo, o el
+    // siguiente turno lo recibiría como si fuera algo que dijo el asistente.
+    const content = parsed.text;
 
     const assistantMessageId = await this.turn.persistAnswer({
       conversationId: prepared.conversationId,
-      content: answer,
+      content,
       citations: prepared.citations,
     });
 
     return {
       userMessageId: prepared.userMessageId,
       assistantMessageId,
-      content: answer,
+      content,
       citations: prepared.citations,
       insightsUsed: prepared.insights,
       droppedChunkIds: prepared.droppedChunkIds,
+      memoriesRecorded,
     };
   }
 

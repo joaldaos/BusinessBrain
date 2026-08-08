@@ -8,6 +8,7 @@ import { AgentTemplatesService } from './application/agent-templates.service';
 import { InstallAgentTemplateUseCase } from './application/install-agent-template.use-case';
 import { EnforceAgentPolicyUseCase } from './application/enforce-agent-policy.use-case';
 import { RunAgentUseCase } from './application/run-agent.use-case';
+import { RecordAgentMemoryUseCase } from './application/record-agent-memory.use-case';
 import { MEMORY_STORE_PORT } from './domain/ports/memory-store.port';
 import { TOOL_REGISTRY, type ToolPort } from './domain/ports/tool.port';
 import { ExecuteAgentToolUseCase } from './application/execute-agent-tool.use-case';
@@ -48,6 +49,7 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
     InstallAgentTemplateUseCase,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
+    RecordAgentMemoryUseCase,
     ExecuteAgentToolUseCase,
   ],
   exports: [
@@ -56,6 +58,7 @@ import { PrismaMemoryStoreAdapter } from './infrastructure/prisma-memory-store.a
     InstallAgentTemplateUseCase,
     EnforceAgentPolicyUseCase,
     RunAgentUseCase,
+    RecordAgentMemoryUseCase,
     ExecuteAgentToolUseCase,
     MEMORY_STORE_PORT,
   ],

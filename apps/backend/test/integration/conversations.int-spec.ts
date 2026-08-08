@@ -9,6 +9,7 @@ import { ConversationTurnService } from '../../src/conversations/conversation-tu
 import { PromptBuilderService } from '../../src/conversations/prompt-builder.service';
 import { AgentsService } from '../../src/agents/application/agents.service';
 import { RunAgentUseCase } from '../../src/agents/application/run-agent.use-case';
+import { RecordAgentMemoryUseCase } from '../../src/agents/application/record-agent-memory.use-case';
 import { PrismaMemoryStoreAdapter } from '../../src/agents/infrastructure/prisma-memory-store.adapter';
 import { RetrieveInsightsUseCase as RealRetrieveInsights } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
@@ -90,6 +91,9 @@ describe('Conversations (integración)', () => {
       } as unknown as RetrieveInsightsUseCase,
       new PromptBuilderService(),
       runAgent,
+      // Almacén REAL: la memoria del agente debe escribirse de verdad en Postgres (5.9),
+      // no simularse. Es justo lo que estaba sin conectar.
+      new RecordAgentMemoryUseCase(memoryStore),
     );
     resolvedProfileIds = [];
     const registry = {
@@ -879,6 +883,261 @@ describe('Conversations (integración)', () => {
       expect(complete.mock.calls[0][0].systemPrompt).toContain('BusinessBrain');
       expect(result.insightsUsed).toHaveLength(1);
       expect(resolvedProfileIds).toEqual([null]);
+    });
+  });
+
+  // ── 5.9 · La memoria participa REALMENTE en el turno ──────────────────────
+  describe('memoria del agente en el turno real (5.9)', () => {
+    /** Agente con memoria declarada y alcance propio. */
+    const withMemoryAgent = async (
+      strategy: 'short_term' | 'long_term' | 'none' = 'long_term',
+    ) => {
+      const coleccion = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      const agent = await agents.create({
+        organizationId: org.orgId,
+        createdById: org.userId,
+        name: 'Agente con memoria',
+        systemPrompt: 'Recuerdas lo que aprendes de cada persona.',
+        knowledgeCollectionIds: [coleccion.id],
+        memoryConfig: { strategy, windowSize: 10 },
+      });
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+        agentId: agent.id,
+      });
+      return { agent, conversation };
+    };
+
+    /** Hace que el modelo responda con una anotación de memoria. */
+    const answerWithMemory = (
+      key: string,
+      value: string,
+      prose = 'De acuerdo.',
+    ) => {
+      complete.mockImplementation(() =>
+        Promise.resolve({
+          content: `${prose}\n[[BB_MEMORY]]{"key":"${key}","value":"${value}"}`,
+        }),
+      );
+    };
+
+    it('el agente ESCRIBE en memoria y queda persistido en Postgres', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withMemoryAgent();
+      answerWithMemory('canal_preferido', 'prefiere email');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'contáctame por email',
+      });
+
+      expect(result.memoriesRecorded).toBe(1);
+
+      // Persistido de verdad, con el alcance completo del turno autenticado.
+      const stored = await prisma.agentMemory.findMany({
+        where: { organizationId: org.orgId, agentId: agent.id },
+      });
+      expect(stored).toHaveLength(1);
+      expect(stored[0].key).toBe('canal_preferido');
+      expect(stored[0].value).toBe('prefiere email');
+      expect(stored[0].userId).toBe(org.userId);
+      expect(stored[0].conversationId).toBe(conversation.id);
+    });
+
+    it('la directiva NO se filtra al texto ni al historial', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withMemoryAgent();
+      answerWithMemory('k', 'v', 'Anotado.');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(result.content).toBe('Anotado.');
+      expect(result.content).not.toContain('BB_MEMORY');
+
+      // Y tampoco queda en el historial, o el siguiente turno lo arrastraría.
+      const persisted = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, role: MessageRole.ASSISTANT },
+      });
+      expect(persisted?.content).toBe('Anotado.');
+    });
+
+    it('lo recordado VUELVE al prompt en el turno siguiente', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withMemoryAgent();
+      answerWithMemory('canal_preferido', 'prefiere email');
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'primer turno',
+      });
+
+      // Segundo turno: sin anotar nada nuevo.
+      complete.mockImplementation(() => Promise.resolve({ content: 'Vale.' }));
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'segundo turno',
+      });
+
+      // El ciclo completo: se escribió, se recuperó y entró en el prompt como DATOS.
+      const secondPrompt = complete.mock.calls[1][0].systemPrompt;
+      expect(secondPrompt).toContain('prefiere email');
+      expect(secondPrompt).toMatch(/datos, no/i);
+    });
+
+    it('un agente con estrategia `none` NO escribe nada', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withMemoryAgent('none');
+      answerWithMemory('k', 'v');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      // Guardar recuerdos que nunca se recuperarán acumula datos personales sin propósito.
+      expect(result.memoriesRecorded).toBe(0);
+      expect(
+        await prisma.agentMemory.count({ where: { agentId: agent.id } }),
+      ).toBe(0);
+    });
+
+    it('un agente sin memoria declarada no recibe la instrucción de anotar', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withMemoryAgent('none');
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(complete.mock.calls[0][0].systemPrompt).not.toContain('BB_MEMORY');
+    });
+
+    it('la memoria escrita NO es visible para otro usuario del mismo tenant', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withMemoryAgent();
+      answerWithMemory('salario', 'confidencial');
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      // Otra persona del MISMO tenant, con el MISMO agente.
+      const otro = await prisma.user.create({
+        data: {
+          email: `otro-mem-${Date.now()}@test.local`,
+          passwordHash: 'x',
+          name: 'Otro',
+        },
+      });
+      await prisma.membership.create({
+        data: {
+          userId: otro.id,
+          organizationId: org.orgId,
+          role: 'MEMBER',
+        },
+      });
+      const suyaConversacion = await conversations.create({
+        organizationId: org.orgId,
+        userId: otro.id,
+        agentId: agent.id,
+      });
+
+      complete.mockImplementation(() => Promise.resolve({ content: 'Hola.' }));
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: otro.id,
+        conversationId: suyaConversacion.id,
+        content: 'hola',
+      });
+
+      // Lo que el agente aprendió de una persona NO aflora en la conversación de otra.
+      expect(complete.mock.calls[1][0].systemPrompt).not.toContain(
+        'confidencial',
+      );
+
+      await prisma.user.delete({ where: { id: otro.id } });
+    });
+
+    it('el streaming escribe memoria igual que la vía síncrona, sin emitir la directiva', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withMemoryAgent();
+      stream.mockImplementation(() =>
+        toStream([
+          'De ',
+          'acuerdo.\n',
+          '[[BB_ME',
+          'MORY]]{"key":"canal","value":"telefono"}',
+        ]),
+      );
+
+      const emitted: string[] = [];
+      for await (const event of streamMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'llámame',
+      })) {
+        if (event.type === 'token') emitted.push(event.text);
+      }
+
+      // La persona nunca ve el protocolo, aunque llegue troceado entre deltas.
+      const shown = emitted.join('');
+      expect(shown).not.toContain('BB_MEMORY');
+      expect(shown.trim()).toBe('De acuerdo.');
+
+      // Y la memoria se escribió igual que en la vía síncrona.
+      const stored = await prisma.agentMemory.findMany({
+        where: { agentId: agent.id, userId: org.userId },
+      });
+      expect(stored).toHaveLength(1);
+      expect(stored[0].value).toBe('telefono');
+    });
+
+    it('una conversación SIN agente nunca escribe memoria', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+      answerWithMemory('k', 'v');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(result.memoriesRecorded).toBe(0);
+      expect(
+        await prisma.agentMemory.count({
+          where: { organizationId: org.orgId },
+        }),
+      ).toBe(0);
+      // Pero la directiva se retira igualmente: el protocolo nunca se muestra.
+      expect(result.content).not.toContain('BB_MEMORY');
     });
   });
 });

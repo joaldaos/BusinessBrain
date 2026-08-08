@@ -8,8 +8,12 @@ import {
   citationLabel,
   type BuiltContext,
 } from '../../knowledge-engine/domain/context-builder';
-import { parseAgentConfiguration } from '../domain/agent-configuration';
+import {
+  parseAgentConfiguration,
+  type AgentConfiguration,
+} from '../domain/agent-configuration';
 import { executableTools, guardrailDirective } from '../domain/agent-policy';
+import { memoryProtocolDirective } from '../domain/agent-directives';
 import {
   memoryBlock,
   memoryRecallLimit,
@@ -80,6 +84,20 @@ export interface AgentRunContext {
   hasMaterial: boolean;
   /** Cuantos recuerdos del propio usuario entraron en el prompt. */
   memoriesUsed: number;
+  /**
+   * Configuración validada del agente (5.9). La expone quien la resolvió para que el bucle
+   * del turno no vuelva a parsear el `Json` por su cuenta: dos parseos son dos criterios, y
+   * el tope de herramientas por turno depende de este.
+   */
+  configuration: AgentConfiguration;
+  /**
+   * Alcance de conocimiento del agente, ya validado y no vacío (5.9).
+   *
+   * Se expone para que la ejecución de herramientas use EXACTAMENTE el mismo alcance que la
+   * preparación del prompt. Recalcularlo aguas abajo abriría la posibilidad de que ambos
+   * divergieran, y con ella la de leer fuera del alcance.
+   */
+  allowedCollectionIds: string[];
 }
 
 @Injectable()
@@ -183,6 +201,8 @@ export class RunAgentUseCase {
       droppedChunkIds: context.droppedChunkIds,
       hasMaterial: context.pieces.length > 0 || insightsUsed.length > 0,
       memoriesUsed: memories.length,
+      configuration,
+      allowedCollectionIds,
     };
   }
 
@@ -238,12 +258,21 @@ export class RunAgentUseCase {
           ].join('\n')
         : '';
 
+    // La instrucción de anotar en memoria solo se emite si el agente declara una estrategia:
+    // uno con `none` no debe siquiera saber que existe la posibilidad, porque nada de lo que
+    // anotara llegaría a guardarse y el modelo gastaría el turno en una vía muerta.
+    const memoryProtocol =
+      params.configuration.memoryConfig.strategy === 'none'
+        ? ''
+        : memoryProtocolDirective();
+
     return [
       params.agent.systemPrompt,
       '',
       GROUNDING_DIRECTIVE,
       guardrailDirective(params.configuration),
       memoryBlock(params.memories),
+      memoryProtocol,
       understanding,
       '',
       'Contexto recuperado:',

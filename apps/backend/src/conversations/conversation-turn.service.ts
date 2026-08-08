@@ -10,6 +10,9 @@ import {
 } from '../knowledge-engine/domain/context-builder';
 import type { LlmCompletionRequest } from '../llm/domain/ports/llm-provider.port';
 import { RunAgentUseCase } from '../agents/application/run-agent.use-case';
+import { RecordAgentMemoryUseCase } from '../agents/application/record-agent-memory.use-case';
+import type { AgentConfiguration } from '../agents/domain/agent-configuration';
+import type { ParsedDirectives } from '../agents/domain/agent-directives';
 import { ConversationsService } from './conversations.service';
 import {
   PromptBuilderService,
@@ -57,6 +60,20 @@ export interface MessageCitation {
   label: string;
 }
 
+/**
+ * Lo que el turno necesita saber del agente DESPUÉS de que el modelo responda: para anotar
+ * memoria con el alcance correcto y, en 5.9, para ejecutar herramientas con el mismo alcance
+ * con el que se preparó el prompt.
+ *
+ * `null` en una conversación sin agente. Que sea nulo no es un detalle de tipos: es lo que
+ * garantiza que el camino de Fase 4 no adquiere memoria ni herramientas por la puerta de atrás.
+ */
+export interface TurnAgentContext {
+  agentId: string;
+  configuration: AgentConfiguration;
+  allowedCollectionIds: string[];
+}
+
 export interface PreparedTurn {
   conversationId: string;
   userMessageId: string;
@@ -67,6 +84,8 @@ export interface PreparedTurn {
   droppedChunkIds: string[];
   /** `null` si no hay conocimiento ni comprensión: entonces no se llama al modelo. */
   request: LlmCompletionRequest | null;
+  /** `null` sin agente. Ver `TurnAgentContext`. */
+  agentContext: TurnAgentContext | null;
 }
 
 @Injectable()
@@ -78,6 +97,7 @@ export class ConversationTurnService {
     private readonly retrieveInsights: RetrieveInsightsUseCase,
     private readonly promptBuilder: PromptBuilderService,
     private readonly runAgent: RunAgentUseCase,
+    private readonly recordMemory: RecordAgentMemoryUseCase,
   ) {}
 
   /**
@@ -174,7 +194,36 @@ export class ConversationTurnService {
       request: this.promptBuilder.hasMaterial(promptInput)
         ? this.promptBuilder.build(promptInput)
         : null,
+      // Sin agente no hay memoria ni herramientas. Es la Fase 4 intacta.
+      agentContext: null,
     };
+  }
+
+  /**
+   * Cierra el turno del agente con lo que el modelo pidió: anota en memoria lo que declaró
+   * haber aprendido.
+   *
+   * Se llama DESPUÉS de responder, y a propósito: la persona ya tiene su respuesta, así que
+   * ningún fallo aquí puede degradarla. En una conversación sin agente no hace nada.
+   */
+  async recordAgentMemories(params: {
+    organizationId: string;
+    userId: string;
+    conversationId: string;
+    agentContext: TurnAgentContext | null;
+    parsed: ParsedDirectives;
+  }): Promise<number> {
+    if (!params.agentContext) return 0;
+
+    return this.recordMemory.execute({
+      organizationId: params.organizationId,
+      // El alcance viene del turno autenticado, NUNCA de lo que el modelo escribió.
+      agentId: params.agentContext.agentId,
+      userId: params.userId,
+      conversationId: params.conversationId,
+      memoryConfig: params.agentContext.configuration.memoryConfig,
+      directives: params.parsed.memories,
+    });
   }
 
   /**
@@ -211,6 +260,13 @@ export class ConversationTurnService {
       citations: run.citations,
       insights: run.insightsUsed,
       droppedChunkIds: run.droppedChunkIds,
+      agentContext: {
+        agentId: run.agent.id,
+        configuration: run.configuration,
+        // El MISMO alcance con el que se preparó el prompt. Recalcularlo aguas abajo
+        // permitiría que ambos divergieran.
+        allowedCollectionIds: run.allowedCollectionIds,
+      },
       // Un agente CON memoria pero sin conocimiento ni comprensión sigue teniendo algo que
       // decir: lo que recuerda de esta persona.
       request:

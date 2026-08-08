@@ -43,4 +43,18 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-member-access': 'off',
     },
   },
+  {
+    // Tests de extremo a extremo (5.9). `supertest` tipa `Response.body` como `any` por
+    // contrato de la propia librería: no es un doble suelto nuestro, es que el cuerpo de una
+    // respuesta HTTP no se conoce en tiempo de compilación. Aserciones como
+    // `response.body.data.id` son la forma normal de escribir estos tests, y tipar cada
+    // respuesta a mano solo trasladaría el `any` un nivel más arriba sin ganar nada.
+    files: ['test/e2e/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
 );

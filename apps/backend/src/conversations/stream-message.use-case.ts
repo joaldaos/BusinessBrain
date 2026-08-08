@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProviderRegistry } from '../llm/application/provider-registry.service';
 import {
-  DirectiveStreamFilter,
   parseAgentDirectives,
   type ParsedDirectives,
 } from '../agents/domain/agent-directives';
@@ -83,10 +82,6 @@ export class StreamMessageUseCase {
 
     let accumulated = '';
     let failed = false;
-    // Las directivas NUNCA se emiten: sin este filtro la persona vería `[[BB_TOOL]]{...}`
-    // en pantalla. El camino síncrono no tiene el problema porque parsea la respuesta
-    // entera antes de devolverla; aquí hay que decidirlo token a token.
-    const filter = new DirectiveStreamFilter();
     let parsed: ParsedDirectives = parseAgentDirectives('');
 
     try {
@@ -96,33 +91,32 @@ export class StreamMessageUseCase {
         prepared.llmProfileId,
       );
 
-      for await (const delta of provider.stream(
-        prepared.request,
-        profile.modelName,
-        profile.apiKeyEnc ?? undefined,
-      )) {
-        const visible = filter.push(delta);
-        if (visible.length > 0) {
-          accumulated += visible;
-          yield { type: 'token', text: visible };
-        }
+      // EL MISMO bucle que la vía síncrona, con el mismo contador del servidor y el mismo
+      // gate. Aquí solo cambia que los trozos se reenvían según llegan. El filtro de
+      // directivas vive dentro del bucle: la persona nunca ve el protocolo.
+      const loop = this.turn.streamAgentLoop({
+        prepared,
+        ask: (request) =>
+          provider.stream(
+            request,
+            profile.modelName,
+            profile.apiKeyEnc ?? undefined,
+          ),
+      });
+
+      let step = await loop.next();
+      while (!step.done) {
+        accumulated += step.value.text;
+        yield { type: 'token', text: step.value.text };
+        step = await loop.next();
       }
+      parsed = step.value.parsed;
     } catch (error) {
       failed = true;
       this.logger.warn(
         `Streaming de respuesta fallido en la organización ${params.organizationId}: ` +
           `${(error as Error).message}`,
       );
-    }
-
-    // Cierra el filtro: emite lo retenido si al final no era una directiva y entrega el
-    // análisis de todo lo recibido. Se hace también si el proveedor falló, para no perder lo
-    // que ya se había filtrado.
-    const closed = filter.flush();
-    parsed = closed.parsed;
-    if (closed.emitted.length > 0) {
-      accumulated += closed.emitted;
-      yield { type: 'token', text: closed.emitted };
     }
 
     // Mismo cierre que en la vía síncrona: anotar en memoria lo que el agente declaró

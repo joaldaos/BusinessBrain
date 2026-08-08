@@ -13,7 +13,11 @@ import {
   type AgentConfiguration,
 } from '../domain/agent-configuration';
 import { executableTools, guardrailDirective } from '../domain/agent-policy';
-import { memoryProtocolDirective } from '../domain/agent-directives';
+import {
+  memoryProtocolDirective,
+  toolProtocolDirective,
+} from '../domain/agent-directives';
+import { TOOL_REGISTRY, type ToolPort } from '../domain/ports/tool.port';
 import {
   memoryBlock,
   memoryRecallLimit,
@@ -110,6 +114,10 @@ export class RunAgentUseCase {
     private readonly retrieveInsights: RetrieveInsightsUseCase,
     @Inject(MEMORY_STORE_PORT)
     private readonly memoryStore: MemoryStorePort,
+    // Registro CERRADO: se usa solo para DESCRIBIR al modelo las herramientas que el gate
+    // permitiría hoy. Anunciar no concede nada.
+    @Inject(TOOL_REGISTRY)
+    private readonly tools: ToolPort[],
   ) {}
 
   async execute(params: RunAgentParams): Promise<AgentRunContext> {
@@ -266,6 +274,16 @@ export class RunAgentUseCase {
         ? ''
         : memoryProtocolDirective();
 
+    // Solo se anuncian las herramientas que (a) el gate permitiría hoy y (b) tienen
+    // adaptador registrado. Anunciar una que va a denegarse o que no existe produce
+    // intentos condenados de antemano, y con ellos respuestas peores.
+    const executable = new Set(executableTools(params.configuration));
+    const toolProtocol = toolProtocolDirective(
+      this.tools
+        .filter((tool) => executable.has(tool.key))
+        .map((tool) => ({ key: tool.key, description: tool.description })),
+    );
+
     return [
       params.agent.systemPrompt,
       '',
@@ -273,6 +291,7 @@ export class RunAgentUseCase {
       guardrailDirective(params.configuration),
       memoryBlock(params.memories),
       memoryProtocol,
+      toolProtocol,
       understanding,
       '',
       'Contexto recuperado:',

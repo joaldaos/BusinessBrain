@@ -42,6 +42,8 @@ describe('AgentMemory (integración)', () => {
       } as unknown as RetrieveContextUseCase,
       new RetrieveInsightsUseCase(db),
       memoryStore,
+      // Registro vacio: estas suites no ejercitan la ejecucion de herramientas.
+      [],
     );
 
     const other = await prisma.user.create({

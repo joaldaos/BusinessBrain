@@ -11,8 +11,17 @@ import {
 import type { LlmCompletionRequest } from '../llm/domain/ports/llm-provider.port';
 import { RunAgentUseCase } from '../agents/application/run-agent.use-case';
 import { RecordAgentMemoryUseCase } from '../agents/application/record-agent-memory.use-case';
+import {
+  AgentToolLoopUseCase,
+  type ToolInvocationTrace,
+  type ToolLoopEvent,
+} from '../agents/application/agent-tool-loop.use-case';
 import type { AgentConfiguration } from '../agents/domain/agent-configuration';
-import type { ParsedDirectives } from '../agents/domain/agent-directives';
+import {
+  parseAgentDirectives,
+  DirectiveStreamFilter,
+  type ParsedDirectives,
+} from '../agents/domain/agent-directives';
 import { ConversationsService } from './conversations.service';
 import {
   PromptBuilderService,
@@ -69,6 +78,9 @@ export interface MessageCitation {
  * garantiza que el camino de Fase 4 no adquiere memoria ni herramientas por la puerta de atrás.
  */
 export interface TurnAgentContext {
+  /** Alcance del turno AUTENTICADO. Nunca proviene de lo que el modelo escriba. */
+  organizationId: string;
+  userId: string;
   agentId: string;
   configuration: AgentConfiguration;
   allowedCollectionIds: string[];
@@ -98,6 +110,7 @@ export class ConversationTurnService {
     private readonly promptBuilder: PromptBuilderService,
     private readonly runAgent: RunAgentUseCase,
     private readonly recordMemory: RecordAgentMemoryUseCase,
+    private readonly toolLoop: AgentToolLoopUseCase,
   ) {}
 
   /**
@@ -200,6 +213,71 @@ export class ConversationTurnService {
   }
 
   /**
+   * Recorre el turno del modelo, resolviendo las herramientas que pida.
+   *
+   * Es el ÚNICO punto por el que ambas superficies llaman al bucle, y por eso vive aquí y no
+   * duplicado en cada caso de uso: si divergieran, la misma pregunta ejecutaría herramientas
+   * distintas según se hubiera pedido por la vía síncrona o por streaming.
+   *
+   * **Sin agente no hay bucle.** Una conversación de Fase 4 hace una sola llamada y sus
+   * directivas se separan igualmente, para que el protocolo nunca llegue a la persona.
+   */
+  async *streamAgentLoop(params: {
+    prepared: PreparedTurn;
+    ask: (request: LlmCompletionRequest) => AsyncIterable<string>;
+  }): AsyncGenerator<
+    ToolLoopEvent,
+    { parsed: ParsedDirectives; toolInvocations: ToolInvocationTrace[] }
+  > {
+    const { prepared } = params;
+    if (!prepared.request) {
+      return { parsed: parseAgentDirectives(''), toolInvocations: [] };
+    }
+
+    if (!prepared.agentContext) {
+      // Camino de Fase 4, intacto: una sola pasada y ninguna herramienta.
+      const filter = new DirectiveStreamFilter();
+      for await (const delta of params.ask(prepared.request)) {
+        const visible = filter.push(delta);
+        if (visible.length > 0) yield { type: 'token', text: visible };
+      }
+      const closed = filter.flush();
+      if (closed.emitted.length > 0) {
+        yield { type: 'token', text: closed.emitted };
+      }
+      return { parsed: closed.parsed, toolInvocations: [] };
+    }
+
+    const result = yield* this.toolLoop.run({
+      organizationId: prepared.agentContext.organizationId,
+      agentId: prepared.agentContext.agentId,
+      userId: prepared.agentContext.userId,
+      conversationId: prepared.conversationId,
+      configuration: prepared.agentContext.configuration,
+      request: prepared.request,
+      ask: params.ask,
+    });
+
+    return { parsed: result.parsed, toolInvocations: result.invocations };
+  }
+
+  /** Igual que `streamAgentLoop` pero agotando el flujo: la vía síncrona no emite tokens. */
+  async runAgentLoop(params: {
+    prepared: PreparedTurn;
+    ask: (request: LlmCompletionRequest) => AsyncIterable<string>;
+  }): Promise<{
+    parsed: ParsedDirectives;
+    toolInvocations: ToolInvocationTrace[];
+  }> {
+    const iterator = this.streamAgentLoop(params);
+
+    let step = await iterator.next();
+    while (!step.done) step = await iterator.next();
+
+    return step.value;
+  }
+
+  /**
    * Cierra el turno del agente con lo que el modelo pidió: anota en memoria lo que declaró
    * haber aprendido.
    *
@@ -261,6 +339,8 @@ export class ConversationTurnService {
       insights: run.insightsUsed,
       droppedChunkIds: run.droppedChunkIds,
       agentContext: {
+        organizationId: params.organizationId,
+        userId: params.userId,
         agentId: run.agent.id,
         configuration: run.configuration,
         // El MISMO alcance con el que se preparó el prompt. Recalcularlo aguas abajo

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProviderRegistry } from '../llm/application/provider-registry.service';
 import { parseAgentDirectives } from '../agents/domain/agent-directives';
+import type { ToolInvocationTrace } from '../agents/application/agent-tool-loop.use-case';
 import {
   ConversationTurnService,
   type MessageCitation,
@@ -37,6 +38,8 @@ export interface SendMessageResult {
   droppedChunkIds: string[];
   /** Cuántas anotaciones de memoria dejó el agente en este turno (5.9). */
   memoriesRecorded: number;
+  /** Qué herramientas se pidieron, cuáles se ejecutaron y por qué se denegó el resto (5.9). */
+  toolInvocations: ToolInvocationTrace[];
 }
 
 @Injectable()
@@ -50,12 +53,8 @@ export class SendMessageUseCase {
 
   async execute(params: SendMessageParams): Promise<SendMessageResult> {
     const prepared = await this.turn.prepare(params);
-    const raw = await this.generateAnswer(prepared, params.organizationId);
-
-    // Las directivas se separan SIEMPRE, también sin agente: si el protocolo se colara en
-    // una respuesta, la persona vería el andamiaje interno del sistema. Sin agente no habrá
-    // ninguna, y separarlas no cuesta nada.
-    const parsed = parseAgentDirectives(raw);
+    const answered = await this.generateAnswer(prepared, params.organizationId);
+    const { parsed, toolInvocations } = answered;
 
     // Anotar va después de responder: la respuesta ya está decidida y ningún fallo al
     // escribir memoria puede degradarla.
@@ -85,15 +84,24 @@ export class SendMessageUseCase {
       insightsUsed: prepared.insights,
       droppedChunkIds: prepared.droppedChunkIds,
       memoriesRecorded,
+      toolInvocations,
     };
   }
 
   private async generateAnswer(
     prepared: PreparedTurn,
     organizationId: string,
-  ): Promise<string> {
+  ): Promise<{
+    parsed: ReturnType<typeof parseAgentDirectives>;
+    toolInvocations: ToolInvocationTrace[];
+  }> {
     // Sin conocimiento ni comprensión no se inventa una respuesta: se dice que no se sabe.
-    if (!prepared.request) return this.turn.noKnowledgeAnswer();
+    if (!prepared.request) {
+      return {
+        parsed: parseAgentDirectives(this.turn.noKnowledgeAnswer()),
+        toolInvocations: [],
+      };
+    }
 
     try {
       // Perfil del agente si la conversación lo tiene (§7.3); si no, el de la organización.
@@ -102,13 +110,24 @@ export class SendMessageUseCase {
         prepared.llmProfileId,
       );
 
-      const result = await provider.complete(
-        prepared.request,
-        profile.modelName,
-        profile.apiKeyEnc ?? undefined,
-      );
+      // El MISMO bucle que usa el streaming. La vía síncrona envuelve `complete` en un
+      // flujo de un solo trozo: así ambas superficies ejecutan exactamente las mismas
+      // herramientas para la misma pregunta.
+      const outcome = await this.turn.runAgentLoop({
+        prepared,
+        ask: (request) =>
+          this.asSingleChunkStream(
+            provider
+              .complete(
+                request,
+                profile.modelName,
+                profile.apiKeyEnc ?? undefined,
+              )
+              .then((result) => result.content),
+          ),
+      });
 
-      return result.content;
+      return outcome;
     } catch (error) {
       // Un fallo del proveedor no puede perder el mensaje del usuario, que ya está
       // persistido: se devuelve un aviso explícito en vez de romper la conversación.
@@ -116,7 +135,17 @@ export class SendMessageUseCase {
         `Generación de respuesta fallida en la organización ${organizationId}: ` +
           `${(error as Error).message}`,
       );
-      return this.turn.providerFailureAnswer();
+      return {
+        parsed: parseAgentDirectives(this.turn.providerFailureAnswer()),
+        toolInvocations: [],
+      };
     }
+  }
+
+  /** Adapta una respuesta completa al mismo contrato de flujo que consume el bucle. */
+  private async *asSingleChunkStream(
+    answer: Promise<string>,
+  ): AsyncIterable<string> {
+    yield await answer;
   }
 }

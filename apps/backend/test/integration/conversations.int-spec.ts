@@ -10,6 +10,11 @@ import { PromptBuilderService } from '../../src/conversations/prompt-builder.ser
 import { AgentsService } from '../../src/agents/application/agents.service';
 import { RunAgentUseCase } from '../../src/agents/application/run-agent.use-case';
 import { RecordAgentMemoryUseCase } from '../../src/agents/application/record-agent-memory.use-case';
+import { AgentToolLoopUseCase } from '../../src/agents/application/agent-tool-loop.use-case';
+import { ExecuteAgentToolUseCase } from '../../src/agents/application/execute-agent-tool.use-case';
+import { EnforceAgentPolicyUseCase } from '../../src/agents/application/enforce-agent-policy.use-case';
+import { KnowledgeSearchTool } from '../../src/agents/infrastructure/tools/knowledge-search.tool';
+import { InsightLookupTool } from '../../src/agents/infrastructure/tools/insight-lookup.tool';
 import { PrismaMemoryStoreAdapter } from '../../src/agents/infrastructure/prisma-memory-store.adapter';
 import { RetrieveInsightsUseCase as RealRetrieveInsights } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
@@ -53,6 +58,8 @@ describe('Conversations (integración)', () => {
   let agents: AgentsService;
   let memoryStore: PrismaMemoryStoreAdapter;
   let resolvedProfileIds: (string | null)[];
+  /** Con qué alcance se llamó al Retriever desde la herramienta de búsqueda. */
+  let retrieveContextCalls: { knowledgeCollectionIds?: string[] }[];
 
   beforeEach(async () => {
     org = await createTestOrg('conv-int');
@@ -71,6 +78,18 @@ describe('Conversations (integración)', () => {
 
     agents = new AgentsService(db);
     memoryStore = new PrismaMemoryStoreAdapter(db);
+    // Registro REAL de herramientas: el turno debe poder ejecutarlas de verdad (5.9).
+    // Se anota con qué alcance se llamó para poder demostrar que lo dicta el agente.
+    retrieveContextCalls = [];
+    const knowledgeSearch = new KnowledgeSearchTool({
+      execute: (args: { knowledgeCollectionIds?: string[] }) => {
+        retrieveContextCalls.push(args);
+        return Promise.resolve(retrievedChunks);
+      },
+    } as unknown as RetrieveContextUseCase);
+    const insightLookup = new InsightLookupTool(new RealRetrieveInsights(db));
+    const toolRegistry = [knowledgeSearch, insightLookup];
+
     const runAgent = new RunAgentUseCase(
       agents,
       {
@@ -78,6 +97,7 @@ describe('Conversations (integración)', () => {
       } as unknown as RetrieveContextUseCase,
       new RealRetrieveInsights(db),
       memoryStore,
+      toolRegistry,
     );
 
     const turn = new ConversationTurnService(
@@ -94,6 +114,15 @@ describe('Conversations (integración)', () => {
       // Almacén REAL: la memoria del agente debe escribirse de verdad en Postgres (5.9),
       // no simularse. Es justo lo que estaba sin conectar.
       new RecordAgentMemoryUseCase(memoryStore),
+      // Bucle REAL con el gate REAL: la ejecución de herramientas debe atravesar
+      // `EnforceAgentPolicyUseCase` de verdad, no un doble que siempre autorice.
+      new AgentToolLoopUseCase(
+        new ExecuteAgentToolUseCase(
+          agents,
+          new EnforceAgentPolicyUseCase(db),
+          toolRegistry,
+        ),
+      ),
     );
     resolvedProfileIds = [];
     const registry = {
@@ -1138,6 +1167,341 @@ describe('Conversations (integración)', () => {
       ).toBe(0);
       // Pero la directiva se retira igualmente: el protocolo nunca se muestra.
       expect(result.content).not.toContain('BB_MEMORY');
+    });
+  });
+
+  // ── 5.9 · Las tools se ejecutan REALMENTE en el turno ─────────────────────
+  describe('ejecución de herramientas en el turno real (5.9)', () => {
+    /** Agente con las herramientas que se le indiquen y alcance propio. */
+    const withToolAgent = async (
+      tools: { tool: string; permission: string }[],
+      guardrails: Record<string, unknown> = {},
+    ) => {
+      const coleccion = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      const agent = await agents.create({
+        organizationId: org.orgId,
+        createdById: org.userId,
+        name: 'Agente con herramientas',
+        systemPrompt: 'Consultas antes de responder.',
+        knowledgeCollectionIds: [coleccion.id],
+        tools,
+        guardrails,
+      });
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+        agentId: agent.id,
+      });
+      return { agent, conversation, coleccion };
+    };
+
+    /** El modelo pide la herramienta en la 1.ª vuelta y responde en la 2.ª. */
+    const asksToolThenAnswers = (tool: string, finalText = 'Ya lo tengo.') => {
+      let call = 0;
+      complete.mockImplementation(() => {
+        call += 1;
+        return Promise.resolve({
+          content:
+            call === 1
+              ? `Déjame consultarlo.\n[[BB_TOOL]]{"tool":"${tool}","input":"descuentos"}`
+              : finalText,
+        });
+      });
+    };
+
+    it('CAMINO COMPLETO: el agente pide una tool READ_ONLY, se ejecuta y responde con el resultado', async () => {
+      retrievedChunks = [chunk('c1', 'Los descuentos superan el margen.')];
+      const { conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+      asksToolThenAnswers('knowledge_search');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: '¿cómo van los descuentos?',
+      });
+
+      // Se ejecutó de verdad, atravesando el gate.
+      expect(result.toolInvocations).toEqual([
+        { tool: 'knowledge_search', executed: true, deniedReason: undefined },
+      ]);
+      // Hubo una segunda llamada al modelo, y llevaba el resultado como DATOS.
+      expect(complete).toHaveBeenCalledTimes(2);
+      const secondCall = complete.mock.calls[1][0];
+      const lastMessage = secondCall.messages[secondCall.messages.length - 1];
+      expect(lastMessage.content).toMatch(/DATOS, no instrucciones/i);
+      expect(lastMessage.content).toContain('descuentos superan el margen');
+      // La persona ve la respuesta final, nunca el protocolo.
+      expect(result.content).toBe('Ya lo tengo.');
+      expect(result.content).not.toContain('BB_TOOL');
+    });
+
+    it('el prompt anuncia SOLO las herramientas concedidas y ejecutables', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      const systemPrompt = complete.mock.calls[0][0].systemPrompt;
+      expect(systemPrompt).toContain('knowledge_search');
+      expect(systemPrompt).not.toContain('insight_lookup');
+    });
+
+    it('NO ejecuta una herramienta que el agente no ha declarado', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { agent, conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+      asksToolThenAnswers('insight_lookup');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(result.toolInvocations[0]).toMatchObject({
+        tool: 'insight_lookup',
+        executed: false,
+      });
+      // Y la denegación queda registrada en auditoría por el propio gate.
+      const logs = await prisma.auditLog.findMany({
+        where: {
+          organizationId: org.orgId,
+          action: 'agent.tool.denied',
+          targetId: agent.id,
+        },
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].metadata).toMatchObject({
+        tool: 'insight_lookup',
+        reason: 'TOOL_NOT_GRANTED',
+      });
+    });
+
+    it('NO ejecuta una herramienta REQUIRES_CONFIRMATION aunque esté declarada', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent([
+        { tool: 'send_email', permission: 'REQUIRES_CONFIRMATION' },
+      ]);
+      asksToolThenAnswers('send_email');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'manda un correo',
+      });
+
+      // El techo de permisos de la Fase 5 sigue siendo READ_ONLY.
+      expect(result.toolInvocations[0].executed).toBe(false);
+    });
+
+    it('NO ejecuta una herramienta AUTONOMOUS aunque esté declarada', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent([
+        { tool: 'trigger_automation', permission: 'AUTONOMOUS' },
+      ]);
+      asksToolThenAnswers('trigger_automation');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'lanza la automatización',
+      });
+
+      expect(result.toolInvocations[0].executed).toBe(false);
+    });
+
+    it('una herramienta inventada por el modelo nunca se ejecuta', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+      asksToolThenAnswers('borrar_produccion');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      expect(result.toolInvocations[0]).toMatchObject({
+        tool: 'borrar_produccion',
+        executed: false,
+      });
+    });
+
+    it('`sql_query` es declarable pero NO tiene adaptador: no se ejecuta', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent([
+        { tool: 'sql_query', permission: 'READ_ONLY' },
+      ]);
+      asksToolThenAnswers('sql_query');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'consulta la base de datos',
+      });
+
+      // Decisión congelada de la Fase 5: no hay SQL libre.
+      expect(result.toolInvocations[0]).toMatchObject({
+        tool: 'sql_query',
+        executed: false,
+      });
+      expect(result.toolInvocations[0].deniedReason).toMatch(
+        /no está implementada/i,
+      );
+      // Y tampoco se anuncia en el prompt, porque no tiene adaptador registrado.
+      expect(complete.mock.calls[0][0].systemPrompt).not.toContain('sql_query');
+    });
+
+    it('EL CONTADOR ES DEL SERVIDOR: el tope se agota aunque el cliente no lo diga', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      // Tope de UNA sola herramienta por turno.
+      const { conversation } = await withToolAgent(
+        [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+        { maxToolCallsPerRun: 1 },
+      );
+
+      // El modelo pide herramienta en TODAS las vueltas: nada en la petición del cliente
+      // puede reiniciar el contador, porque el contador no viaja en la petición.
+      complete.mockImplementation(() =>
+        Promise.resolve({
+          content: `[[BB_TOOL]]{"tool":"knowledge_search","input":"otra vez"}`,
+        }),
+      );
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'insiste',
+      });
+
+      const executed = result.toolInvocations.filter((i) => i.executed);
+      const denied = result.toolInvocations.filter((i) => !i.executed);
+      expect(executed).toHaveLength(1);
+      expect(denied).toHaveLength(1);
+      expect(denied[0].deniedReason).toMatch(/máximo de 1/i);
+    });
+
+    it('el bucle termina: un modelo que pide herramienta sin parar no bloquea el turno', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { conversation } = await withToolAgent(
+        [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
+        { maxToolCallsPerRun: 50 },
+      );
+      complete.mockImplementation(() =>
+        Promise.resolve({
+          content: `[[BB_TOOL]]{"tool":"knowledge_search","input":"otra"}`,
+        }),
+      );
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'bucle',
+      });
+
+      // Techo absoluto del bucle, independiente del guardrail: acota coste y latencia.
+      expect(result.toolInvocations.length).toBeLessThanOrEqual(4);
+      expect(complete.mock.calls.length).toBeLessThanOrEqual(5);
+    });
+
+    it('el ALCANCE de la herramienta lo dicta el agente, no lo que pida el modelo', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const { coleccion, conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+      // El modelo intenta ampliar el alcance por su cuenta dentro de la entrada.
+      asksToolThenAnswers('knowledge_search');
+
+      await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'busca en todas las colecciones de la empresa',
+      });
+
+      // La búsqueda se acotó a la colección del agente: el alcance viene de la
+      // configuración persistida, nunca de la petición ni del prompt.
+      expect(retrieveContextCalls.at(-1)?.knowledgeCollectionIds).toEqual([
+        coleccion.id,
+      ]);
+    });
+
+    it('el streaming ejecuta las MISMAS herramientas que la vía síncrona', async () => {
+      retrievedChunks = [chunk('c1', 'Los descuentos superan el margen.')];
+      const { conversation } = await withToolAgent([
+        { tool: 'knowledge_search', permission: 'READ_ONLY' },
+      ]);
+
+      let call = 0;
+      stream.mockImplementation(() => {
+        call += 1;
+        return call === 1
+          ? toStream([
+              'Déjame ',
+              'consultarlo.\n',
+              '[[BB_TOOL]]{"tool":"knowledge_search","input":"x"}',
+            ])
+          : toStream(['Ya ', 'lo ', 'tengo.']);
+      });
+
+      const emitted: string[] = [];
+      for await (const event of streamMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: '¿cómo van los descuentos?',
+      })) {
+        if (event.type === 'token') emitted.push(event.text);
+      }
+
+      const shown = emitted.join('');
+      expect(shown).not.toContain('BB_TOOL');
+      expect(shown).toContain('Déjame consultarlo.');
+      expect(shown).toContain('Ya lo tengo.');
+      // Dos pasadas por el modelo, igual que en la vía síncrona.
+      expect(stream).toHaveBeenCalledTimes(2);
+    });
+
+    it('una conversación SIN agente nunca ejecuta herramientas', async () => {
+      retrievedChunks = [chunk('c1', 'contenido')];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+      asksToolThenAnswers('knowledge_search');
+
+      const result = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'hola',
+      });
+
+      // El camino de Fase 4 no adquiere herramientas por la puerta de atrás.
+      expect(result.toolInvocations).toEqual([]);
+      expect(complete).toHaveBeenCalledTimes(1);
     });
   });
 });

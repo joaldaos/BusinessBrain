@@ -147,31 +147,85 @@ export class RecommendationsService {
     status: RecommendationStatus,
   ): Promise<RecommendationView> {
     const recommendation = await this.loadAuthorized(params);
+    const resolvedAt = new Date();
 
-    // Una decisión ya tomada no se sobrescribe: hacerlo borraría quién decidió y cuándo,
-    // que es justamente lo que esta subfase existe para conservar. Cambiar de opinión es
-    // una operación distinta y con su propia traza, no un segundo `accept` silencioso.
-    if (recommendation.status !== RecommendationStatus.NEW) {
+    // Transición CONDICIONAL y atómica: la condición `status: NEW` viaja dentro del propio
+    // UPDATE, no en un `if` previo.
+    //
+    // Comprobar el estado y despues actualizar deja una ventana entre ambas operaciones: dos
+    // personas que aceptan a la vez leen NEW las dos, las dos pasan la comprobación y la
+    // segunda escritura pisa a la primera. El resultado seria una decision humana borrada en
+    // silencio —justo lo que `resolvedById` existe para conservar— y un `resolvedAt` que no
+    // corresponde a la persona registrada. Con la condición dentro del UPDATE, Postgres
+    // serializa las dos escrituras y solo una encuentra la fila en NEW.
+    const { count } = await this.prisma.recommendation.updateMany({
+      where: {
+        id: recommendation.id,
+        // El filtro de organización se repite tambien aqui: `updateMany` no hereda el WHERE
+        // de la lectura anterior.
+        organizationId: params.organizationId,
+        status: RecommendationStatus.NEW,
+      },
+      data: {
+        status,
+        resolvedById: params.userId,
+        resolvedAt,
+      },
+    });
+
+    if (count === 0) {
+      // O ya estaba resuelta, o otra persona ganó la carrera. En ambos casos la decisión
+      // vigente es la que está persistida, y se relee para explicarla con exactitud.
+      const current = await this.prisma.recommendation.findFirst({
+        where: {
+          id: recommendation.id,
+          organizationId: params.organizationId,
+        },
+        select: { status: true, resolvedAt: true },
+      });
+
       throw new ConflictException(
-        `La recomendación ya fue resuelta como ${recommendation.status}` +
-          (recommendation.resolvedAt
-            ? ` el ${recommendation.resolvedAt.toISOString()}`
+        `La recomendación ya fue resuelta como ${current?.status ?? 'RESUELTA'}` +
+          (current?.resolvedAt
+            ? ` el ${current.resolvedAt.toISOString()}`
             : ''),
       );
     }
 
-    const updated = await this.prisma.recommendation.update({
-      where: { id: recommendation.id },
+    // Traza de la transición: quién, cuándo, estado anterior y estado nuevo. El estado
+    // anterior es demostrablemente NEW porque el UPDATE condicional solo dispara desde ahí.
+    await this.prisma.auditLog.create({
       data: {
-        status,
-        resolvedById: params.userId,
-        resolvedAt: new Date(),
+        organizationId: params.organizationId,
+        actorId: params.userId,
+        action:
+          status === RecommendationStatus.ACCEPTED
+            ? 'recommendation.accepted'
+            : 'recommendation.dismissed',
+        targetType: 'Recommendation',
+        targetId: recommendation.id,
+        metadata: {
+          previousStatus: RecommendationStatus.NEW,
+          newStatus: status,
+          resolvedAt: resolvedAt.toISOString(),
+          sourceInsightId: recommendation.sourceInsightId,
+          // Se registra el alcance con el que se autorizó la decisión: sin él, auditar a
+          // posteriori "quién podía ver esto" exigiría reconstruir las concesiones de
+          // entonces, que pueden haber cambiado desde.
+          effectiveCollectionScope: recommendation.effectiveCollectionScope,
+          // Constancia explícita: la aceptación no dispara nada fuera del sistema.
+          externalActionExecuted: false,
+        },
       },
+    });
+
+    const updated = await this.prisma.recommendation.findFirstOrThrow({
+      where: { id: recommendation.id, organizationId: params.organizationId },
       include: this.viewInclude,
     });
 
     this.logger.log(
-      `Recomendación ${updated.id} ${status} por el usuario ${params.userId} — ` +
+      `Recomendación ${updated.id}: NEW → ${status} por el usuario ${params.userId} — ` +
         'ninguna acción externa ejecutada',
     );
 

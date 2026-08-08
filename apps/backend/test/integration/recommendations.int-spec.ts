@@ -461,6 +461,111 @@ describe('Recommendations (integración)', () => {
       expect(persisted?.resolvedAt).not.toBeNull();
     });
 
+    it('registra la TRANSICIÓN completa: quién, cuándo, estado anterior y estado nuevo', async () => {
+      const { recommendation, decider } = await seedReadable();
+
+      await recommendations.accept({
+        organizationId: org.orgId,
+        userId: decider,
+        recommendationId: recommendation.id,
+      });
+
+      const logs = await prisma.auditLog.findMany({
+        where: {
+          organizationId: org.orgId,
+          targetType: 'Recommendation',
+          targetId: recommendation.id,
+        },
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].action).toBe('recommendation.accepted');
+      expect(logs[0].actorId).toBe(decider);
+      expect(logs[0].metadata).toMatchObject({
+        previousStatus: RecommendationStatus.NEW,
+        newStatus: RecommendationStatus.ACCEPTED,
+        // Constancia explícita de que la decisión no disparó nada fuera del sistema.
+        externalActionExecuted: false,
+      });
+    });
+
+    it('descartar registra su propia transición NEW → DISMISSED', async () => {
+      const { recommendation, decider } = await seedReadable();
+
+      await recommendations.dismiss({
+        organizationId: org.orgId,
+        userId: decider,
+        recommendationId: recommendation.id,
+      });
+
+      const log = await prisma.auditLog.findFirst({
+        where: { targetType: 'Recommendation', targetId: recommendation.id },
+      });
+      expect(log?.action).toBe('recommendation.dismissed');
+      expect(log?.metadata).toMatchObject({
+        previousStatus: RecommendationStatus.NEW,
+        newStatus: RecommendationStatus.DISMISSED,
+      });
+    });
+
+    it('dos resoluciones SIMULTÁNEAS: solo una gana y ninguna decisión se pierde', async () => {
+      const ventas = await createCollection(org, 'Ventas');
+      const recommendation = await escalateFromCollections(org, [ventas.id]);
+
+      const first = await createMember(org, MembershipRole.MEMBER);
+      const second = await createMember(org, MembershipRole.MEMBER);
+      for (const userId of [first, second]) {
+        await access.grant({
+          organizationId: org.orgId,
+          knowledgeCollectionId: ventas.id,
+          userId,
+          grantedById: org.userId,
+        });
+      }
+
+      // Comprobar el estado y despues actualizar dejaría una ventana entre ambas
+      // operaciones: las dos leerían NEW, las dos pasarían la comprobación y la segunda
+      // escritura pisaría a la primera, borrando en silencio una decisión humana.
+      const outcomes = await Promise.allSettled([
+        recommendations.accept({
+          organizationId: org.orgId,
+          userId: first,
+          recommendationId: recommendation.id,
+        }),
+        recommendations.dismiss({
+          organizationId: org.orgId,
+          userId: second,
+          recommendationId: recommendation.id,
+        }),
+      ]);
+
+      const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
+      const rejected = outcomes.filter((o) => o.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toMatchObject({
+        status: 409,
+      });
+
+      // El resolutor persistido es exactamente el de la decisión que ganó, y solo se
+      // registró una transición.
+      const persisted = await prisma.recommendation.findUnique({
+        where: { id: recommendation.id },
+      });
+      const winner = (
+        fulfilled[0] as PromiseFulfilledResult<{
+          resolvedById: string | null;
+          status: RecommendationStatus;
+        }>
+      ).value;
+      expect(persisted?.resolvedById).toBe(winner.resolvedById);
+      expect(persisted?.status).toBe(winner.status);
+      expect(
+        await prisma.auditLog.count({
+          where: { targetType: 'Recommendation', targetId: recommendation.id },
+        }),
+      ).toBe(1);
+    });
+
     it('una recomendación recién escalada nace SIN resolutor', async () => {
       const ventas = await createCollection(org, 'Ventas');
       const recommendation = await escalateFromCollections(org, [ventas.id]);

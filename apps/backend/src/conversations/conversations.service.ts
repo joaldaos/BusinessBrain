@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Conversation } from '@businessbrain/database';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -23,6 +27,8 @@ export class ConversationsService {
     title?: string;
     agentId?: string;
   }): Promise<Conversation> {
+    await this.assertAgentBelongsToOrg(params.organizationId, params.agentId);
+
     return this.prisma.conversation.create({
       data: {
         organizationId: params.organizationId,
@@ -31,6 +37,41 @@ export class ConversationsService {
         agentId: params.agentId ?? null,
       },
     });
+  }
+
+  /**
+   * `agentId` llega en el cuerpo de la petición y hasta aquí se persistía tal cual.
+   *
+   * Hoy `RunAgentUseCase` vuelve a resolver el agente contra la organización, así que un
+   * `agentId` ajeno acaba fallando al enviar el primer mensaje: el sistema falla cerrado. Se
+   * valida igualmente en la creación por tres motivos, en orden de importancia:
+   *
+   * 1. **La validación no debe depender de que otro la repita.** Que hoy exista un segundo
+   *    control es una propiedad del código actual, no una garantía del modelo. El día que
+   *    aparezca otro consumidor de `Conversation.agentId` heredaría una referencia que nadie
+   *    comprobó nunca.
+   * 2. **Deja estado imposible persistido.** Una conversación apuntando a un agente de otro
+   *    tenant es una fila que no debería poder existir, y que además queda inservible: cada
+   *    mensaje enviado devolvería 404 sin explicar por qué.
+   * 3. **Es la misma invariante que `AgentsService` ya aplica** a `knowledgeCollectionIds`,
+   *    `llmProfileId` y `templateId`. Dejar `agentId` fuera era una asimetría, no una
+   *    decisión.
+   */
+  private async assertAgentBelongsToOrg(
+    organizationId: string,
+    agentId?: string,
+  ): Promise<void> {
+    if (!agentId) return;
+
+    const agent = await this.prisma.agent.findFirst({
+      where: { id: agentId, organizationId },
+      select: { id: true },
+    });
+    if (!agent) {
+      throw new BadRequestException(
+        'Agente inexistente o de otra organización',
+      );
+    }
   }
 
   /**

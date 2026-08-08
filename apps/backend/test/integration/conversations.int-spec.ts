@@ -608,6 +608,44 @@ describe('Conversations (integración)', () => {
       return { agent, conversation, coleccion };
     };
 
+    it('RECHAZA crear una conversación con un agente de otra organización', async () => {
+      const other = await createTestOrg('conv-int-agent-xorg');
+      const theirs = await agents.create({
+        organizationId: other.orgId,
+        createdById: other.userId,
+        name: 'Agente ajeno',
+        systemPrompt: 'No deberías poder usarme.',
+      });
+
+      // Persistir la referencia sin comprobarla dejaba una fila que no debería poder
+      // existir, y que dependía de que `RunAgentUseCase` volviera a validar más tarde.
+      await expect(
+        conversations.create({
+          organizationId: org.orgId,
+          userId: org.userId,
+          agentId: theirs.id,
+        }),
+      ).rejects.toThrow(/otra organización|inexistente/i);
+
+      expect(
+        await prisma.conversation.count({
+          where: { organizationId: org.orgId, agentId: theirs.id },
+        }),
+      ).toBe(0);
+
+      await destroyTestOrg(other);
+    });
+
+    it('RECHAZA crear una conversación con un agente inexistente', async () => {
+      await expect(
+        conversations.create({
+          organizationId: org.orgId,
+          userId: org.userId,
+          agentId: 'no-existe',
+        }),
+      ).rejects.toThrow(/inexistente|otra organización/i);
+    });
+
     it('usa REALMENTE el systemPrompt del agente', async () => {
       retrievedChunks = [chunk('c1', 'contenido')];
       const { conversation } = await withAgent();

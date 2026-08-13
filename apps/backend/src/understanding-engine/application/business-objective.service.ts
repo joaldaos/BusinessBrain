@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   BusinessObjectiveOrigin,
   BusinessObjectiveStatus,
@@ -39,7 +45,8 @@ export class BusinessObjectiveService {
       params.origin === BusinessObjectiveOrigin.MANUAL_DECLARATION;
 
     if (isManual && !params.actorUserId) {
-      throw new Error(
+      // Falta un dato de la petición, no hay avería: 400, no 500.
+      throw new BadRequestException(
         'Una declaración manual exige identificar a la persona que respalda el objetivo',
       );
     }
@@ -81,7 +88,9 @@ export class BusinessObjectiveService {
       throw new NotFoundException('BusinessObjective no encontrado');
 
     if (objective.status === BusinessObjectiveStatus.DISCARDED) {
-      throw new Error(
+      // Conflicto con el ESTADO del recurso: la misma llamada sería válida sobre un
+      // objetivo no descartado.
+      throw new ConflictException(
         'Un objetivo descartado no se confirma: debe declararse de nuevo si vuelve a importar',
       );
     }
@@ -148,7 +157,7 @@ export class BusinessObjectiveService {
       params.origin === BusinessObjectiveOrigin.MANUAL_DECLARATION;
 
     if (isManual && !params.actorUserId) {
-      throw new Error(
+      throw new BadRequestException(
         'Una edición manual exige identificar a la persona que respalda la nueva versión',
       );
     }
@@ -171,6 +180,53 @@ export class BusinessObjectiveService {
         supersedesObjectiveId: previous.id,
       },
     });
+  }
+
+  /**
+   * Catálogo de objetivos de la organización — subfase 6.1.
+   *
+   * Incluye TODOS los estados a propósito: sin ver los `INFERRED` no habría forma de
+   * confirmarlos, y sin ver los `DISCARDED` no habría forma de entender por qué el sistema
+   * dejó de considerar algo que antes importaba.
+   *
+   * Por defecto solo devuelve la cabeza de cada cadena de versiones: una lista que mezclara
+   * versiones superadas con vigentes haría imposible saber qué le importa hoy a la empresa.
+   */
+  async list(params: {
+    organizationId: string;
+    status?: BusinessObjectiveStatus;
+    includeSuperseded?: boolean;
+    limit: number;
+    offset: number;
+  }): Promise<BusinessObjective[]> {
+    return this.prisma.businessObjective.findMany({
+      where: {
+        organizationId: params.organizationId,
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.includeSuperseded ? {} : { supersededBy: { is: null } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: params.limit,
+      skip: params.offset,
+    });
+  }
+
+  /** Un objetivo de la propia organización. Fuera de ella, no existe. */
+  async findOne(params: {
+    organizationId: string;
+    businessObjectiveId: string;
+  }): Promise<BusinessObjective> {
+    const objective = await this.prisma.businessObjective.findFirst({
+      where: {
+        id: params.businessObjectiveId,
+        organizationId: params.organizationId,
+      },
+    });
+    if (!objective) {
+      throw new NotFoundException('BusinessObjective no encontrado');
+    }
+
+    return objective;
   }
 
   /**

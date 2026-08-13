@@ -13,16 +13,27 @@ import {
   type Recommendation,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InsightScopeService } from './insight-scope.service';
 
 /**
  * Curación humana y puente con el Principio de Evolución Asistida —
  * UNDERSTANDING_ENGINE_DESIGN.md §3.7, §11, §12. Subfase 3.5.
+ *
+ * Desde la subfase 6.1 ambas operaciones exigen que el actor CUBRA el alcance efectivo del
+ * `Insight`, no solo que pertenezca a su organización. Antes bastaba lo segundo porque nada
+ * llegaba hasta aquí desde fuera; al exponerse por HTTP, ese filtro dejaba de ser suficiente:
+ * la curación es pegajosa frente al recálculo (§3.7) y el escalado propaga el alcance a una
+ * entidad nueva (§12), así que ambas son escrituras duraderas sobre comprensión que el actor
+ * podría no tener derecho a leer.
  */
 @Injectable()
 export class CurateInsightUseCase {
   private readonly logger = new Logger(CurateInsightUseCase.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly insightScope: InsightScopeService,
+  ) {}
 
   /**
    * Registra curación humana sobre un `Insight` (§3.7). Una vez registrada tiene PRIORIDAD
@@ -40,9 +51,18 @@ export class CurateInsightUseCase {
   }): Promise<void> {
     const insight = await this.prisma.insight.findFirst({
       where: { id: params.insightId, organizationId: params.organizationId },
-      select: { id: true },
+      select: { id: true, transitiveEvidenceClosure: true },
     });
     if (!insight) throw new NotFoundException('Insight no encontrado');
+
+    // El alcance ANTES de escribir: curar es una decisión con efecto duradero sobre la
+    // confianza, no una lectura.
+    await this.insightScope.assertActorCoversInsight({
+      organizationId: params.organizationId,
+      actorUserId: params.actorUserId,
+      insightId: insight.id,
+      transitiveEvidenceClosure: insight.transitiveEvidenceClosure,
+    });
 
     if (params.type === InsightFeedbackType.REVOCATION) {
       // Petición mal formada, no fallo del servidor: quien llama ha usado la operación
@@ -85,9 +105,22 @@ export class CurateInsightUseCase {
   }): Promise<void> {
     const feedback = await this.prisma.insightFeedback.findFirst({
       where: { id: params.feedbackId, organizationId: params.organizationId },
-      include: { insight: { select: { id: true, status: true } } },
+      include: {
+        insight: {
+          select: { id: true, status: true, transitiveEvidenceClosure: true },
+        },
+      },
     });
     if (!feedback) throw new NotFoundException('InsightFeedback no encontrado');
+
+    // Revocar una curación devuelve el Insight al recálculo automático: es tan decisivo
+    // como haberlo curado, y exige el mismo alcance.
+    await this.insightScope.assertActorCoversInsight({
+      organizationId: params.organizationId,
+      actorUserId: params.actorUserId,
+      insightId: feedback.insight.id,
+      transitiveEvidenceClosure: feedback.insight.transitiveEvidenceClosure,
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.insightFeedback.create({
@@ -134,6 +167,8 @@ export class CurateInsightUseCase {
   async escalateToRecommendation(params: {
     organizationId: string;
     insightId: string;
+    /** Quién escala. Debe CUBRIR el alcance efectivo del Insight de origen (6.1). */
+    actorUserId: string;
     /** Los seis puntos que el Principio de Evolución Asistida exige (§3.2 del plan). */
     contract: {
       title: string;
@@ -154,6 +189,18 @@ export class CurateInsightUseCase {
     });
     if (!insight) throw new NotFoundException('Insight no encontrado');
 
+    // Cobertura del actor ANTES de cualquier otra comprobación. Escalar propaga el alcance
+    // a una entidad nueva redactada por esta persona; hacerlo sobre evidencia que no puede
+    // leer sería blanquear el alcance por el lado de quien dispara, no por el del dato.
+    // Se reutiliza el alcance ya calculado aquí para no proyectarlo dos veces.
+    const effectiveCollectionScope =
+      await this.insightScope.assertActorCoversInsight({
+        organizationId: params.organizationId,
+        actorUserId: params.actorUserId,
+        insightId: insight.id,
+        transitiveEvidenceClosure: insight.transitiveEvidenceClosure,
+      });
+
     if (insight.status !== InsightStatus.ACTIVE) {
       // Conflicto con el ESTADO del recurso, no con la petición: la misma llamada sería
       // válida si el Insight siguiera activo. Es exactamente la semántica de 409.
@@ -171,11 +218,6 @@ export class CurateInsightUseCase {
           'declárelo explícitamente como "no aplica (sin impacto estructural)"',
       );
     }
-
-    const effectiveCollectionScope = await this.effectiveScopeOf(
-      params.organizationId,
-      insight.transitiveEvidenceClosure,
-    );
 
     const recommendation = await this.prisma.recommendation.create({
       data: {
@@ -213,22 +255,5 @@ export class CurateInsightUseCase {
    */
   isEscalationCandidate(type: InsightType): boolean {
     return type === InsightType.RISK || type === InsightType.OPPORTUNITY;
-  }
-
-  private async effectiveScopeOf(
-    organizationId: string,
-    closure: unknown,
-  ): Promise<string[]> {
-    const refIds = Array.isArray(closure)
-      ? (closure as { refId: string }[]).map((c) => c.refId)
-      : [];
-    if (refIds.length === 0) return [];
-
-    const memberships = await this.prisma.knowledgeItemCollection.findMany({
-      where: { knowledgeItem: { id: { in: refIds }, organizationId } },
-      select: { knowledgeCollectionId: true },
-    });
-
-    return [...new Set(memberships.map((m) => m.knowledgeCollectionId))];
   }
 }

@@ -9,8 +9,17 @@ import { RetrieverKnowledgeRetrievalAdapter } from './infrastructure/retriever-k
 import { GenerativeSynthesisStrategy } from './infrastructure/strategies/generative-synthesis.strategy';
 import { RetrieveInsightsUseCase } from './application/retrieve-insights.use-case';
 import { CurateInsightUseCase } from './application/curate-insight.use-case';
+import { InsightScopeService } from './application/insight-scope.service';
+import { ManualTriggerAdmissionService } from './application/manual-trigger-admission.service';
+import { AnalysisRunsService } from './application/analysis-runs.service';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { LlmModule } from '../llm/llm.module';
+import { BusinessObjectivesController } from './api/business-objectives.controller';
+import { AnalysisRunsController } from './api/analysis-runs.controller';
+import {
+  InsightFeedbackController,
+  InsightsController,
+} from './api/insights.controller';
 
 /**
  * Understanding Engine — Fase 3.
@@ -26,13 +35,25 @@ import { LlmModule } from '../llm/llm.module';
  * con su gate, confianza viva con frescura derivada, curación humana, puente con
  * `Recommendation` y `RetrieveInsights`.
  *
- * SIN CONTROLADORES, deliberadamente: `RetrieveInsights` se valida como capacidad interna y
- * no se expone a ninguna superficie de consumo en esta fase (§18). El chat y el resto de
- * superficies conversacionales se construyen sobre ella en la Fase 4.
+ * La Fase 3 se construyó SIN CONTROLADORES a propósito (§18): `RetrieveInsights` se validó
+ * como capacidad interna. La consecuencia, detectada en la auditoría de cierre de la Fase 5,
+ * era que el motor entero resultaba inalcanzable en produccion — ninguna organizacion podia
+ * declarar un objetivo, lanzar un analisis ni escalar nada, de modo que `GET /recommendations`
+ * devolvia siempre vacio.
+ *
+ * La subfase 6.1 añade esa superficie HTTP. No contradice la arquitectura congelada: lo que
+ * §516 excluye es la INTERFAZ DE USUARIO (Fase 9), y "sin HTTP publico" estaba acotado a la
+ * Fase 3. Toda lectura de comprension sigue pasando por `RetrieveInsights`, y toda escritura
+ * —curar, revocar, escalar— exige ahora que el actor cubra el alcance efectivo del Insight.
  */
 @Module({
   imports: [KnowledgeEngineModule, LlmModule],
-  controllers: [],
+  controllers: [
+    BusinessObjectivesController,
+    AnalysisRunsController,
+    InsightsController,
+    InsightFeedbackController,
+  ],
   providers: [
     {
       provide: KNOWLEDGE_SIGNALS_PORT,
@@ -48,12 +69,16 @@ import { LlmModule } from '../llm/llm.module';
     BusinessObjectiveService,
     RetrieveInsightsUseCase,
     CurateInsightUseCase,
+    InsightScopeService,
+    ManualTriggerAdmissionService,
+    AnalysisRunsService,
   ],
   exports: [
     TriggerAnalysisRunUseCase,
     BusinessObjectiveService,
     RetrieveInsightsUseCase,
     CurateInsightUseCase,
+    InsightScopeService,
   ],
 })
 export class UnderstandingEngineModule {}

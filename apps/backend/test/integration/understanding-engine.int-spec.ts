@@ -11,6 +11,7 @@ import { TriggerAnalysisRunUseCase } from '../../src/understanding-engine/applic
 import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/infrastructure/prisma-knowledge-signals.adapter';
 import { KnowledgeSignalStrategy } from '../../src/understanding-engine/infrastructure/strategies/knowledge-signal.strategy';
 import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine/infrastructure/strategies/generative-synthesis.strategy';
+import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   createInsight,
@@ -19,6 +20,7 @@ import {
   destroyTestOrg,
   prisma,
   type TestOrg,
+  insightScope,
 } from './fixtures';
 
 /**
@@ -50,8 +52,8 @@ describe('Understanding Engine (integración)', () => {
 
   beforeAll(() => {
     objectives = new BusinessObjectiveService(db);
-    curator = new CurateInsightUseCase(db);
-    retriever = new RetrieveInsightsUseCase(db);
+    curator = new CurateInsightUseCase(db, insightScope(db));
+    retriever = new RetrieveInsightsUseCase(db, insightScope(db));
     trigger = new TriggerAnalysisRunUseCase(
       db,
       new PrismaKnowledgeSignalsAdapter(db),
@@ -72,6 +74,45 @@ describe('Understanding Engine (integración)', () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
+
+  /**
+   * `Insight` con evidencia en una colección concedida al actor.
+   *
+   * Desde 6.1 curar y escalar exigen que quien actúa CUBRA el alcance efectivo, así que un
+   * insight sin colecciones no puede curarse ni escalarse por nadie: su alcance es vacío y el
+   * alcance vacío es inaccesible por defecto. Estos tests verifican otras reglas, así que
+   * necesitan un insight que el actor sí pueda tocar.
+   */
+  const scopedInsight = async (params: {
+    subjectIdentity: string;
+    type?: InsightType;
+    status?: InsightStatus;
+    confidence?: number;
+    confidenceComputedAt?: Date;
+  }) => {
+    const item = await createKnowledgeItem(org);
+    const collection = await prisma.knowledgeCollection.create({
+      data: {
+        organizationId: org.orgId,
+        name: `col-${params.subjectIdentity}`,
+      },
+    });
+    await prisma.knowledgeItemCollection.create({
+      data: {
+        organizationId: org.orgId,
+        knowledgeItemId: item.id,
+        knowledgeCollectionId: collection.id,
+      },
+    });
+    await new CollectionAccessService(db).grant({
+      organizationId: org.orgId,
+      knowledgeCollectionId: collection.id,
+      userId: org.userId,
+      grantedById: org.userId,
+    });
+
+    return createInsight(org, { ...params, evidenceItemIds: [item.id] });
+  };
 
   describe('3.1 — razonamiento sobre señales e idempotencia (§12)', () => {
     it('una fuente cuya confianza decae genera un ANOMALY trazable a la señal exacta', async () => {
@@ -399,8 +440,8 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('la confianza decae en lectura, y la curación humana la protege', async () => {
-      const insight = await createInsight(org, {
-        subjectIdentity: 'z',
+      const insight = await scopedInsight({
+        subjectIdentity: 'z-decae',
         confidence: 0.9,
         confidenceComputedAt: new Date('2026-01-01'),
       });
@@ -427,7 +468,7 @@ describe('Understanding Engine (integración)', () => {
 
   describe('3.5 — curación humana y puente con Recommendation (§3.7, §11)', () => {
     it('revocar una curación crea un registro nuevo sin borrar el anterior', async () => {
-      const insight = await createInsight(org, { subjectIdentity: 'curado' });
+      const insight = await scopedInsight({ subjectIdentity: 'curado' });
 
       await curator.curate({
         organizationId: org.orgId,
@@ -455,7 +496,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('un Insight descartado se excluye por defecto y solo reaparece en modo histórico', async () => {
-      const insight = await createInsight(org, {
+      const insight = await scopedInsight({
         subjectIdentity: 'descartado',
       });
 
@@ -495,8 +536,17 @@ describe('Understanding Engine (integración)', () => {
         evidenceItemIds: [item.id],
       });
 
+      // 6.1: el actor debe cubrir el alcance del Insight para poder escalarlo.
+      await new CollectionAccessService(db).grant({
+        organizationId: org.orgId,
+        knowledgeCollectionId: collection.id,
+        userId: org.userId,
+        grantedById: org.userId,
+      });
+
       const recommendation = await curator.escalateToRecommendation({
         organizationId: org.orgId,
+        actorUserId: org.userId,
         insightId: insight.id,
         contract: {
           title: 'Revisar el proceso',
@@ -518,12 +568,13 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('el plan de migración NUNCA se omite', async () => {
-      const insight = await createInsight(org, { subjectIdentity: 'sin-plan' });
+      const insight = await scopedInsight({ subjectIdentity: 'sin-plan' });
 
       await expect(
         curator.escalateToRecommendation({
           organizationId: org.orgId,
           insightId: insight.id,
+          actorUserId: org.userId,
           contract: {
             title: 't',
             detected: 'd',
@@ -539,7 +590,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('un contrato incompleto es 400, no 500: la peticion esta mal, no el servidor', async () => {
-      const insight = await createInsight(org, {
+      const insight = await scopedInsight({
         subjectIdentity: 'sin-plan-400',
       });
 
@@ -548,6 +599,7 @@ describe('Understanding Engine (integración)', () => {
         curator.escalateToRecommendation({
           organizationId: org.orgId,
           insightId: insight.id,
+          actorUserId: org.userId,
           contract: {
             title: 't',
             detected: 'd',
@@ -563,7 +615,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('registrar una REVOCATION por la via equivocada es 400', async () => {
-      const insight = await createInsight(org, {
+      const insight = await scopedInsight({
         subjectIdentity: 'revoca-mal',
       });
 
@@ -578,7 +630,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('un Insight no activo no puede escalarse', async () => {
-      const insight = await createInsight(org, {
+      const insight = await scopedInsight({
         subjectIdentity: 'expirado',
         status: InsightStatus.EXPIRED,
       });
@@ -587,6 +639,7 @@ describe('Understanding Engine (integración)', () => {
         curator.escalateToRecommendation({
           organizationId: org.orgId,
           insightId: insight.id,
+          actorUserId: org.userId,
           contract: {
             title: 't',
             detected: 'd',
@@ -602,7 +655,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('escalar un Insight no activo es 409: conflicto de estado, no fallo del servidor', async () => {
-      const insight = await createInsight(org, {
+      const insight = await scopedInsight({
         subjectIdentity: 'expirado-409',
         status: InsightStatus.EXPIRED,
       });
@@ -612,6 +665,7 @@ describe('Understanding Engine (integración)', () => {
         curator.escalateToRecommendation({
           organizationId: org.orgId,
           insightId: insight.id,
+          actorUserId: org.userId,
           contract: {
             title: 't',
             detected: 'd',

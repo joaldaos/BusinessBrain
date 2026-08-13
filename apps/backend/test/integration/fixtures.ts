@@ -1,3 +1,5 @@
+import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
+import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import {
   AnalysisRunStatus,
   AnalysisRunTrigger,
@@ -19,6 +21,23 @@ import {
  */
 
 export const prisma = new PrismaClient();
+
+/**
+ * `InsightScopeService` real sobre el Postgres de pruebas.
+ *
+ * Se construye de verdad, no se dobla: desde 6.1 es la proyeccion UNICA del alcance efectivo
+ * y la autorizacion del actor al curar y escalar. Doblarlo dejaria sin verificar justamente
+ * la garantia que separa una conclusion restringida de que la toque cualquiera.
+ */
+export function insightScope(db: unknown): InsightScopeService {
+  const prismaService = db as ConstructorParameters<
+    typeof InsightScopeService
+  >[0];
+  return new InsightScopeService(
+    prismaService,
+    new CollectionAccessService(prismaService),
+  );
+}
 
 export interface TestOrg {
   orgId: string;

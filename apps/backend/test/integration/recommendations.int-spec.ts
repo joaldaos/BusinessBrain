@@ -16,6 +16,7 @@ import {
   destroyTestOrg,
   prisma,
   type TestOrg,
+  insightScope,
 } from './fixtures';
 
 /**
@@ -38,7 +39,7 @@ describe('Recommendations (integración)', () => {
     org = await createTestOrg('rec-int');
     access = new CollectionAccessService(db);
     recommendations = new RecommendationsService(db, access);
-    curate = new CurateInsightUseCase(db);
+    curate = new CurateInsightUseCase(db, insightScope(db));
   });
 
   afterEach(async () => {
@@ -86,9 +87,21 @@ describe('Recommendations (integración)', () => {
       evidenceItemIds: items.map((item) => item.id),
     });
 
+    // Desde 6.1 escalar exige que el actor CUBRA el alcance del Insight: sin esto seria
+    // blanquear alcance por el lado de quien dispara.
+    for (const collectionId of collectionIds) {
+      await new CollectionAccessService(db).grant({
+        organizationId: target.orgId,
+        knowledgeCollectionId: collectionId,
+        userId: target.userId,
+        grantedById: target.userId,
+      });
+    }
+
     return curate.escalateToRecommendation({
       organizationId: target.orgId,
       insightId: insight.id,
+      actorUserId: target.userId,
       contract: {
         title,
         detected: 'Descuentos por encima del margen objetivo.',
@@ -101,6 +114,25 @@ describe('Recommendations (integración)', () => {
       },
     });
   };
+
+  /**
+   * Siembra una `Recommendation` con un alcance concreto SIN pasar por el escalado.
+   *
+   * Desde 6.1 escalar exige que el actor cubra el alcance, de modo que ya no es posible
+   * crear por esa vía una recomendación con alcance vacío ni con colecciones que el actor no
+   * tenga —y eso es una garantía, no una limitación—. Pero el caso sigue siendo real en
+   * producción: la evidencia puede salir de su colección DESPUÉS de haberse escalado, y
+   * entonces la recomendación queda con un alcance que ya nadie cubre. Esto lo reproduce.
+   */
+  const seedRecommendationWithScope = (scope: string[]) =>
+    prisma.recommendation.create({
+      data: {
+        organizationId: org.orgId,
+        title: 'Propuesta con alcance heredado',
+        description: 'Su evidencia cambió de colección después del escalado.',
+        effectiveCollectionScope: scope,
+      },
+    });
 
   // ── 1. Acceso completo al effectiveCollectionScope → puede leer ───────────
   describe('acceso completo', () => {
@@ -317,7 +349,7 @@ describe('Recommendations (integración)', () => {
 
     it('DENIEGA incluso al OWNER si no tiene la colección concedida', async () => {
       const ventas = await createCollection(org, 'Ventas');
-      const recommendation = await escalateFromCollections(org, [ventas.id]);
+      const recommendation = await seedRecommendationWithScope([ventas.id]);
 
       // El rol no sustituye al alcance: son dos controles distintos y el alcance no se
       // hereda del cargo.
@@ -342,7 +374,7 @@ describe('Recommendations (integración)', () => {
 
       // Evidencia sin colección: alcance vacío. Tratarlo como "sin restricciones"
       // convertiría el fallo más silencioso en acceso universal.
-      const orphan = await escalateFromCollections(org, []);
+      const orphan = await seedRecommendationWithScope([]);
       expect(orphan.effectiveCollectionScope).toEqual([]);
 
       await expect(
@@ -924,7 +956,7 @@ describe('Recommendations (integración)', () => {
 
     it('el alcance vacío sigue siendo inaccesible con paginación', async () => {
       const { reader } = await seedMany(1);
-      const orphan = await escalateFromCollections(org, []);
+      const orphan = await seedRecommendationWithScope([]);
 
       const page = await recommendations.list({
         organizationId: org.orgId,

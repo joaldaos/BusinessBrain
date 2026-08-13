@@ -42,6 +42,16 @@ export interface TriggerAnalysisRunParams {
   trigger?: AnalysisRunTrigger;
   /** Acota las señales a las observadas desde este instante. */
   since?: Date;
+  /**
+   * Fila de `AnalysisRun` ya reclamada por una superficie con control operativo propio (6.1).
+   *
+   * Omitirlo es el camino normal y conserva la concurrencia sin restricciones del §3.1. NO es
+   * un mecanismo de exclusión: es la forma de que un control operativo externo —el disparo
+   * manual por HTTP— pueda reservar su ejecución sin que el dominio adquiera un invariante de
+   * serialización que la arquitectura congelada rechaza explícitamente (§20, tabla de
+   * alternativas).
+   */
+  existingRunId?: string;
 }
 
 export interface AnalysisRunResult {
@@ -66,15 +76,48 @@ export class TriggerAnalysisRunUseCase {
     private readonly generativeStrategy: GenerativeSynthesisStrategy,
   ) {}
 
-  async execute(params: TriggerAnalysisRunParams): Promise<AnalysisRunResult> {
-    const run = await this.prisma.analysisRun.create({
+  /**
+   * Abre la ejecución. **Sin bloqueo y sin serializar por organización** (§3.1, §12).
+   *
+   * Varios `AnalysisRun` simultáneos sobre la misma organización son legítimos y son el modo
+   * NORMAL de operación: el barrido periódico y el disparo por evento se solapan por diseño.
+   * La corrección bajo concurrencia no la da un cerrojo, la dan la unicidad de identidad de
+   * sujeto por exclusión de estados terminales y `ResolveInsightConflict` — serializar aquí
+   * pondría todo el análisis por evento detrás de una estrategia generativa lenta (bloqueo de
+   * cabecera de línea), justo en el escenario de agentes autónomos de alta frecuencia.
+   *
+   * `existingRunId` permite ADOPTAR una fila ya reclamada por una superficie que aplique su
+   * propio control operativo (hoy, el disparo manual por HTTP). Es opcional a propósito:
+   * cualquier disparo automático —planificador, evento, agente— lo omite y conserva la
+   * concurrencia intacta.
+   */
+  private async startRun(
+    params: TriggerAnalysisRunParams,
+  ): Promise<{ id: string }> {
+    if (params.existingRunId) {
+      return this.prisma.analysisRun.update({
+        where: { id: params.existingRunId },
+        data: {
+          status: AnalysisRunStatus.RUNNING,
+          startedAt: new Date(),
+        },
+        select: { id: true },
+      });
+    }
+
+    return this.prisma.analysisRun.create({
       data: {
         organizationId: params.organizationId,
         trigger: params.trigger ?? AnalysisRunTrigger.MANUAL,
         status: AnalysisRunStatus.RUNNING,
         startedAt: new Date(),
       },
+      select: { id: true },
     });
+  }
+
+  async execute(params: TriggerAnalysisRunParams): Promise<AnalysisRunResult> {
+    const run = await this.startRun(params);
 
     try {
       const signals = await this.knowledgeSignals.listSignals({

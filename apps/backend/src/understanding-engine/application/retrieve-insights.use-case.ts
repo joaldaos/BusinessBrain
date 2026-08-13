@@ -6,6 +6,7 @@ import {
   Prisma,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InsightScopeService } from './insight-scope.service';
 import { TERMINAL_INSIGHT_STATUSES } from '../domain/insight-status.classification';
 import { TERMINAL_KNOWLEDGE_ITEM_STATUSES } from '../../knowledge-engine/domain/knowledge-item-status.classification';
 import {
@@ -34,6 +35,12 @@ export interface RetrieveInsightsParams {
   minimumConfidence?: number;
   /** Colecciones a las que el consumidor tiene acceso concedido (§3.4, §12). */
   allowedCollectionIds?: string[];
+  /**
+   * Acota a unos identificadores concretos (6.1). Existe para que leer UN `Insight` recorra
+   * exactamente el mismo camino que leer la lista —decaimiento, frescura y curación
+   * incluidos— en vez de tener una segunda proyección que podría divergir.
+   */
+  insightIds?: string[];
   /** Exige vigencia estricta: excluye los que no se lean como frescos. */
   requireFresh?: boolean;
   /** Ancla de negocio concreta. */
@@ -67,7 +74,10 @@ export interface RetrievedInsight {
 export class RetrieveInsightsUseCase {
   private readonly logger = new Logger(RetrieveInsightsUseCase.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly insightScope: InsightScopeService,
+  ) {}
 
   async execute(params: RetrieveInsightsParams): Promise<RetrievedInsight[]> {
     const now = new Date();
@@ -86,6 +96,7 @@ export class RetrieveInsightsUseCase {
               },
             }),
         ...(params.types ? { type: { in: params.types } } : {}),
+        ...(params.insightIds ? { id: { in: params.insightIds } } : {}),
         ...(params.businessObjectiveId
           ? {
               objectiveLinks: {
@@ -158,9 +169,11 @@ export class RetrieveInsightsUseCase {
       // cubre TODAS las colecciones que sostienen su justificación. Cobertura completa: el
       // acceso parcial deniega, nunca concede parcialmente.
       if (params.allowedCollectionIds) {
-        const scope = await this.effectiveCollectionScope(
+        // Proyección ÚNICA del sistema (6.1): antes se calculaba aquí y otra vez en
+        // `CurateInsight`. Dos definiciones del mismo alcance son dos criterios.
+        const scope = await this.insightScope.effectiveScopeOf(
           params.organizationId,
-          closure.map((c) => c.refId),
+          insight.transitiveEvidenceClosure,
         );
         const allowed = new Set(params.allowedCollectionIds);
         const covered = scope.every((collectionId) =>
@@ -270,26 +283,6 @@ export class RetrieveInsightsUseCase {
     }
 
     return states;
-  }
-
-  /**
-   * Proyección viva del alcance de colección sobre la pertenencia ACTUAL de la evidencia
-   * (§3.4), nunca sobre una copia registrada al generarse el `Insight`.
-   */
-  private async effectiveCollectionScope(
-    organizationId: string,
-    refIds: string[],
-  ): Promise<string[]> {
-    if (refIds.length === 0) return [];
-
-    const memberships = await this.prisma.knowledgeItemCollection.findMany({
-      where: {
-        knowledgeItem: { id: { in: refIds }, organizationId },
-      },
-      select: { knowledgeCollectionId: true },
-    });
-
-    return [...new Set(memberships.map((m) => m.knowledgeCollectionId))];
   }
 
   /** Curación vigente: la última entrada no revocada (§3.7). */

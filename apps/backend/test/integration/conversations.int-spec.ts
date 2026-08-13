@@ -28,6 +28,7 @@ import {
   destroyTestOrg,
   prisma,
   type TestOrg,
+  insightScope,
 } from './fixtures';
 
 /**
@@ -87,7 +88,9 @@ describe('Conversations (integración)', () => {
         return Promise.resolve(retrievedChunks);
       },
     } as unknown as RetrieveContextUseCase);
-    const insightLookup = new InsightLookupTool(new RealRetrieveInsights(db));
+    const insightLookup = new InsightLookupTool(
+      new RealRetrieveInsights(db, insightScope(db)),
+    );
     const toolRegistry = [knowledgeSearch, insightLookup];
 
     const runAgent = new RunAgentUseCase(
@@ -95,7 +98,7 @@ describe('Conversations (integración)', () => {
       {
         execute: () => Promise.resolve(retrievedChunks),
       } as unknown as RetrieveContextUseCase,
-      new RealRetrieveInsights(db),
+      new RealRetrieveInsights(db, insightScope(db)),
       memoryStore,
       toolRegistry,
     );

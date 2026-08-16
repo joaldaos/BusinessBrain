@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+/* Paleta sobria: esto es una herramienta de trabajo, no una landing. */
+@theme {
+  --color-ink: #14161a;
+  --color-muted: #6b7280;
+  --color-line: #e5e7eb;
+  --color-accent: #1d4ed8;
+}
+
+html, body, #root { height: 100%; }
+body { color: var(--color-ink); background: #f7f8fa; }

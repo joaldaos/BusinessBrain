@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEnum,
   IsObject,
   IsOptional,
@@ -23,4 +24,17 @@ export class CreateKnowledgeSourceDto {
   @IsOptional()
   @IsObject()
   config?: Record<string, unknown>;
+
+  /**
+   * A qué colecciones va a parar el conocimiento que entre por esta fuente.
+   *
+   * Es el "alcance" que `KNOWLEDGE_ENGINE_DESIGN.md` §3.2 atribuye a una `KnowledgeSource`.
+   * Sin declararlo, lo ingerido no pertenece a ninguna colección, su alcance efectivo es
+   * vacío y —por la regla fail-closed— NADIE ve la comprensión derivada de él: el motor
+   * funciona entero y el producto no sirve para nada.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  knowledgeCollectionIds?: string[];
 }

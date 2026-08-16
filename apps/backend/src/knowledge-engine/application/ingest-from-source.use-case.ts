@@ -336,6 +336,9 @@ export class IngestFromSourceUseCase {
             const newItem = await tx.knowledgeItem.create({
               data: newItemData,
             });
+            // Aquí NO se colocan las colecciones de la fuente: una versión nueva HEREDA las
+            // de su predecesor (más abajo). Colocarlas dos veces violaría la unicidad, y
+            // sustituirlas movería un documento de sitio por el mero hecho de actualizarse.
 
             await tx.knowledgeItemLineageEdge.create({
               data: {
@@ -375,6 +378,12 @@ export class IngestFromSourceUseCase {
         }
 
         const newItem = await tx.knowledgeItem.create({ data: newItemData });
+        await this.placeInSourceCollections(
+          tx,
+          organizationId,
+          knowledgeSource.id,
+          newItem.id,
+        );
         return { type: 'created' as const, knowledgeItemId: newItem.id };
       });
     } catch (error) {
@@ -487,5 +496,33 @@ export class IngestFromSourceUseCase {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     );
+  }
+
+  /**
+   * Coloca el item recien creado en las colecciones que declara su fuente.
+   *
+   * Es lo que hace que el conocimiento sea VISIBLE: sin pertenencia a coleccion, su alcance
+   * efectivo es vacio y la regla fail-closed lo esconde de todo el mundo, incluida la
+   * comprension que se derive de el.
+   *
+   * Dentro de la misma transaccion que la creacion: un item a medio colocar seria un item
+   * invisible sin que nada lo delatara.
+   */
+  private async placeInSourceCollections(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    knowledgeSourceId: string,
+    knowledgeItemId: string,
+  ): Promise<void> {
+    const collections = await tx.knowledgeSourceCollection.findMany({
+      where: { knowledgeSourceId, organizationId },
+      select: { knowledgeCollectionId: true },
+    });
+
+    for (const { knowledgeCollectionId } of collections) {
+      await tx.knowledgeItemCollection.create({
+        data: { organizationId, knowledgeItemId, knowledgeCollectionId },
+      });
+    }
   }
 }

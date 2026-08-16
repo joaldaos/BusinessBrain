@@ -88,15 +88,20 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
   ) {}
 
   async generate(context: ReasoningContext): Promise<InsightCandidate[]> {
-    const chunks = await this.gatherContext(context.organizationId);
-
-    if (chunks.length < MIN_CHUNKS_TO_SYNTHESIZE) {
-      // Sin material suficiente no se razona: es preferible no producir nada a producir una
-      // conclusión sobre un conocimiento que no da para sostenerla.
-      return [];
-    }
-
     try {
+      // La RECUPERACIÓN también va dentro del guard, y no es un detalle: sondear el
+      // conocimiento exige vectorizar la consulta, o sea llamar al proveedor de embeddings.
+      // Estando fuera, una organización sin clave de LLM configurada tumbaba el `AnalysisRun`
+      // ENTERO con un 500 — incluidas las estrategias simbólicas, que no necesitan ningún
+      // modelo y ya habían hecho su trabajo. Justo lo que este bloque decía evitar.
+      const chunks = await this.gatherContext(context.organizationId);
+
+      if (chunks.length < MIN_CHUNKS_TO_SYNTHESIZE) {
+        // Sin material suficiente no se razona: es preferible no producir nada a producir una
+        // conclusión sobre un conocimiento que no da para sostenerla.
+        return [];
+      }
+
       const findings = await this.synthesize(context.organizationId, chunks);
       return findings
         .slice(0, MAX_CANDIDATES_PER_RUN)
@@ -106,8 +111,9 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
       // Un fallo del proveedor no puede tumbar el AnalysisRun completo: las estrategias
       // deterministas y simbólicas que ya corrieron conservan su resultado.
       this.logger.warn(
-        `Síntesis generativa fallida para la organización ${context.organizationId}: ` +
-          `${(error as Error).message}. La ejecución continúa sin sus candidatos.`,
+        `Razonamiento generativo no disponible para la organización ` +
+          `${context.organizationId}: ${(error as Error).message}. La ejecución continúa ` +
+          `con las estrategias que no dependen de un modelo.`,
       );
       return [];
     }

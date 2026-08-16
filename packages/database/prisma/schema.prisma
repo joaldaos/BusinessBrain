@@ -390,7 +390,29 @@ model KnowledgeSource {
   knowledgeItemsAsOrigin  KnowledgeItem[] @relation("KnowledgeItemOriginSource")
   knowledgeItemsAsCurrent KnowledgeItem[] @relation("KnowledgeItemCurrentSource")
   ingestionJobs           IngestionJob[]
+  collections             KnowledgeSourceCollection[]
 
+  @@unique([id, organizationId])
+  @@index([organizationId])
+}
+
+// A que colecciones va a parar el conocimiento que entra por una fuente.
+//
+// Sin esto, un documento recien ingerido no pertenecia a ninguna coleccion, su alcance
+// efectivo era vacio y —por la regla fail-closed de alcance vacio— NADIE podia ver la
+// comprension derivada de el. El sistema funcionaba y no servia para nada.
+//
+// Es el "alcance" que KNOWLEDGE_ENGINE_DESIGN.md §3.2 ya atribuye a una KnowledgeSource:
+// que carpeta, que buzon, que tablas. Aqui, a que coleccion pertenece lo que traiga.
+model KnowledgeSourceCollection {
+  knowledgeSourceId     String
+  knowledgeCollectionId String
+  organizationId        String
+
+  knowledgeSource     KnowledgeSource     @relation(fields: [knowledgeSourceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  knowledgeCollection KnowledgeCollection @relation(fields: [knowledgeCollectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([knowledgeSourceId, knowledgeCollectionId])
   @@index([organizationId])
 }
 
@@ -424,6 +446,7 @@ model KnowledgeCollection {
 
   organization             Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   knowledgeItemCollections KnowledgeItemCollection[]
+  knowledgeSources         KnowledgeSourceCollection[]
   agents                   Agent[]                     @relation("AgentKnowledgeScope")
   userAccess               KnowledgeCollectionAccess[]
 

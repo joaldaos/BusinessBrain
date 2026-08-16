@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
 import type { CreateKnowledgeSourceDto } from '../dto/create-knowledge-source.dto';
@@ -35,17 +39,60 @@ export class KnowledgeSourcesService {
     createdById: string,
     dto: CreateKnowledgeSourceDto,
   ) {
-    return this.prisma.knowledgeSource.create({
-      data: {
-        organizationId,
-        type: dto.type,
-        connectorKey: dto.connectorKey,
-        name: dto.name,
-        configEnc: this.encryption.encrypt(JSON.stringify(dto.config ?? {})),
-        createdById,
-      },
-      select: PUBLIC_SELECT,
+    const collectionIds = [...new Set(dto.knowledgeCollectionIds ?? [])];
+    await this.assertCollectionsBelongToOrg(organizationId, collectionIds);
+
+    // En una transacción: una fuente creada sin sus colecciones sería una fuente cuyo
+    // contenido nace invisible, y nada lo delataría hasta que alguien echara de menos sus
+    // conclusiones.
+    return this.prisma.$transaction(async (tx) => {
+      const source = await tx.knowledgeSource.create({
+        data: {
+          organizationId,
+          type: dto.type,
+          connectorKey: dto.connectorKey,
+          name: dto.name,
+          configEnc: this.encryption.encrypt(JSON.stringify(dto.config ?? {})),
+          createdById,
+        },
+        select: PUBLIC_SELECT,
+      });
+
+      if (collectionIds.length > 0) {
+        await tx.knowledgeSourceCollection.createMany({
+          data: collectionIds.map((knowledgeCollectionId) => ({
+            knowledgeSourceId: source.id,
+            knowledgeCollectionId,
+            organizationId,
+          })),
+        });
+      }
+
+      return source;
     });
+  }
+
+  /**
+   * Las colecciones declaradas deben ser de ESTA organización.
+   *
+   * La clave foránea compuesta ya lo hace imposible a nivel de base de datos; aquí se traduce
+   * ese fallo de integridad a un error explicable en vez de dejar escapar una violación de
+   * restricción sin contexto — mismo criterio que `CollectionAccessService.grant`.
+   */
+  private async assertCollectionsBelongToOrg(
+    organizationId: string,
+    collectionIds: string[],
+  ): Promise<void> {
+    if (collectionIds.length === 0) return;
+
+    const found = await this.prisma.knowledgeCollection.count({
+      where: { id: { in: collectionIds }, organizationId },
+    });
+    if (found !== collectionIds.length) {
+      throw new BadRequestException(
+        'Alguna de las colecciones indicadas no existe o pertenece a otra organización',
+      );
+    }
   }
 
   async findAll(organizationId: string) {

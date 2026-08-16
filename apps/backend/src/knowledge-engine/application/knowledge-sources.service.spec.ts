@@ -10,6 +10,9 @@ describe('KnowledgeSourcesService', () => {
       findMany: jest.Mock;
       findFirst: jest.Mock;
     };
+    knowledgeSourceCollection: { createMany: jest.Mock };
+    knowledgeCollection: { count: jest.Mock };
+    $transaction: jest.Mock;
   };
   let encryption: { encrypt: jest.Mock };
   let service: KnowledgeSourcesService;
@@ -21,7 +24,16 @@ describe('KnowledgeSourcesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      // Colecciones de destino de la fuente: sin ellas, lo que entre por aquí nace invisible.
+      knowledgeSourceCollection: {
+        createMany: jest.fn().mockResolvedValue({}),
+      },
+      knowledgeCollection: { count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(prisma),
+    );
     encryption = { encrypt: jest.fn().mockReturnValue('iv:tag:cipher') };
     service = new KnowledgeSourcesService(
       prisma as unknown as PrismaService,

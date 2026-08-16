@@ -28,6 +28,9 @@ export const AUDIT_ACTIONS = {
   /** Una ejecución desatendida terminó. Sin actor: no la provocó una persona. */
   AUTOMATION_RUN_FINISHED: 'automation.run.finished',
 
+  /** Crear una colección define una frontera de acceso: queda traza. */
+  KNOWLEDGE_COLLECTION_CREATED: 'knowledge_collection.created',
+
   // ── Informes ──────────────────────────────────────────────────────────────
   //
   // El PDF no se almacena: se entrega y se descarta. La traza de generación es, por tanto,

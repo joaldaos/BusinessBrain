@@ -13,6 +13,7 @@ import { ScoreConfidenceUseCase } from './application/score-confidence.use-case'
 import { CanonicalizeUseCase } from './application/canonicalize.use-case';
 import { ChunkAndEmbedUseCase } from './application/chunk-and-embed.use-case';
 import { RetrieveContextUseCase } from './application/retrieve-context.use-case';
+import { KnowledgeCollectionsController } from './api/knowledge-collections.controller';
 import { CollectionAccessController } from './api/collection-access.controller';
 import { CollectionAccessService } from './application/collection-access.service';
 import { LlmModule } from '../llm/llm.module';
@@ -23,6 +24,7 @@ import { LlmModule } from '../llm/llm.module';
     KnowledgeSourcesController,
     KnowledgeItemsController,
     CollectionAccessController,
+    KnowledgeCollectionsController,
   ],
   providers: [
     KnowledgeSourcesService,

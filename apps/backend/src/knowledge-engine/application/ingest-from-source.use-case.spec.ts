@@ -15,7 +15,12 @@ describe('IngestFromSourceUseCase', () => {
       update: jest.Mock;
     };
     knowledgeItemLineageEdge: { create: jest.Mock };
-    knowledgeItemCollection: { findMany: jest.Mock; createMany: jest.Mock };
+    knowledgeItemCollection: {
+      findMany: jest.Mock;
+      createMany: jest.Mock;
+      create: jest.Mock;
+    };
+    knowledgeSourceCollection: { findMany: jest.Mock };
     $queryRaw: jest.Mock;
   };
   let prisma: {
@@ -52,6 +57,12 @@ describe('IngestFromSourceUseCase', () => {
       knowledgeItemCollection: {
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      // Colecciones que declara la FUENTE: donde aterriza el contenido nuevo. Sin esto, lo
+      // ingerido no pertenece a ninguna colección y nadie puede verlo.
+      knowledgeSourceCollection: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $queryRaw: jest.fn(),
     };

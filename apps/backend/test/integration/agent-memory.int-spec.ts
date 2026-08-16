@@ -5,6 +5,7 @@ import { RetrieveInsightsUseCase } from '../../src/understanding-engine/applicat
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createTestOrg,
   destroyTestOrg,
   prisma,
@@ -34,7 +35,7 @@ describe('AgentMemory (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('agent-memory-int');
-    agents = new AgentsService(db);
+    agents = new AgentsService(db, auditService(db));
     memoryStore = new PrismaMemoryStoreAdapter(db);
     runAgent = new RunAgentUseCase(
       agents,
@@ -184,6 +185,7 @@ describe('AgentMemory (integración)', () => {
       await agents.update({
         organizationId: org.orgId,
         agentId,
+        actorUserId: org.userId,
         memoryConfig: { strategy: 'none', windowSize: 10 },
       });
       await memoryStore.remember(scopeFor(org.userId), {
@@ -199,6 +201,7 @@ describe('AgentMemory (integración)', () => {
       await agents.update({
         organizationId: org.orgId,
         agentId,
+        actorUserId: org.userId,
         memoryConfig: { strategy: 'short_term', windowSize: 10 },
       });
       await memoryStore.remember(scopeFor(org.userId), {
@@ -234,6 +237,7 @@ describe('AgentMemory (integración)', () => {
       await agents.update({
         organizationId: org.orgId,
         agentId,
+        actorUserId: org.userId,
         memoryConfig: { strategy: 'long_term', windowSize: 2 },
       });
       for (const key of ['k1', 'k2', 'k3', 'k4']) {

@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../audit/domain/audit-actions';
 import type { PlanTier } from '@businessbrain/database';
 
 const PAGE_SIZE = 20;
@@ -12,7 +17,10 @@ function normalizePage(page?: number): number {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async stats() {
     const [totalUsers, totalOrganizations, bannedUsers, usersByPlan] =
@@ -78,13 +86,15 @@ export class AdminService {
       data: { status: nextStatus },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: nextStatus === 'BANNED' ? 'user.banned' : 'user.unbanned',
-        targetType: 'User',
-        targetId: userId,
-      },
+    await this.audit.record({
+      actorId,
+      action:
+        nextStatus === 'BANNED'
+          ? AUDIT_ACTIONS.USER_BANNED
+          : AUDIT_ACTIONS.USER_UNBANNED,
+      targetType: AUDIT_TARGET_TYPES.USER,
+      targetId: userId,
+      metadata: { previousStatus: user.status, newStatus: nextStatus },
     });
 
     return { id: updated.id, status: updated.status };
@@ -106,15 +116,13 @@ export class AdminService {
       data: { planTier },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        organizationId,
-        action: 'organization.plan_changed',
-        targetType: 'Organization',
-        targetId: organizationId,
-        metadata: { from: organization.planTier, to: planTier },
-      },
+    await this.audit.record({
+      actorId,
+      organizationId,
+      action: AUDIT_ACTIONS.ORGANIZATION_PLAN_CHANGED,
+      targetType: AUDIT_TARGET_TYPES.ORGANIZATION,
+      targetId: organizationId,
+      metadata: { from: organization.planTier, to: planTier },
     });
 
     return { id: updated.id, planTier: updated.planTier };

@@ -83,12 +83,14 @@ export class AgentsController {
   @OrgRoles(MembershipRole.ADMIN)
   update(
     @CurrentOrg() org: RequestOrganization,
+    @CurrentUser() user: RequestUser,
     @Param('agentId') agentId: string,
     @Body() dto: UpdateAgentDto,
   ) {
     return this.agents.update({
       organizationId: org.id,
       agentId,
+      actorUserId: user.id,
       name: dto.name,
       area: dto.area,
       systemPrompt: dto.systemPrompt,
@@ -111,8 +113,13 @@ export class AgentsController {
   @OrgRoles(MembershipRole.ADMIN)
   deactivate(
     @CurrentOrg() org: RequestOrganization,
+    @CurrentUser() user: RequestUser,
     @Param('agentId') agentId: string,
   ) {
-    return this.agents.deactivate({ organizationId: org.id, agentId });
+    return this.agents.deactivate({
+      organizationId: org.id,
+      agentId,
+      actorUserId: user.id,
+    });
   }
 }

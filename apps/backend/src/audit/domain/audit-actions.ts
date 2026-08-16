@@ -1,0 +1,72 @@
+/**
+ * Catálogo cerrado de acciones auditables — subfase 6.2.
+ *
+ * Las acciones son un catálogo tipado y no cadenas libres. Con cadenas libres, dos sitios
+ * acaban escribiendo `agent.updated` y `agent.update` sin que nada falle, y el día que
+ * alguien audita "todos los cambios de agentes" obtiene la mitad. Un registro de auditoría
+ * cuyo vocabulario deriva no es un registro de auditoría: es ruido con marcas de tiempo.
+ *
+ * Convención `recurso.acción`, en pasado: describe un hecho consumado, no una intención.
+ */
+
+export const AUDIT_ACTIONS = {
+  // ── Agentes: conceder capacidades y alcance de conocimiento ───────────────
+  AGENT_CREATED: 'agent.created',
+  AGENT_UPDATED: 'agent.updated',
+  AGENT_DEACTIVATED: 'agent.deactivated',
+  /** Denegación del gate de políticas. Ya existía desde 5.2; ahora pasa por el servicio. */
+  AGENT_TOOL_DENIED: 'agent.tool.denied',
+
+  // ── Plantillas: instalar concede capacidades ya configuradas ──────────────
+  AGENT_TEMPLATE_CREATED: 'agent_template.created',
+  AGENT_TEMPLATE_UPDATED: 'agent_template.updated',
+  AGENT_TEMPLATE_REMOVED: 'agent_template.removed',
+  AGENT_TEMPLATE_INSTALLED: 'agent_template.installed',
+
+  // ── Acceso a conocimiento: es un cambio de PERMISOS ───────────────────────
+  COLLECTION_ACCESS_GRANTED: 'collection_access.granted',
+  COLLECTION_ACCESS_REVOKED: 'collection_access.revoked',
+
+  // ── Objetivos de negocio: anclan todo juicio de valor (§8) ────────────────
+  BUSINESS_OBJECTIVE_DECLARED: 'business_objective.declared',
+  BUSINESS_OBJECTIVE_CONFIRMED: 'business_objective.confirmed',
+  BUSINESS_OBJECTIVE_DISCARDED: 'business_objective.discarded',
+  BUSINESS_OBJECTIVE_VERSIONED: 'business_objective.versioned',
+
+  // ── Análisis: gasta dinero del cliente y lee toda la organización ─────────
+  ANALYSIS_RUN_TRIGGERED: 'analysis_run.triggered',
+
+  // ── Decisiones humanas sobre la comprensión ───────────────────────────────
+  INSIGHT_CURATED: 'insight.curated',
+  INSIGHT_CURATION_REVOKED: 'insight.curation_revoked',
+  INSIGHT_ESCALATED: 'insight.escalated',
+
+  // ── Decisiones humanas sobre las propuestas ───────────────────────────────
+  RECOMMENDATION_ACCEPTED: 'recommendation.accepted',
+  RECOMMENDATION_DISMISSED: 'recommendation.dismissed',
+
+  // ── Plataforma (super admin) ──────────────────────────────────────────────
+  USER_BANNED: 'user.banned',
+  /** Desbanear NO es "banear con otro estado": es la acción contraria y se nombra aparte. */
+  USER_UNBANNED: 'user.unbanned',
+  ORGANIZATION_PLAN_CHANGED: 'organization.plan_changed',
+} as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
+
+/** Tipos de entidad sobre los que se audita. También cerrado, y por el mismo motivo. */
+export const AUDIT_TARGET_TYPES = {
+  AGENT: 'Agent',
+  AGENT_TEMPLATE: 'AgentTemplate',
+  KNOWLEDGE_COLLECTION: 'KnowledgeCollection',
+  BUSINESS_OBJECTIVE: 'BusinessObjective',
+  ANALYSIS_RUN: 'AnalysisRun',
+  INSIGHT: 'Insight',
+  INSIGHT_FEEDBACK: 'InsightFeedback',
+  RECOMMENDATION: 'Recommendation',
+  USER: 'User',
+  ORGANIZATION: 'Organization',
+} as const;
+
+export type AuditTargetType =
+  (typeof AUDIT_TARGET_TYPES)[keyof typeof AUDIT_TARGET_TYPES];

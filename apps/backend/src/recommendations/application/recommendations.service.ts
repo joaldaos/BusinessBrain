@@ -11,6 +11,11 @@ import {
   type Recommendation,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { CollectionAccessService } from '../../knowledge-engine/application/collection-access.service';
 import { evaluateRecommendationAccess } from '../domain/recommendation-access';
 
@@ -58,6 +63,7 @@ export class RecommendationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly collectionAccess: CollectionAccessService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -231,28 +237,26 @@ export class RecommendationsService {
 
     // Traza de la transición: quién, cuándo, estado anterior y estado nuevo. El estado
     // anterior es demostrablemente NEW porque el UPDATE condicional solo dispara desde ahí.
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId: params.organizationId,
-        actorId: params.userId,
-        action:
-          status === RecommendationStatus.ACCEPTED
-            ? 'recommendation.accepted'
-            : 'recommendation.dismissed',
-        targetType: 'Recommendation',
-        targetId: recommendation.id,
-        metadata: {
-          previousStatus: RecommendationStatus.NEW,
-          newStatus: status,
-          resolvedAt: resolvedAt.toISOString(),
-          sourceInsightId: recommendation.sourceInsightId,
-          // Se registra el alcance con el que se autorizó la decisión: sin él, auditar a
-          // posteriori "quién podía ver esto" exigiría reconstruir las concesiones de
-          // entonces, que pueden haber cambiado desde.
-          effectiveCollectionScope: recommendation.effectiveCollectionScope,
-          // Constancia explícita: la aceptación no dispara nada fuera del sistema.
-          externalActionExecuted: false,
-        },
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.userId,
+      action:
+        status === RecommendationStatus.ACCEPTED
+          ? AUDIT_ACTIONS.RECOMMENDATION_ACCEPTED
+          : AUDIT_ACTIONS.RECOMMENDATION_DISMISSED,
+      targetType: AUDIT_TARGET_TYPES.RECOMMENDATION,
+      targetId: recommendation.id,
+      metadata: {
+        previousStatus: RecommendationStatus.NEW,
+        newStatus: status,
+        resolvedAt: resolvedAt.toISOString(),
+        sourceInsightId: recommendation.sourceInsightId,
+        // Se registra el alcance con el que se autorizó la decisión: sin él, auditar a
+        // posteriori "quién podía ver esto" exigiría reconstruir las concesiones de
+        // entonces, que pueden haber cambiado desde.
+        effectiveCollectionScope: recommendation.effectiveCollectionScope,
+        // Constancia explícita: la aceptación no dispara nada fuera del sistema.
+        externalActionExecuted: false,
       },
     });
 

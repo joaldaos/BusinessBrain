@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 
 /**
  * Acceso de una PERSONA a colecciones de conocimiento — subfase 5.8.
@@ -23,7 +28,10 @@ import { PrismaService } from '../../prisma/prisma.service';
  */
 @Injectable()
 export class CollectionAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * Colecciones concedidas a una persona en una organización.
@@ -93,6 +101,18 @@ export class CollectionAccessService {
       throw error;
     }
 
+    // Conceder una colección amplía lo que una persona puede ver del conocimiento y, a
+    // través del alcance efectivo, qué comprensión y qué recomendaciones le resultan
+    // accesibles. Es un cambio de permisos, y hasta 6.2 no dejaba ningún rastro.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.grantedById,
+      action: AUDIT_ACTIONS.COLLECTION_ACCESS_GRANTED,
+      targetType: AUDIT_TARGET_TYPES.KNOWLEDGE_COLLECTION,
+      targetId: params.knowledgeCollectionId,
+      metadata: { grantedToUserId: params.userId },
+    });
+
     return {
       knowledgeCollectionId: params.knowledgeCollectionId,
       userId: params.userId,
@@ -104,6 +124,8 @@ export class CollectionAccessService {
     organizationId: string;
     knowledgeCollectionId: string;
     userId: string;
+    /** Quién revoca. Necesario para la traza (6.2). */
+    actorUserId: string;
   }): Promise<{ revoked: number }> {
     const { count } = await this.prisma.knowledgeCollectionAccess.deleteMany({
       where: {
@@ -112,6 +134,19 @@ export class CollectionAccessService {
         userId: params.userId,
       },
     });
+
+    // Solo se registra si de verdad se retiró algo: revocar lo que no estaba concedido no
+    // es un cambio, y anotarlo diluiría las revocaciones reales.
+    if (count > 0) {
+      await this.audit.record({
+        organizationId: params.organizationId,
+        actorId: params.actorUserId,
+        action: AUDIT_ACTIONS.COLLECTION_ACCESS_REVOKED,
+        targetType: AUDIT_TARGET_TYPES.KNOWLEDGE_COLLECTION,
+        targetId: params.knowledgeCollectionId,
+        metadata: { revokedFromUserId: params.userId },
+      });
+    }
 
     return { revoked: count };
   }

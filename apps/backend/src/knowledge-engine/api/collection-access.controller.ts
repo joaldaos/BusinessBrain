@@ -72,6 +72,7 @@ export class CollectionAccessController {
   @OrgRoles(MembershipRole.ADMIN)
   revoke(
     @CurrentOrg() org: RequestOrganization,
+    @CurrentUser() actor: RequestUser,
     @Param('collectionId') collectionId: string,
     @Param('userId') userId: string,
   ) {
@@ -79,6 +80,7 @@ export class CollectionAccessController {
       organizationId: org.id,
       knowledgeCollectionId: collectionId,
       userId,
+      actorUserId: actor.id,
     });
   }
 }

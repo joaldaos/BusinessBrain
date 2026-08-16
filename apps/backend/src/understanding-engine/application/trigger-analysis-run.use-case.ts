@@ -7,6 +7,11 @@ import {
   Prisma,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import {
   KNOWLEDGE_SIGNALS_PORT,
   type KnowledgeSignalsPort,
@@ -42,6 +47,8 @@ export interface TriggerAnalysisRunParams {
   trigger?: AnalysisRunTrigger;
   /** Acota las señales a las observadas desde este instante. */
   since?: Date;
+  /** Quién lo lanzó, si fue una persona. Un disparo automático futuro no tendrá actor. */
+  actorUserId?: string;
   /**
    * Fila de `AnalysisRun` ya reclamada por una superficie con control operativo propio (6.1).
    *
@@ -74,6 +81,7 @@ export class TriggerAnalysisRunUseCase {
     private readonly signalStrategy: KnowledgeSignalStrategy,
     private readonly businessObjectives: BusinessObjectiveService,
     private readonly generativeStrategy: GenerativeSynthesisStrategy,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -179,6 +187,24 @@ export class TriggerAnalysisRunUseCase {
         },
       });
 
+      // Un análisis razona sobre TODO el conocimiento de la organización y gasta la clave
+      // del cliente: quién lo lanzó y qué produjo es información de gobierno.
+      await this.audit.record({
+        organizationId: params.organizationId,
+        actorId: params.actorUserId ?? null,
+        action: AUDIT_ACTIONS.ANALYSIS_RUN_TRIGGERED,
+        targetType: AUDIT_TARGET_TYPES.ANALYSIS_RUN,
+        targetId: run.id,
+        metadata: {
+          trigger: params.trigger ?? AnalysisRunTrigger.MANUAL,
+          status: AnalysisRunStatus.SUCCESS,
+          signals: signals.length,
+          candidatesGenerated: candidates.length,
+          insightsCreated: created,
+          insightsAlreadyKnown: alreadyKnown,
+        },
+      });
+
       this.logger.log(
         `AnalysisRun ${run.id} (org ${params.organizationId}): ${signals.length} señales, ` +
           `${candidates.length} candidatos, ${created} Insight creados, ${alreadyKnown} ya conocidos`,
@@ -201,6 +227,22 @@ export class TriggerAnalysisRunUseCase {
           completedAt: new Date(),
         },
       });
+
+      // Un análisis fallido también es un hecho de gobierno: sin él, la traza contaría solo
+      // los éxitos y nadie sabría que la organización lleva días sin comprender nada nuevo.
+      await this.audit.record({
+        organizationId: params.organizationId,
+        actorId: params.actorUserId ?? null,
+        action: AUDIT_ACTIONS.ANALYSIS_RUN_TRIGGERED,
+        targetType: AUDIT_TARGET_TYPES.ANALYSIS_RUN,
+        targetId: run.id,
+        metadata: {
+          trigger: params.trigger ?? AnalysisRunTrigger.MANUAL,
+          status: AnalysisRunStatus.FAILED,
+          error: message,
+        },
+      });
+
       throw error;
     }
   }

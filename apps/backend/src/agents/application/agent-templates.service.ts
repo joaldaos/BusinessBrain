@@ -12,6 +12,11 @@ import {
   type AgentTemplate,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { InvalidAgentConfigurationError } from '../domain/agent-configuration';
 import {
   evaluateTemplateUsage,
@@ -74,7 +79,10 @@ export interface UpdateAgentTemplateParams {
 
 @Injectable()
 export class AgentTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(params: CreateAgentTemplateParams): Promise<AgentTemplate> {
     await this.assertCanManageTemplates(
@@ -89,7 +97,7 @@ export class AgentTemplatesService {
       defaultTools: params.defaultTools ?? [],
     });
 
-    return this.prisma.agentTemplate.create({
+    const created = await this.prisma.agentTemplate.create({
       data: {
         // La plantilla nace SIEMPRE atribuida a la organización activa. `publisherOrgId`
         // nulo es una plantilla de plataforma y no se crea por esta vía: sería publicar.
@@ -103,6 +111,22 @@ export class AgentTemplatesService {
         defaultTools: configuration.tools as unknown as Prisma.InputJsonValue,
       },
     });
+
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_TEMPLATE_CREATED,
+      targetType: AUDIT_TARGET_TYPES.AGENT_TEMPLATE,
+      targetId: created.id,
+      metadata: {
+        name: created.name,
+        visibility: created.visibility,
+        area: created.area,
+        defaultTools: configuration.tools,
+      },
+    });
+
+    return created;
   }
 
   /**
@@ -171,7 +195,7 @@ export class AgentTemplatesService {
       defaultTools: params.defaultTools ?? current.defaultTools,
     });
 
-    return this.prisma.agentTemplate.update({
+    const updated = await this.prisma.agentTemplate.update({
       where: { id: current.id },
       data: {
         name: params.name,
@@ -187,6 +211,32 @@ export class AgentTemplatesService {
         version: { increment: 1 },
       },
     });
+
+    await this.audit.recordChange({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_TEMPLATE_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.AGENT_TEMPLATE,
+      targetId: updated.id,
+      before: this.auditableState(current),
+      after: this.auditableState(updated),
+    });
+
+    return updated;
+  }
+
+  /** Lo que una plantilla concede al instalarse. El resto no explica ningún cambio. */
+  private auditableState(template: AgentTemplate): Record<string, unknown> {
+    return {
+      name: template.name,
+      description: template.description,
+      area: template.area,
+      visibility: template.visibility,
+      defaultSystemPrompt: template.defaultSystemPrompt,
+      defaultCapabilities: template.defaultCapabilities,
+      defaultTools: template.defaultTools,
+      version: template.version,
+    };
   }
 
   /**
@@ -208,6 +258,15 @@ export class AgentTemplatesService {
     const template = await this.findOne(params);
 
     await this.prisma.agentTemplate.delete({ where: { id: template.id } });
+
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_TEMPLATE_REMOVED,
+      targetType: AUDIT_TARGET_TYPES.AGENT_TEMPLATE,
+      targetId: template.id,
+      metadata: { name: template.name, visibility: template.visibility },
+    });
 
     return { id: template.id };
   }

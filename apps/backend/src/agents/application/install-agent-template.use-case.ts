@@ -1,4 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { AgentTemplatesService } from './agent-templates.service';
 import { AgentsService, type AgentWithScope } from './agents.service';
 
@@ -52,6 +57,7 @@ export class InstallAgentTemplateUseCase {
   constructor(
     private readonly templates: AgentTemplatesService,
     private readonly agents: AgentsService,
+    private readonly audit: AuditService,
   ) {}
 
   async execute(params: InstallAgentTemplateParams): Promise<AgentWithScope> {
@@ -82,6 +88,23 @@ export class InstallAgentTemplateUseCase {
       capabilities: template.defaultCapabilities,
       tools: template.defaultTools,
       knowledgeCollectionIds: params.knowledgeCollectionIds,
+    });
+
+    // Instalar deja constancia en AMBOS extremos: `AgentsService` ya registró la creación
+    // del agente; esto registra que la concesión vino de una plantilla concreta y de qué
+    // versión, que es lo que permite responder "de dónde salieron estos permisos".
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_TEMPLATE_INSTALLED,
+      targetType: AUDIT_TARGET_TYPES.AGENT_TEMPLATE,
+      targetId: template.id,
+      metadata: {
+        templateVersion: template.version,
+        visibility: template.visibility,
+        agentId: agent.id,
+        agentName: agent.name,
+      },
     });
 
     this.logger.log(

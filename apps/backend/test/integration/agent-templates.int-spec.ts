@@ -8,6 +8,7 @@ import { AgentTemplatesService } from '../../src/agents/application/agent-templa
 import { InstallAgentTemplateUseCase } from '../../src/agents/application/install-agent-template.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createMember,
   createTestOrg,
   destroyTestOrg,
@@ -33,9 +34,13 @@ describe('AgentTemplates (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('tpl-int');
-    templates = new AgentTemplatesService(db);
-    agents = new AgentsService(db);
-    install = new InstallAgentTemplateUseCase(templates, agents);
+    templates = new AgentTemplatesService(db, auditService(db));
+    agents = new AgentsService(db, auditService(db));
+    install = new InstallAgentTemplateUseCase(
+      templates,
+      agents,
+      auditService(db),
+    );
   });
 
   afterEach(async () => {
@@ -511,6 +516,7 @@ describe('AgentTemplates (integración)', () => {
 
       const updated = await agents.update({
         organizationId: org.orgId,
+        actorUserId: org.userId,
         agentId: agent.id,
         name: 'Renombrado tras instalar',
       });

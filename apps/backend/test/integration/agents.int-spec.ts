@@ -3,6 +3,7 @@ import { AgentsService } from '../../src/agents/application/agents.service';
 import { EnforceAgentPolicyUseCase } from '../../src/agents/application/enforce-agent-policy.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createTestOrg,
   destroyTestOrg,
   prisma,
@@ -25,8 +26,8 @@ describe('Agents (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('agents-int');
-    agents = new AgentsService(db);
-    policy = new EnforceAgentPolicyUseCase(db);
+    agents = new AgentsService(db, auditService(db));
+    policy = new EnforceAgentPolicyUseCase(db, auditService(db));
   });
 
   afterEach(async () => {
@@ -88,12 +89,14 @@ describe('Agents (integración)', () => {
 
       await agents.update({
         organizationId: org.orgId,
+        actorUserId: org.userId,
         agentId: agent.id,
         name: 'Renombrado',
       });
       const deactivated = await agents.deactivate({
         organizationId: org.orgId,
         agentId: agent.id,
+        actorUserId: org.userId,
       });
 
       expect(deactivated.isActive).toBe(false);
@@ -106,7 +109,11 @@ describe('Agents (integración)', () => {
 
     it('listar excluye los desactivados salvo que se pidan', async () => {
       const agent = await create();
-      await agents.deactivate({ organizationId: org.orgId, agentId: agent.id });
+      await agents.deactivate({
+        organizationId: org.orgId,
+        agentId: agent.id,
+        actorUserId: org.userId,
+      });
 
       expect(await agents.list({ organizationId: org.orgId })).toHaveLength(0);
       expect(
@@ -143,12 +150,17 @@ describe('Agents (integración)', () => {
       await expect(
         agents.update({
           organizationId: org.orgId,
+          actorUserId: org.userId,
           agentId: theirs.id,
           name: 'secuestrado',
         }),
       ).rejects.toThrow();
       await expect(
-        agents.deactivate({ organizationId: org.orgId, agentId: theirs.id }),
+        agents.deactivate({
+          organizationId: org.orgId,
+          agentId: theirs.id,
+          actorUserId: org.userId,
+        }),
       ).rejects.toThrow();
 
       await destroyTestOrg(other);
@@ -192,6 +204,7 @@ describe('Agents (integración)', () => {
 
       const updated = await agents.update({
         organizationId: org.orgId,
+        actorUserId: org.userId,
         agentId: agent.id,
         knowledgeCollectionIds: [soporte.id],
       });
@@ -209,6 +222,7 @@ describe('Agents (integración)', () => {
       await expect(
         agents.update({
           organizationId: org.orgId,
+          actorUserId: org.userId,
           agentId: agent.id,
           knowledgeCollectionIds: [theirs.id],
         }),
@@ -272,6 +286,7 @@ describe('Agents (integración)', () => {
       await expect(
         agents.update({
           organizationId: org.orgId,
+          actorUserId: org.userId,
           agentId: agent.id,
           memoryConfig: { strategy: 'telepatia' },
         }),
@@ -349,7 +364,11 @@ describe('Agents (integración)', () => {
       const agent = await create({
         tools: [{ tool: 'knowledge_search', permission: 'READ_ONLY' }],
       });
-      await agents.deactivate({ organizationId: org.orgId, agentId: agent.id });
+      await agents.deactivate({
+        organizationId: org.orgId,
+        agentId: agent.id,
+        actorUserId: org.userId,
+      });
 
       const decision = await enforce(agent.id, 'knowledge_search');
       expect(decision.allowed === false && decision.reason).toBe(

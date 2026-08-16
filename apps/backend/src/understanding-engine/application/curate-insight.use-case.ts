@@ -13,6 +13,11 @@ import {
   type Recommendation,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { InsightScopeService } from './insight-scope.service';
 
 /**
@@ -33,6 +38,7 @@ export class CurateInsightUseCase {
   constructor(
     private readonly prisma: PrismaService,
     private readonly insightScope: InsightScopeService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -89,6 +95,21 @@ export class CurateInsightUseCase {
           data: { status: InsightStatus.DISCARDED },
         });
       }
+    });
+
+    // La curación tiene PRIORIDAD sobre el recálculo automático (§3.7): es una decisión
+    // humana con efecto duradero sobre la confianza, no una opinión pasajera.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.INSIGHT_CURATED,
+      targetType: AUDIT_TARGET_TYPES.INSIGHT,
+      targetId: insight.id,
+      metadata: {
+        curationType: params.type,
+        comment: params.comment ?? null,
+        discardsInsight: params.type === InsightFeedbackType.DISMISSAL,
+      },
     });
   }
 
@@ -150,6 +171,24 @@ export class CurateInsightUseCase {
           },
         });
       }
+    });
+
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.INSIGHT_CURATION_REVOKED,
+      targetType: AUDIT_TARGET_TYPES.INSIGHT_FEEDBACK,
+      targetId: feedback.id,
+      metadata: {
+        insightId: feedback.insightId,
+        revokedCurationType: feedback.type,
+        comment: params.comment ?? null,
+        // Revocar un descarte devuelve el Insight al flujo vivo: es un cambio de estado,
+        // no solo una anotación.
+        restoredInsight:
+          feedback.type === InsightFeedbackType.DISMISSAL &&
+          feedback.insight.status === InsightStatus.DISCARDED,
+      },
     });
   }
 
@@ -236,6 +275,22 @@ export class CurateInsightUseCase {
         priority: params.priority ?? 0,
         // Estado NEW: registrada para revisión humana. No ejecuta absolutamente nada.
         status: RecommendationStatus.NEW,
+      },
+    });
+
+    // Escalar convierte comprensión en una propuesta formal con el contrato de Evolución
+    // Asistida. No ejecuta nada, y la traza lo deja explícito.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.INSIGHT_ESCALATED,
+      targetType: AUDIT_TARGET_TYPES.INSIGHT,
+      targetId: insight.id,
+      metadata: {
+        recommendationId: recommendation.id,
+        insightType: insight.type,
+        effectiveCollectionScope,
+        externalActionExecuted: false,
       },
     });
 

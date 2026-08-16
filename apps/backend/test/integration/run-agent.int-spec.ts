@@ -5,6 +5,7 @@ import { RetrieveInsightsUseCase } from '../../src/understanding-engine/applicat
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createInsight,
   createKnowledgeItem,
   createTestOrg,
@@ -33,7 +34,7 @@ describe('RunAgent (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('run-agent-int');
-    agents = new AgentsService(db);
+    agents = new AgentsService(db, auditService(db));
     retrieveContextSpy = jest.fn().mockResolvedValue([]);
 
     memoryStore = new PrismaMemoryStoreAdapter(db);
@@ -101,7 +102,11 @@ describe('RunAgent (integración)', () => {
     it('un agente desactivado no ejecuta', async () => {
       const ventas = await collection('Ventas');
       const agent = await createAgent({ knowledgeCollectionIds: [ventas.id] });
-      await agents.deactivate({ organizationId: org.orgId, agentId: agent.id });
+      await agents.deactivate({
+        organizationId: org.orgId,
+        agentId: agent.id,
+        actorUserId: org.userId,
+      });
 
       await expect(
         runAgent.execute({

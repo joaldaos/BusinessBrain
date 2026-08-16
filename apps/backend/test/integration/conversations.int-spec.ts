@@ -22,6 +22,7 @@ import type { RetrieveInsightsUseCase } from '../../src/understanding-engine/app
 import type { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createInsight,
   createKnowledgeItem,
   createTestOrg,
@@ -77,7 +78,7 @@ describe('Conversations (integración)', () => {
       [{ systemPrompt: string; messages: { content: string }[] }]
     >(() => toStream(['Según ', '[1], ', 'son 23 días.']));
 
-    agents = new AgentsService(db);
+    agents = new AgentsService(db, auditService(db));
     memoryStore = new PrismaMemoryStoreAdapter(db);
     // Registro REAL de herramientas: el turno debe poder ejecutarlas de verdad (5.9).
     // Se anota con qué alcance se llamó para poder demostrar que lo dicta el agente.
@@ -122,7 +123,7 @@ describe('Conversations (integración)', () => {
       new AgentToolLoopUseCase(
         new ExecuteAgentToolUseCase(
           agents,
-          new EnforceAgentPolicyUseCase(db),
+          new EnforceAgentPolicyUseCase(db, auditService(db)),
           toolRegistry,
         ),
       ),

@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -41,7 +42,13 @@ describe('AdminService', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [AdminService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        AdminService,
+        { provide: PrismaService, useValue: prisma },
+        // `AuditService` REAL sobre el mismo doble de Prisma: la traza es parte del
+        // comportamiento que estos tests comprueban, no un detalle a silenciar.
+        AuditService,
+      ],
     }).compile();
 
     service = moduleRef.get(AdminService);

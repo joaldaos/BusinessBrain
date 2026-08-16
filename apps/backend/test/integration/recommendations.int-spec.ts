@@ -9,6 +9,7 @@ import { RecommendationsService } from '../../src/recommendations/application/re
 import { CurateInsightUseCase } from '../../src/understanding-engine/application/curate-insight.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createInsight,
   createKnowledgeItem,
   createMember,
@@ -37,9 +38,9 @@ describe('Recommendations (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('rec-int');
-    access = new CollectionAccessService(db);
-    recommendations = new RecommendationsService(db, access);
-    curate = new CurateInsightUseCase(db, insightScope(db));
+    access = new CollectionAccessService(db, auditService(db));
+    recommendations = new RecommendationsService(db, access, auditService(db));
+    curate = new CurateInsightUseCase(db, insightScope(db), auditService(db));
   });
 
   afterEach(async () => {
@@ -90,7 +91,7 @@ describe('Recommendations (integración)', () => {
     // Desde 6.1 escalar exige que el actor CUBRA el alcance del Insight: sin esto seria
     // blanquear alcance por el lado de quien dispara.
     for (const collectionId of collectionIds) {
-      await new CollectionAccessService(db).grant({
+      await new CollectionAccessService(db, auditService(db)).grant({
         organizationId: target.orgId,
         knowledgeCollectionId: collectionId,
         userId: target.userId,
@@ -312,6 +313,7 @@ describe('Recommendations (integración)', () => {
         organizationId: org.orgId,
         knowledgeCollectionId: ventas.id,
         userId: reader,
+        actorUserId: org.userId,
       });
 
       await expect(

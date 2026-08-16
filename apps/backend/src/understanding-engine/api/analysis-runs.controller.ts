@@ -11,7 +11,11 @@ import { AnalysisRunTrigger, MembershipRole } from '@businessbrain/database';
 import { OrgRoleGuard } from '../../common/guards/org-role.guard';
 import { OrgRoles } from '../../common/decorators/roles.decorator';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
-import type { RequestOrganization } from '../../common/types/authenticated-request';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type {
+  RequestOrganization,
+  RequestUser,
+} from '../../common/types/authenticated-request';
 import { TriggerAnalysisRunUseCase } from '../application/trigger-analysis-run.use-case';
 import { ManualTriggerAdmissionService } from '../application/manual-trigger-admission.service';
 import { AnalysisRunsService } from '../application/analysis-runs.service';
@@ -62,6 +66,7 @@ export class AnalysisRunsController {
   @OrgRoles(MembershipRole.ADMIN)
   async trigger(
     @CurrentOrg() org: RequestOrganization,
+    @CurrentUser() user: RequestUser,
     @Body() dto: TriggerAnalysisRunDto,
   ) {
     const since = this.parseSince(dto.since);
@@ -77,6 +82,7 @@ export class AnalysisRunsController {
         // El disparo por HTTP es MANUAL por definición. Los demás orígenes corresponden a
         // vías que no existen todavía y aceptarlos aquí falsearía la procedencia.
         trigger: AnalysisRunTrigger.MANUAL,
+        actorUserId: user.id,
         since,
         // Adopta la fila reservada en vez de crear otra.
         existingRunId: claimed.id,

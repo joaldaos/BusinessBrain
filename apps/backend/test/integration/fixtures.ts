@@ -1,3 +1,4 @@
+import { AuditService } from '../../src/audit/audit.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import {
@@ -29,13 +30,23 @@ export const prisma = new PrismaClient();
  * y la autorizacion del actor al curar y escalar. Doblarlo dejaria sin verificar justamente
  * la garantia que separa una conclusion restringida de que la toque cualquiera.
  */
+/**
+ * `AuditService` real sobre el Postgres de pruebas.
+ *
+ * Se construye de verdad: 6.2 existe para que quede traza, y doblarlo dejaria sin verificar
+ * justo eso. Los tests que comprueban la traza leen `AuditLog` directamente.
+ */
+export function auditService(db: unknown): AuditService {
+  return new AuditService(db as ConstructorParameters<typeof AuditService>[0]);
+}
+
 export function insightScope(db: unknown): InsightScopeService {
   const prismaService = db as ConstructorParameters<
     typeof InsightScopeService
   >[0];
   return new InsightScopeService(
     prismaService,
-    new CollectionAccessService(prismaService),
+    new CollectionAccessService(prismaService, auditService(prismaService)),
   );
 }
 

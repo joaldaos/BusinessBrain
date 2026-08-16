@@ -11,6 +11,12 @@ import {
   type BusinessObjective,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
+import { diffForAudit } from '../../audit/domain/audit-redaction';
 
 /**
  * Ciclo de vida de `BusinessObjective` — UNDERSTANDING_ENGINE_DESIGN.md §3.6, §12.
@@ -23,7 +29,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class BusinessObjectiveService {
   private readonly logger = new Logger(BusinessObjectiveService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * Declara un objetivo nuevo (§12, `DeclareBusinessObjective`).
@@ -51,7 +60,7 @@ export class BusinessObjectiveService {
       );
     }
 
-    return this.prisma.businessObjective.create({
+    const declared = await this.prisma.businessObjective.create({
       data: {
         organizationId: params.organizationId,
         statement: params.statement,
@@ -65,6 +74,23 @@ export class BusinessObjectiveService {
         confirmedAt: isManual ? new Date() : null,
       },
     });
+
+    // Un objetivo confirmado es el ancla obligatoria de todo juicio de valor (§8): habilita
+    // que el sistema clasifique algo como riesgo u oportunidad. Quién lo declaró importa.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId ?? null,
+      action: AUDIT_ACTIONS.BUSINESS_OBJECTIVE_DECLARED,
+      targetType: AUDIT_TARGET_TYPES.BUSINESS_OBJECTIVE,
+      targetId: declared.id,
+      metadata: {
+        statement: declared.statement,
+        origin: declared.origin,
+        status: declared.status,
+      },
+    });
+
+    return declared;
   }
 
   /**
@@ -95,7 +121,7 @@ export class BusinessObjectiveService {
       );
     }
 
-    return this.prisma.businessObjective.update({
+    const confirmed = await this.prisma.businessObjective.update({
       where: { id: objective.id },
       data: {
         status: BusinessObjectiveStatus.CONFIRMED,
@@ -104,6 +130,19 @@ export class BusinessObjectiveService {
         confirmedAt: new Date(),
       },
     });
+
+    await this.audit.recordChange({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.BUSINESS_OBJECTIVE_CONFIRMED,
+      targetType: AUDIT_TARGET_TYPES.BUSINESS_OBJECTIVE,
+      targetId: confirmed.id,
+      before: { status: objective.status, confidence: objective.confidence },
+      after: { status: confirmed.status, confidence: confirmed.confidence },
+      metadata: { statement: confirmed.statement },
+    });
+
+    return confirmed;
   }
 
   async discard(params: {
@@ -120,10 +159,26 @@ export class BusinessObjectiveService {
     if (!objective)
       throw new NotFoundException('BusinessObjective no encontrado');
 
-    return this.prisma.businessObjective.update({
+    const discarded = await this.prisma.businessObjective.update({
       where: { id: objective.id },
       data: { status: BusinessObjectiveStatus.DISCARDED },
     });
+
+    // El esquema guarda quién CONFIRMÓ pero no quién descartó. La traza lo cubre sin
+    // migración: descartar un objetivo retira el ancla de futuros juicios de valor y no
+    // puede quedar sin autor.
+    await this.audit.recordChange({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.BUSINESS_OBJECTIVE_DISCARDED,
+      targetType: AUDIT_TARGET_TYPES.BUSINESS_OBJECTIVE,
+      targetId: discarded.id,
+      before: { status: objective.status },
+      after: { status: discarded.status },
+      metadata: { statement: discarded.statement },
+    });
+
+    return discarded;
   }
 
   /**
@@ -165,7 +220,7 @@ export class BusinessObjectiveService {
     const inheritsConfirmation =
       isManual && previous.status === BusinessObjectiveStatus.CONFIRMED;
 
-    return this.prisma.businessObjective.create({
+    const version = await this.prisma.businessObjective.create({
       data: {
         organizationId: params.organizationId,
         statement: params.statement,
@@ -180,6 +235,29 @@ export class BusinessObjectiveService {
         supersedesObjectiveId: previous.id,
       },
     });
+
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId ?? null,
+      action: AUDIT_ACTIONS.BUSINESS_OBJECTIVE_VERSIONED,
+      targetType: AUDIT_TARGET_TYPES.BUSINESS_OBJECTIVE,
+      targetId: version.id,
+      changes: diffForAudit(
+        {
+          statement: previous.statement,
+          description: previous.description,
+          status: previous.status,
+        },
+        {
+          statement: version.statement,
+          description: version.description,
+          status: version.status,
+        },
+      ),
+      metadata: { supersedesObjectiveId: previous.id },
+    });
+
+    return version;
   }
 
   /**

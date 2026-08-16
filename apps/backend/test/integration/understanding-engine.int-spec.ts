@@ -14,6 +14,7 @@ import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createInsight,
   createKnowledgeItem,
   createTestOrg,
@@ -51,8 +52,8 @@ describe('Understanding Engine (integración)', () => {
   let trigger: TriggerAnalysisRunUseCase;
 
   beforeAll(() => {
-    objectives = new BusinessObjectiveService(db);
-    curator = new CurateInsightUseCase(db, insightScope(db));
+    objectives = new BusinessObjectiveService(db, auditService(db));
+    curator = new CurateInsightUseCase(db, insightScope(db), auditService(db));
     retriever = new RetrieveInsightsUseCase(db, insightScope(db));
     trigger = new TriggerAnalysisRunUseCase(
       db,
@@ -60,6 +61,7 @@ describe('Understanding Engine (integración)', () => {
       new KnowledgeSignalStrategy(),
       objectives,
       noGenerative,
+      auditService(db),
     );
   });
 
@@ -104,7 +106,7 @@ describe('Understanding Engine (integración)', () => {
         knowledgeCollectionId: collection.id,
       },
     });
-    await new CollectionAccessService(db).grant({
+    await new CollectionAccessService(db, auditService(db)).grant({
       organizationId: org.orgId,
       knowledgeCollectionId: collection.id,
       userId: org.userId,
@@ -251,6 +253,7 @@ describe('Understanding Engine (integración)', () => {
         new KnowledgeSignalStrategy(),
         objectives,
         independent,
+        auditService(db),
       );
       await withIndependent.execute({ organizationId: org.orgId });
 
@@ -308,6 +311,7 @@ describe('Understanding Engine (integración)', () => {
         new KnowledgeSignalStrategy(),
         objectives,
         dissenting,
+        auditService(db),
       );
       await withDissent.execute({ organizationId: org.orgId });
 
@@ -537,7 +541,7 @@ describe('Understanding Engine (integración)', () => {
       });
 
       // 6.1: el actor debe cubrir el alcance del Insight para poder escalarlo.
-      await new CollectionAccessService(db).grant({
+      await new CollectionAccessService(db, auditService(db)).grant({
         organizationId: org.orgId,
         knowledgeCollectionId: collection.id,
         userId: org.userId,

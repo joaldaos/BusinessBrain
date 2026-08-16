@@ -8,6 +8,7 @@ import type { RetrieveContextUseCase } from '../../src/knowledge-engine/applicat
 import type { ToolPort } from '../../src/agents/domain/ports/tool.port';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
+  auditService,
   createInsight,
   createKnowledgeItem,
   createTestOrg,
@@ -37,7 +38,7 @@ describe('Agent tools (integración)', () => {
 
   beforeEach(async () => {
     org = await createTestOrg('agent-tools-int');
-    agents = new AgentsService(db);
+    agents = new AgentsService(db, auditService(db));
     retrieveContextSpy = jest.fn().mockResolvedValue([]);
 
     const knowledgeSearch = new KnowledgeSearchTool({
@@ -49,7 +50,7 @@ describe('Agent tools (integración)', () => {
 
     executeTool = new ExecuteAgentToolUseCase(
       agents,
-      new EnforceAgentPolicyUseCase(db),
+      new EnforceAgentPolicyUseCase(db, auditService(db)),
       [knowledgeSearch, insightLookup] as ToolPort[],
     );
 
@@ -156,7 +157,11 @@ describe('Agent tools (integración)', () => {
       const agent = await createAgent([
         { tool: 'knowledge_search', permission: 'READ_ONLY' },
       ]);
-      await agents.deactivate({ organizationId: org.orgId, agentId: agent.id });
+      await agents.deactivate({
+        organizationId: org.orgId,
+        agentId: agent.id,
+        actorUserId: org.userId,
+      });
 
       expect((await run(agent.id, 'knowledge_search')).executed).toBe(false);
     });
@@ -289,6 +294,7 @@ describe('Agent tools (integración)', () => {
       ]);
       await agents.update({
         organizationId: org.orgId,
+        actorUserId: org.userId,
         agentId: agent.id,
         guardrails: { maxToolCallsPerRun: 1 },
       });

@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { AgentArea, Prisma, type Agent } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import {
   InvalidAgentConfigurationError,
   parseAgentConfiguration,
@@ -32,7 +37,10 @@ export interface AgentWithScope extends Agent {
 
 @Injectable()
 export class AgentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(params: {
     organizationId: string;
@@ -61,7 +69,7 @@ export class AgentsService {
     );
     await this.assertTemplateIsUsable(params.organizationId, params.templateId);
 
-    return this.prisma.agent.create({
+    const created = await this.prisma.agent.create({
       data: {
         organizationId: params.organizationId,
         createdById: params.createdById,
@@ -78,6 +86,27 @@ export class AgentsService {
       },
       include: this.scopeInclude,
     });
+
+    // Crear un agente es CONCEDER capacidades, herramientas y alcance de conocimiento: el
+    // cambio de permisos más importante que ocurre en el sistema fuera de las colecciones.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.createdById,
+      action: AUDIT_ACTIONS.AGENT_CREATED,
+      targetType: AUDIT_TARGET_TYPES.AGENT,
+      targetId: created.id,
+      metadata: {
+        name: created.name,
+        area: created.area,
+        templateId: created.templateId,
+        capabilities: configuration.capabilities,
+        tools: configuration.tools,
+        memoryStrategy: configuration.memoryConfig.strategy,
+        knowledgeCollectionIds: created.knowledgeCollections.map((c) => c.id),
+      },
+    });
+
+    return created;
   }
 
   async list(params: {
@@ -121,6 +150,8 @@ export class AgentsService {
     guardrails?: unknown;
     knowledgeCollectionIds?: string[];
     isActive?: boolean;
+    /** Quién modifica. Necesario para la traza de auditoría (6.2). */
+    actorUserId: string;
   }): Promise<AgentWithScope> {
     const current = await this.findOne(params);
 
@@ -144,7 +175,7 @@ export class AgentsService {
       );
     }
 
-    return this.prisma.agent.update({
+    const updated = await this.prisma.agent.update({
       where: { id: params.agentId },
       data: {
         name: params.name,
@@ -162,6 +193,42 @@ export class AgentsService {
       },
       include: this.scopeInclude,
     });
+
+    await this.audit.recordChange({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.AGENT,
+      targetId: updated.id,
+      before: this.auditableState(current),
+      after: this.auditableState(updated),
+    });
+
+    return updated;
+  }
+
+  /**
+   * Estado del agente relevante para la auditoría: lo que concede o acota.
+   *
+   * Deja fuera marcas de tiempo y campos derivados; registrar `updatedAt` en cada cambio
+   * llenaría la traza de diferencias que no explican nada.
+   */
+  private auditableState(agent: AgentWithScope): Record<string, unknown> {
+    return {
+      name: agent.name,
+      area: agent.area,
+      systemPrompt: agent.systemPrompt,
+      llmProfileId: agent.llmProfileId,
+      temperature: agent.temperature,
+      capabilities: agent.capabilities,
+      tools: agent.tools,
+      memoryConfig: agent.memoryConfig,
+      guardrails: agent.guardrails,
+      isActive: agent.isActive,
+      knowledgeCollectionIds: agent.knowledgeCollections
+        .map((collection) => collection.id)
+        .sort(),
+    };
   }
 
   /**
@@ -171,14 +238,26 @@ export class AgentsService {
   async deactivate(params: {
     organizationId: string;
     agentId: string;
+    actorUserId: string;
   }): Promise<AgentWithScope> {
     await this.findOne(params);
 
-    return this.prisma.agent.update({
+    const deactivated = await this.prisma.agent.update({
       where: { id: params.agentId },
       data: { isActive: false },
       include: this.scopeInclude,
     });
+
+    await this.audit.record({
+      organizationId: params.organizationId,
+      actorId: params.actorUserId,
+      action: AUDIT_ACTIONS.AGENT_DEACTIVATED,
+      targetType: AUDIT_TARGET_TYPES.AGENT,
+      targetId: deactivated.id,
+      metadata: { name: deactivated.name },
+    });
+
+    return deactivated;
   }
 
   private readonly scopeInclude = {

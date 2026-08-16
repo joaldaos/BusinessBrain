@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { parseAgentConfiguration } from '../domain/agent-configuration';
 import {
   evaluateToolRequest,
@@ -33,7 +38,10 @@ export interface EnforcePolicyParams {
 export class EnforceAgentPolicyUseCase {
   private readonly logger = new Logger(EnforceAgentPolicyUseCase.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async execute(params: EnforcePolicyParams): Promise<PolicyDecision> {
     const agent = await this.prisma.agent.findFirst({
@@ -81,18 +89,16 @@ export class EnforceAgentPolicyUseCase {
       `Herramienta "${params.tool}" denegada al agente ${params.agentId}: ${decision.reason}`,
     );
 
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId: params.organizationId,
-        action: 'agent.tool.denied',
-        targetType: 'Agent',
-        targetId: params.agentId,
-        metadata: {
-          tool: params.tool,
-          reason: decision.reason,
-          explanation: decision.explanation,
-          conversationId: params.conversationId ?? null,
-        },
+    await this.audit.record({
+      organizationId: params.organizationId,
+      action: AUDIT_ACTIONS.AGENT_TOOL_DENIED,
+      targetType: AUDIT_TARGET_TYPES.AGENT,
+      targetId: params.agentId,
+      metadata: {
+        tool: params.tool,
+        reason: decision.reason,
+        explanation: decision.explanation,
+        conversationId: params.conversationId ?? null,
       },
     });
   }

@@ -34,15 +34,34 @@ export function http() {
   return request(app.getHttpServer());
 }
 
-export async function startTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  })
-    // ÚNICA sustitución. El proveedor real no puede llamarse sin credenciales, y esta suite
-    // existe para verificar guards, aislamiento y autorización, no la calidad del modelo.
+/**
+ * Sustitución adicional de un proveedor concreto.
+ *
+ * Existe únicamente para las suites que necesitan un RAZONAMIENTO determinista —no un
+ * modelo— y que aun así quieren atravesar la aplicación real: guards, controladores,
+ * persistencia y transacciones. Toda suite que la use debe decir en el propio test QUÉ
+ * sustituye y por qué, para que nunca se confunda con producción.
+ */
+export interface ProviderOverride {
+  token: unknown;
+  value: unknown;
+}
+
+export async function startTestApp(
+  overrides: ProviderOverride[] = [],
+): Promise<INestApplication> {
+  let builder = Test.createTestingModule({ imports: [AppModule] })
+    // Sustitución por defecto. El proveedor real no puede llamarse sin credenciales, y esta
+    // suite existe para verificar guards, aislamiento y autorización, no la calidad del
+    // modelo.
     .overrideProvider(ProviderRegistry)
-    .useValue(fakeProviderRegistry())
-    .compile();
+    .useValue(fakeProviderRegistry());
+
+  for (const override of overrides) {
+    builder = builder.overrideProvider(override.token).useValue(override.value);
+  }
+
+  const moduleRef = await builder.compile();
 
   app = moduleRef.createNestApplication();
 

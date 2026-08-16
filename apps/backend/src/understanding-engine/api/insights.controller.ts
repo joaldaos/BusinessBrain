@@ -22,6 +22,8 @@ import { collectionsScope } from '../../knowledge-engine/domain/knowledge-scope'
 import { RetrieveInsightsUseCase } from '../application/retrieve-insights.use-case';
 import { CurateInsightUseCase } from '../application/curate-insight.use-case';
 import { InsightScopeService } from '../application/insight-scope.service';
+import { BeliefHistoryService } from '../application/belief-history.service';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import {
   CurateInsightDto,
   EscalateInsightDto,
@@ -54,6 +56,7 @@ export class InsightsController {
     private readonly curateInsight: CurateInsightUseCase,
     private readonly insightScope: InsightScopeService,
     private readonly collectionAccess: CollectionAccessService,
+    private readonly beliefHistory: BeliefHistoryService,
   ) {}
 
   @Get()
@@ -115,6 +118,33 @@ export class InsightsController {
     // Existe y el alcance lo cubre: quedó fuera por un filtro de LECTURA —estado terminal—,
     // no por autorización. No se expone: `historicalMode` está deliberadamente fuera de la API.
     throw new NotFoundException('Insight no disponible');
+  }
+
+  /**
+   * Historia de la creencia a la que pertenece este `Insight` — Fase 7.
+   *
+   * Devuelve la trayectoria del ASUNTO, no de la fila: versiones encadenadas en orden, la
+   * evolución de la confianza y, por cada transición, qué evidencia entró, salió, fue
+   * reemplazada o contradijo.
+   *
+   * El alcance se aplica versión a versión: una versión cuya evidencia el lector no cubre no
+   * aparece, y su evidencia jamás se filtra a través de la atribución.
+   */
+  @Get(':insightId/history')
+  @OrgRoles(MembershipRole.MEMBER)
+  history(
+    @CurrentOrg() org: RequestOrganization,
+    @CurrentUser() user: RequestUser,
+    @Param('insightId') insightId: string,
+    @Query() page: PaginationQueryDto,
+  ) {
+    return this.beliefHistory.forInsight({
+      organizationId: org.id,
+      actorUserId: user.id,
+      insightId,
+      limit: page.limit,
+      offset: page.offset,
+    });
   }
 
   /**

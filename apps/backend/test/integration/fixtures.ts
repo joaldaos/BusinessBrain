@@ -191,6 +191,10 @@ export async function createInsight(
     confidence?: number;
     confidenceComputedAt?: Date;
     evidenceItemIds?: string[];
+    /** Versión a la que reemplaza. Fase 7: encadena versiones de una misma creencia. */
+    supersedesInsightId?: string;
+    evidenceRole?: 'BASELINE' | 'CORROBORATION' | 'CONTRADICTION';
+    createdAt?: Date;
   },
 ) {
   const evidenceIds = params.evidenceItemIds ?? [];
@@ -200,6 +204,8 @@ export async function createInsight(
       organizationId: org.orgId,
       analysisRunId: org.analysisRunId,
       subjectIdentity: params.subjectIdentity,
+      supersedesInsightId: params.supersedesInsightId ?? null,
+      ...(params.createdAt ? { createdAt: params.createdAt } : {}),
       type: params.type ?? InsightType.ANOMALY,
       summary: `Hallazgo sobre ${params.subjectIdentity}`,
       status: params.status ?? InsightStatus.ACTIVE,
@@ -221,7 +227,7 @@ export async function createInsight(
       data: {
         insightId: insight.id,
         kind: 'KNOWLEDGE_ITEM',
-        role: 'BASELINE',
+        role: params.evidenceRole ?? 'BASELINE',
         knowledgeItemId: refId,
       },
     });

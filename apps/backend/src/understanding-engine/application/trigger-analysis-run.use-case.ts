@@ -70,6 +70,17 @@ export interface AnalysisRunResult {
   insightsAlreadyKnown: number;
 }
 
+/**
+ * Otra reconciliación creó ya la sucesora de este asunto. No es un fallo del análisis: la
+ * cadena tiene exactamente una sucesora y eso es lo correcto.
+ */
+class SupersessionRaceLostError extends Error {
+  constructor(readonly supersededId: string) {
+    super(`La versión ${supersededId} ya fue superada por otra reconciliación`);
+    this.name = 'SupersessionRaceLostError';
+  }
+}
+
 @Injectable()
 export class TriggerAnalysisRunUseCase {
   private readonly logger = new Logger(TriggerAnalysisRunUseCase.name);
@@ -354,6 +365,7 @@ export class TriggerAnalysisRunUseCase {
         // afirmaciones (§12, `ResolveInsightConflict`).
         await this.reconcileWithExisting({
           organizationId: params.organizationId,
+          analysisRunId: params.analysisRunId,
           candidate,
           strategy,
           resolvedType: gate.resolvedType,
@@ -379,6 +391,8 @@ export class TriggerAnalysisRunUseCase {
    */
   private async reconcileWithExisting(params: {
     organizationId: string;
+    /** Ejecución que produjo la versión sucesora: es su ancla temporal (Fase 7). */
+    analysisRunId: string;
     candidate: InsightCandidate;
     strategy: ReasoningStrategyPort;
     resolvedType: InsightType;
@@ -395,8 +409,12 @@ export class TriggerAnalysisRunUseCase {
         type: true,
         confidence: true,
         strategyKey: true,
+        strategyVersion: true,
+        summary: true,
+        subjectIdentity: true,
         reasoningTrace: true,
         transitiveEvidenceClosure: true,
+        objectiveLinks: { select: { businessObjectiveId: true } },
       },
     });
     if (!existing) return;
@@ -425,38 +443,215 @@ export class TriggerAnalysisRunUseCase {
       string,
       unknown
     >;
-    const history = Array.isArray(previousTrace.reconciliations)
-      ? (previousTrace.reconciliations as unknown[])
-      : [];
 
-    await this.prisma.insight.update({
-      where: { id: existing.id },
-      data: {
-        confidence: resolution.resolvedConfidence,
-        // La reconciliación forma parte de la traza: por qué cambió la confianza debe
-        // poder explicarse igual que cualquier otra decisión (§10).
-        reasoningTrace: {
-          ...previousTrace,
-          reconciliations: [
-            ...history,
-            {
-              outcome: resolution.outcome,
-              withStrategy: params.strategy.key,
-              previousConfidence: existing.confidence,
-              resolvedConfidence: resolution.resolvedConfidence,
-              sharedEvidenceRefIds: resolution.sharedEvidenceRefIds,
-              rationale: resolution.rationale,
-              at: new Date().toISOString(),
-            },
-          ],
-        } as Prisma.InputJsonValue,
+    // VERSIÓN SUCESORA, nunca sobrescritura (§121, §344). El diseño congelado es explícito:
+    // "nunca se sobrescribe en sitio". Hasta la Fase 7 esto era un `update` que machacaba la
+    // confianza anterior, de modo que la trayectoria de una creencia se perdía en cada
+    // reanálisis y "qué creíamos antes" era irrespondible.
+    //
+    // La versión anterior pasa a SUPERADO —estado terminal (§5)— y por eso libera el hueco
+    // del índice único parcial sobre (organización, identidad de sujeto), que está definido
+    // por exclusión de terminales (§370). Todo en UNA transacción: una cadena con dos
+    // versiones vivas del mismo asunto, o con la anterior superada sin sucesora, serían
+    // estados imposibles.
+    let successorId: string;
+    try {
+      successorId = await this.createSuccessorVersion({
+        existing,
+        params,
+        resolution,
+        previousTrace,
+      });
+    } catch (error) {
+      if (error instanceof SupersessionRaceLostError) {
+        // Otra reconciliación concurrente ya versionó este asunto. La cadena queda con una
+        // sola sucesora, que es la garantía que importa. No es un fallo de la ejecución.
+        this.logger.warn(
+          `Reconciliación sobre "${params.candidate.subjectIdentity}": ${error.message}`,
+        );
+        return;
+      }
+      throw error;
+    }
+
+    // La creencia cambió: queda traza. Sin actor porque no lo provocó una persona sino un
+    // reanálisis; `AuditService` admite acciones de sistema (6.2).
+    await this.audit.record({
+      organizationId: params.organizationId,
+      action: AUDIT_ACTIONS.INSIGHT_VERSIONED,
+      targetType: AUDIT_TARGET_TYPES.INSIGHT,
+      targetId: successorId,
+      metadata: {
+        subjectIdentity: params.candidate.subjectIdentity,
+        supersededInsightId: existing.id,
+        outcome: resolution.outcome,
+        previousConfidence: existing.confidence,
+        newConfidence: resolution.resolvedConfidence,
+        analysisRunId: params.analysisRunId,
+        withStrategy: params.strategy.key,
       },
     });
 
     this.logger.log(
       `Reconciliación sobre "${params.candidate.subjectIdentity}": ${resolution.outcome} — ` +
-        `${resolution.rationale}`,
+        `${resolution.rationale}. Versión ${existing.id} → ${successorId}`,
     );
+  }
+
+  /**
+   * Crea la versión sucesora y marca la anterior como SUPERADO, atómicamente.
+   *
+   * El cierre transitivo de la sucesora es la UNIÓN del cierre anterior y la evidencia
+   * entrante (§152, construcción incremental). Esa unión es lo que hace respondible "qué
+   * evidencia entró": comparar los dos cierres da la atribución exacta sin recorrer el grafo
+   * (§185).
+   *
+   * La evidencia de la versión anterior QUEDA CON ELLA como registro histórico (§188): no se
+   * mueve ni se copia. La sucesora crea sus propias filas de `InsightEvidence`, inmutables
+   * igual que las de su predecesora.
+   *
+   * Los anclajes a `BusinessObjective` se heredan: el asunto sigue importando por el mismo
+   * motivo, y perderlos degradaría un RISK a un hallazgo sin ancla (§8).
+   */
+  private async createSuccessorVersion(params: {
+    existing: {
+      id: string;
+      type: InsightType;
+      confidence: number;
+      strategyKey: string;
+      strategyVersion: string;
+      summary: string;
+      subjectIdentity: string;
+      transitiveEvidenceClosure: Prisma.JsonValue;
+      objectiveLinks: { businessObjectiveId: string }[];
+    };
+    params: {
+      organizationId: string;
+      analysisRunId: string;
+      candidate: InsightCandidate;
+      strategy: ReasoningStrategyPort;
+      resolvedType: InsightType;
+    };
+    resolution: {
+      outcome: string;
+      resolvedConfidence: number;
+      sharedEvidenceRefIds: string[];
+      rationale: string;
+    };
+    previousTrace: Record<string, unknown>;
+  }): Promise<string> {
+    const { existing, resolution, previousTrace } = params;
+    const candidate = params.params.candidate;
+
+    // Unión de cierres: el anterior más la evidencia entrante, sin duplicados. El cierre es
+    // inmutable por versión (§150); lo que cambia entre versiones es lo que se compara.
+    const previousClosure = this.closureEntries(
+      existing.transitiveEvidenceClosure,
+    );
+    const seen = new Set(previousClosure.map((entry) => entry.refId));
+    const mergedClosure = [...previousClosure];
+    for (const evidence of candidate.evidence) {
+      if (seen.has(evidence.refId)) continue;
+      seen.add(evidence.refId);
+      mergedClosure.push({ kind: evidence.kind, refId: evidence.refId });
+    }
+
+    const history = Array.isArray(previousTrace.reconciliations)
+      ? (previousTrace.reconciliations as unknown[])
+      : [];
+
+    return this.prisma.$transaction(async (tx) => {
+      // La anterior pasa a terminal ANTES de insertar: es lo que libera el hueco del índice
+      // único. Condicionada a seguir ACTIVE, de modo que dos reconciliaciones simultáneas no
+      // puedan producir dos sucesoras (bifurcación).
+      const superseded = await tx.insight.updateMany({
+        where: { id: existing.id, status: InsightStatus.ACTIVE },
+        data: { status: InsightStatus.SUPERSEDED },
+      });
+      if (superseded.count === 0) {
+        // Otra reconciliación ganó la carrera. No es un fallo: el asunto ya tiene sucesora y
+        // volver a crear otra bifurcaría la cadena.
+        throw new SupersessionRaceLostError(existing.id);
+      }
+
+      const successor = await tx.insight.create({
+        data: {
+          organizationId: params.params.organizationId,
+          analysisRunId: params.params.analysisRunId,
+          subjectIdentity: existing.subjectIdentity,
+          type: params.params.resolvedType,
+          summary: candidate.summary,
+          status: InsightStatus.ACTIVE,
+          strategyKey: params.params.strategy.key,
+          strategyVersion: params.params.strategy.version,
+          confidence: resolution.resolvedConfidence,
+          transitiveEvidenceClosure: mergedClosure,
+          // Enlace explícito con la versión que reemplaza: es el ÚNICO eje de orden de la
+          // trayectoria, y es ortogonal al grafo de evidencia (§186).
+          supersedesInsightId: existing.id,
+          reasoningTrace: {
+            ...previousTrace,
+            reconciliations: [
+              ...history,
+              {
+                outcome: resolution.outcome,
+                withStrategy: params.params.strategy.key,
+                previousConfidence: existing.confidence,
+                resolvedConfidence: resolution.resolvedConfidence,
+                sharedEvidenceRefIds: resolution.sharedEvidenceRefIds,
+                rationale: resolution.rationale,
+                supersededInsightId: existing.id,
+                at: new Date().toISOString(),
+              },
+            ],
+          } as Prisma.InputJsonValue,
+        },
+        select: { id: true },
+      });
+
+      // El ancla de negocio se hereda: el asunto sigue importando por el mismo objetivo.
+      for (const link of existing.objectiveLinks) {
+        await tx.insightObjectiveLink.create({
+          data: {
+            insightId: successor.id,
+            businessObjectiveId: link.businessObjectiveId,
+          },
+        });
+      }
+
+      // Evidencia PROPIA de la sucesora. La de la anterior no se toca (§188).
+      for (const evidence of candidate.evidence) {
+        await tx.insightEvidence.create({
+          data: {
+            insightId: successor.id,
+            kind: evidence.kind,
+            role: evidence.role,
+            ...(evidence.kind === 'KNOWLEDGE_ITEM'
+              ? { knowledgeItemId: evidence.refId }
+              : {}),
+            ...(evidence.kind === 'KNOWLEDGE_CHUNK'
+              ? { knowledgeChunkId: evidence.refId }
+              : {}),
+            ...(evidence.kind === 'DERIVED_INSIGHT'
+              ? { derivedInsightId: evidence.refId }
+              : {}),
+          },
+        });
+      }
+
+      return successor.id;
+    });
+  }
+
+  /** Entradas del cierre, tolerando un JSON que no sea una lista. */
+  private closureEntries(
+    raw: Prisma.JsonValue,
+  ): { kind: string; refId: string }[] {
+    return Array.isArray(raw)
+      ? (raw as unknown as { kind: string; refId: string }[]).filter(
+          (entry) => typeof entry?.refId === 'string',
+        )
+      : [];
   }
 
   private closureRefIds(closure: Prisma.JsonValue): string[] {

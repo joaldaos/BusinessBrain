@@ -40,6 +40,11 @@ export const AUDIT_ACTIONS = {
   INSIGHT_CURATED: 'insight.curated',
   INSIGHT_CURATION_REVOKED: 'insight.curation_revoked',
   INSIGHT_ESCALATED: 'insight.escalated',
+  /**
+   * Una creencia cambió: nació una versión nueva y la anterior quedó superada (Fase 7).
+   * Es un hecho del sistema, no de una persona: `actorId` queda nulo.
+   */
+  INSIGHT_VERSIONED: 'insight.versioned',
 
   // ── Decisiones humanas sobre las propuestas ───────────────────────────────
   RECOMMENDATION_ACCEPTED: 'recommendation.accepted',

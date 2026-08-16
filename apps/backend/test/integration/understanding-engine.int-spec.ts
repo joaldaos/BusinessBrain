@@ -274,12 +274,23 @@ describe('Understanding Engine (integración)', () => {
       );
       await withIndependent.execute({ organizationId: org.orgId });
 
-      const after = await prisma.insight.findFirstOrThrow({
+      // Fase 7: la confianza nueva NO se escribe encima. Nace una versión sucesora y la
+      // anterior queda superada con su valor original intacto — la creencia de ayer sigue
+      // siendo consultable tal como fue (§121, §344).
+      const previous = await prisma.insight.findFirstOrThrow({
         where: { id: before.id },
       });
-      expect(after.confidence).toBeGreaterThan(before.confidence);
+      expect(previous.status).toBe(InsightStatus.SUPERSEDED);
+      expect(previous.confidence).toBe(before.confidence);
 
-      const trace = after.reasoningTrace as {
+      const successor = await prisma.insight.findFirstOrThrow({
+        where: { supersedesInsightId: before.id },
+      });
+      expect(successor.confidence).toBeGreaterThan(before.confidence);
+      expect(successor.status).toBe(InsightStatus.ACTIVE);
+      expect(successor.subjectIdentity).toBe(before.subjectIdentity);
+
+      const trace = successor.reasoningTrace as {
         reconciliations?: { outcome: string }[];
       };
       expect(trace.reconciliations?.[0].outcome).toBe('CORROBORATED');
@@ -332,13 +343,19 @@ describe('Understanding Engine (integración)', () => {
       );
       await withDissent.execute({ organizationId: org.orgId });
 
-      const after = await prisma.insight.findFirstOrThrow({
+      const previous = await prisma.insight.findFirstOrThrow({
         where: { id: before.id },
       });
-      expect(after.confidence).toBeLessThan(before.confidence);
+      expect(previous.status).toBe(InsightStatus.SUPERSEDED);
+      expect(previous.confidence).toBe(before.confidence);
+
+      const successor = await prisma.insight.findFirstOrThrow({
+        where: { supersedesInsightId: before.id },
+      });
+      expect(successor.confidence).toBeLessThan(before.confidence);
 
       // La discrepancia nunca se ignora en silencio: queda en la traza (§9, §10).
-      const trace = after.reasoningTrace as {
+      const trace = successor.reasoningTrace as {
         reconciliations?: { outcome: string }[];
       };
       expect(trace.reconciliations?.[0].outcome).toBe('CONTRADICTED');

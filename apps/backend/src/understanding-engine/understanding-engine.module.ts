@@ -12,6 +12,7 @@ import { CurateInsightUseCase } from './application/curate-insight.use-case';
 import { InsightScopeService } from './application/insight-scope.service';
 import { ManualTriggerAdmissionService } from './application/manual-trigger-admission.service';
 import { AnalysisRunsService } from './application/analysis-runs.service';
+import { BeliefHistoryService } from './application/belief-history.service';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { LlmModule } from '../llm/llm.module';
 import { BusinessObjectivesController } from './api/business-objectives.controller';
@@ -72,6 +73,7 @@ import {
     InsightScopeService,
     ManualTriggerAdmissionService,
     AnalysisRunsService,
+    BeliefHistoryService,
   ],
   exports: [
     TriggerAnalysisRunUseCase,

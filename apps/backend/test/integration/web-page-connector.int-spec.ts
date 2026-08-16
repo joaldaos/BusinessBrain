@@ -9,6 +9,7 @@ import { KnowledgeSourcesService } from '../../src/knowledge-engine/application/
 import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
 import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
 import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
+import { driveConnector } from './fixtures';
 import type { ClassifyContentUseCase } from '../../src/knowledge-engine/application/classify-content.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -43,6 +44,7 @@ describe('Conector de página web (integración)', () => {
   const connectors = new ConnectorRegistry(
     new FileUploadConnector(),
     new WebPageConnector(),
+    driveConnector(),
   );
   const classify = {
     execute: () =>

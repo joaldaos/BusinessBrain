@@ -134,9 +134,26 @@ export class IngestFromSourceUseCase {
       //
       // El descifrado ocurre aquí y no en la superficie a propósito: la config puede contener
       // secretos, y no debe pasar por un controlador ni asomarse a una respuesta HTTP.
+      // Marcador de la última sincronización: lo devuelve el conector y se guarda al terminar
+      // BIEN. Guardarlo antes haría que una ejecución fallida avanzara el marcador y se
+      // perdieran para siempre los cambios de esa ventana.
+      let nextCursor: string | null = null;
+      const removedAtSource: string[] = [];
+
       const extracted = await connector.extract({
         ...(params.connectorInput as Record<string, unknown> | undefined),
+        organizationId: params.organizationId,
         config: this.readConfig(knowledgeSource.configEnc),
+        cursor:
+          typeof knowledgeSource.syncCursor === 'string'
+            ? knowledgeSource.syncCursor
+            : undefined,
+        onCursor: (cursor: string) => {
+          nextCursor = cursor;
+        },
+        onRemoved: (fileIds: string[]) => {
+          removedAtSource.push(...fileIds);
+        },
       });
 
       const stats: IngestionStats = {
@@ -216,6 +233,22 @@ export class IngestFromSourceUseCase {
           finishedAt: new Date(),
         },
       });
+      if (removedAtSource.length > 0) {
+        // Se INFORMA de lo que ya no está en el origen, y no se toca nada más.
+        //
+        // Qué debe ocurrir con un documento que desaparece de su fuente es una decisión de
+        // producto que el diseño congelado no resuelve: §5 y §6 definen qué SIGNIFICA el
+        // estado ELIMINADO y cómo se restaura, pero no dicen si una sincronización debe
+        // aplicarlo por su cuenta. Y la diferencia importa: sacar un fichero de la carpeta
+        // vigilada es indistinguible de borrarlo, así que aplicarlo automáticamente
+        // retiraría conocimiento que la empresa sigue usando. Pendiente de decisión.
+        this.logger.warn(
+          `${removedAtSource.length} documento(s) ya no están en el origen de la fuente ` +
+            `${knowledgeSource.id}. No se modifica su estado: la política de supresión está ` +
+            `pendiente de una decisión de producto`,
+        );
+      }
+
       await this.prisma.knowledgeSource.update({
         where: { id: knowledgeSource.id },
         data:
@@ -224,6 +257,10 @@ export class IngestFromSourceUseCase {
                 status: ConnectionStatus.CONNECTED,
                 lastSyncedAt: new Date(),
                 lastError: null,
+                // El marcador avanza SOLO si la ejecución fue bien. Avanzarlo tras un fallo
+                // perdería para siempre los cambios de esa ventana: la siguiente
+                // sincronización preguntaría por lo posterior a algo que nunca se ingirió.
+                ...(nextCursor !== null ? { syncCursor: nextCursor } : {}),
               }
             : { status: ConnectionStatus.ERROR, lastError: jobError },
       });

@@ -37,4 +37,16 @@ export class CreateKnowledgeSourceDto {
   @IsArray()
   @IsString({ each: true })
   knowledgeCollectionIds?: string[];
+
+  /**
+   * Conexión externa que autoriza esta fuente. Obligatoria para los conectores que la
+   * necesitan; nula en subida manual o página pública.
+   *
+   * Se declara como columna propia y no dentro de `config` porque es una RELACIÓN: al revocar
+   * la conexión hay que poder saber exactamente qué fuentes dejan de poder sincronizar, y eso
+   * no se consulta dentro de un JSON cifrado.
+   */
+  @IsOptional()
+  @IsString()
+  integrationId?: string;
 }

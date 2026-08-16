@@ -1,7 +1,14 @@
 import { useRef, useState } from 'react';
 import { api, session } from '../api/client';
 import { useAuth } from '../auth';
-import { hasRole, type KnowledgeCollection, type KnowledgeItem, type KnowledgeSource } from '../api/types';
+import {
+  hasRole,
+  type DriveFolder,
+  type Integration,
+  type KnowledgeCollection,
+  type KnowledgeItem,
+  type KnowledgeSource,
+} from '../api/types';
 import {
   Badge,
   Button,
@@ -36,6 +43,13 @@ export function KnowledgePage() {
   );
   const sources = useResource(() => api<KnowledgeSource[]>('/knowledge-sources'));
   const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'));
+  const integrations = useResource(() => api<Integration[]>('/integrations'));
+
+  const drive = (integrations.data ?? []).find(
+    (integration) =>
+      integration.provider === 'GOOGLE_DRIVE' &&
+      integration.status === 'CONNECTED',
+  );
 
   return (
     <>
@@ -47,9 +61,18 @@ export function KnowledgePage() {
         onCreated={collections.reload}
       />
 
+      {canAdmin && (
+        <GoogleDriveCard
+          drive={drive}
+          error={integrations.error}
+          onChanged={integrations.reload}
+        />
+      )}
+
       <SourcesCard
         sources={sources.data ?? []}
         collections={collections.data ?? []}
+        drive={drive}
         loading={sources.loading}
         error={sources.error}
         onChanged={() => {
@@ -159,24 +182,105 @@ function CollectionsCard({
   );
 }
 
+/**
+ * Conexion con Google Drive.
+ *
+ * Conectar abre la pantalla de consentimiento de Google en esta misma ventana: es una
+ * navegacion de verdad, no una llamada — el flujo de OAuth vuelve al servidor con un codigo en
+ * la URL, y para eso el navegador tiene que ir y volver.
+ */
+function GoogleDriveCard({
+  drive,
+  error,
+  onChanged,
+}: {
+  drive: Integration | undefined;
+  error: unknown;
+  onChanged: () => void;
+}) {
+  const action = useAction();
+
+  return (
+    <Card title="Google Drive">
+      <ErrorNote error={error ?? action.error} />
+
+      {drive ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge tone="good">conectado</Badge>
+          <span className="text-xs text-gray-600">
+            {drive._count?.knowledgeSources ?? 0} carpeta(s) sincronizandose
+          </span>
+          <Button
+            variant="danger"
+            className="ml-auto"
+            disabled={action.busy}
+            onClick={() =>
+              void action
+                .run(() => api(`/integrations/${drive.id}`, { method: 'DELETE' }))
+                .then(onChanged)
+            }
+          >
+            Desconectar
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-xs text-gray-500">
+            BusinessBrain pedira permiso de SOLO LECTURA sobre tu Drive. Nunca
+            escribe ni modifica nada, y puedes retirarlo cuando quieras.
+          </p>
+          <Button
+            disabled={action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                const { authorizationUrl } = await api<{
+                  authorizationUrl: string;
+                }>('/integrations/google-drive/connect');
+                window.location.href = authorizationUrl;
+              })
+            }
+          >
+            Conectar Google Drive
+          </Button>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function SourcesCard({
   sources,
   collections,
+  drive,
   loading,
   error,
   onChanged,
 }: {
   sources: KnowledgeSource[];
   collections: KnowledgeCollection[];
+  drive: Integration | undefined;
   loading: boolean;
   error: unknown;
   onChanged: () => void;
 }) {
   const [name, setName] = useState('');
   const [collectionId, setCollectionId] = useState('');
-  const [kind, setKind] = useState<'FILE_UPLOAD' | 'WEBSITE'>('FILE_UPLOAD');
+  const [kind, setKind] = useState<'FILE_UPLOAD' | 'WEBSITE' | 'GOOGLE_DRIVE'>(
+    'FILE_UPLOAD',
+  );
   const [url, setUrl] = useState('');
+  const [folderId, setFolderId] = useState('');
   const create = useAction();
+
+  // Las carpetas se piden solo cuando hacen falta: listar el Drive de alguien sin que lo
+  // haya pedido seria trabajo y exposicion gratuitos.
+  const folders = useResource(
+    () =>
+      kind === 'GOOGLE_DRIVE' && drive
+        ? api<DriveFolder[]>(`/integrations/${drive.id}/folders`)
+        : Promise.resolve([]),
+    [kind, drive?.id],
+  );
 
   return (
     <Card title="Fuentes de conocimiento">
@@ -197,19 +301,33 @@ function SourcesCard({
       <form
         className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
         onSubmit={create.onSubmit(async () => {
-          const web = kind === 'WEBSITE';
+          const connectorKey = {
+            FILE_UPLOAD: 'file_upload_v1',
+            WEBSITE: 'web_page_v1',
+            GOOGLE_DRIVE: 'google_drive_v1',
+          }[kind];
+
+          const config =
+            kind === 'WEBSITE'
+              ? { url: url.trim() }
+              : kind === 'GOOGLE_DRIVE'
+                ? { integrationId: drive?.id, folderId }
+                : {};
+
           await api('/knowledge-sources', {
             method: 'POST',
             body: {
               name,
               type: kind,
-              connectorKey: web ? 'web_page_v1' : 'file_upload_v1',
-              ...(web ? { config: { url: url.trim() } } : {}),
+              connectorKey,
+              config,
+              ...(kind === 'GOOGLE_DRIVE' ? { integrationId: drive?.id } : {}),
               knowledgeCollectionIds: collectionId ? [collectionId] : [],
             },
           });
           setName('');
           setUrl('');
+          setFolderId('');
           onChanged();
         })}
       >
@@ -225,6 +343,9 @@ function SourcesCard({
             >
               <option value="FILE_UPLOAD">Documentos que subo yo</option>
               <option value="WEBSITE">Una página web</option>
+              {drive && (
+                <option value="GOOGLE_DRIVE">Una carpeta de Google Drive</option>
+              )}
             </select>
           </Field>
         </div>
@@ -241,6 +362,31 @@ function SourcesCard({
             />
           </Field>
         </div>
+        {kind === 'GOOGLE_DRIVE' && (
+          <div className="min-w-56 flex-1">
+            <Field
+              label="Carpeta de Drive"
+              hint="Se leera entera la primera vez; despues, solo lo que cambie."
+            >
+              <select
+                className={inputClass}
+                value={folderId}
+                onChange={(e) => setFolderId(e.target.value)}
+                required
+              >
+                <option value="">
+                  {folders.loading ? 'Cargando carpetas…' : 'Elige una…'}
+                </option>
+                {folders.data?.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
+
         {kind === 'WEBSITE' && (
           <div className="min-w-64 flex-1">
             <Field
@@ -347,7 +493,7 @@ function SourceRow({
           <span className="text-xs text-red-700">{action.error.message}</span>
         )}
 
-        {source.type === 'WEBSITE' ? (
+        {source.type === 'WEBSITE' || source.type === 'GOOGLE_DRIVE' ? (
           // Una fuente web va a buscar su contenido: no hay nada que subir. Volver a
           // sincronizar no duplica — si la página no cambió, el sistema lo reconoce.
           <Button
@@ -361,7 +507,11 @@ function SourceRow({
               })
             }
           >
-            {action.busy ? 'Leyendo…' : 'Leer la página'}
+            {action.busy
+              ? 'Sincronizando…'
+              : source.type === 'GOOGLE_DRIVE'
+                ? 'Sincronizar'
+                : 'Leer la página'}
           </Button>
         ) : (
           <>

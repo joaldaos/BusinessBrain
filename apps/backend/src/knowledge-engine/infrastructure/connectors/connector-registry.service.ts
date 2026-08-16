@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ConnectorPort } from '../../domain/ports/connector.port';
 import { FileUploadConnector } from './file-upload.connector';
 import { WebPageConnector } from './web-page.connector';
+import { GoogleDriveConnector } from '../../../integrations/infrastructure/google-drive.connector';
 
 /**
  * Único punto del sistema que sabe qué conectores concretos existen (mismo patrón que
@@ -15,10 +16,12 @@ export class ConnectorRegistry {
   constructor(
     fileUploadConnector: FileUploadConnector,
     webPageConnector: WebPageConnector,
+    googleDriveConnector: GoogleDriveConnector,
   ) {
     this.connectors = {
       [fileUploadConnector.key]: fileUploadConnector,
       [webPageConnector.key]: webPageConnector,
+      [googleDriveConnector.key]: googleDriveConnector,
     };
   }
 

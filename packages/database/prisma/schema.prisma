@@ -379,6 +379,14 @@ model KnowledgeSource {
   status         ConnectionStatus    @default(PENDING)
   lastSyncedAt   DateTime?
   lastError      String?
+  // Conexion externa que autoriza esta fuente. Nula en las que no la necesitan (subida
+  // manual, pagina web publica). Relacion INEQUIVOCA: al revocar la conexion se sabe
+  // exactamente que fuentes dejan de poder sincronizar.
+  integrationId  String?
+  // Marcador de la ultima sincronizacion, propiedad del conector: donde se quedo. Para Drive
+  // es el token de cambios de Google. No es un secreto —no da acceso a nada— y por eso no
+  // viaja en `configEnc`, que se descifra entero en cada uso.
+  syncCursor     Json?
   createdById    String
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
@@ -391,6 +399,7 @@ model KnowledgeSource {
   knowledgeItemsAsCurrent KnowledgeItem[] @relation("KnowledgeItemCurrentSource")
   ingestionJobs           IngestionJob[]
   collections             KnowledgeSourceCollection[]
+  integration             Integration?    @relation(fields: [integrationId, organizationId], references: [id, organizationId], onDelete: SetNull)
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -974,8 +983,10 @@ model Integration {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeSources KnowledgeSource[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
 }
 

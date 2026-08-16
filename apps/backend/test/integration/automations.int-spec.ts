@@ -23,6 +23,7 @@ import { CollectionAccessService } from '../../src/knowledge-engine/application/
 import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
 import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
 import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
+import { driveConnector } from './fixtures';
 import { IngestFromSourceUseCase } from '../../src/knowledge-engine/application/ingest-from-source.use-case';
 import type { ClassifyContentUseCase } from '../../src/knowledge-engine/application/classify-content.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -66,6 +67,7 @@ describe('Automatizaciones (integración)', () => {
     const connectors = new ConnectorRegistry(
       new FileUploadConnector(),
       new WebPageConnector(),
+      driveConnector(),
     );
     service = new AutomationsService(
       db,

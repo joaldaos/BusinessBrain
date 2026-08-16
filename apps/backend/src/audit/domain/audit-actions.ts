@@ -28,6 +28,14 @@ export const AUDIT_ACTIONS = {
   /** Una ejecución desatendida terminó. Sin actor: no la provocó una persona. */
   AUTOMATION_RUN_FINISHED: 'automation.run.finished',
 
+  // ── Integraciones externas ────────────────────────────────────────────────
+  //
+  // Conectar concede a BusinessBrain acceso de lectura al Drive de una empresa; desconectar
+  // se lo retira y detiene lo que dependía de él. Ambas son cambios de permisos sobre un
+  // sistema ajeno, y son justo lo que alguien querría poder reconstruir después.
+  INTEGRATION_CONNECTED: 'integration.connected',
+  INTEGRATION_DISCONNECTED: 'integration.disconnected',
+
   /** Crear una colección define una frontera de acceso: queda traza. */
   KNOWLEDGE_COLLECTION_CREATED: 'knowledge_collection.created',
 
@@ -89,6 +97,8 @@ export const AUDIT_TARGET_TYPES = {
   AGENT_TEMPLATE: 'AgentTemplate',
   AUTOMATION: 'Automation',
   REPORT: 'Report',
+  INTEGRATION: 'Integration',
+  KNOWLEDGE_SOURCE: 'KnowledgeSource',
   KNOWLEDGE_COLLECTION: 'KnowledgeCollection',
   BUSINESS_OBJECTIVE: 'BusinessObjective',
   ANALYSIS_RUN: 'AnalysisRun',

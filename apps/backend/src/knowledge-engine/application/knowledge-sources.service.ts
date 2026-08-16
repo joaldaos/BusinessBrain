@@ -20,6 +20,7 @@ const PUBLIC_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
+  integrationId: true,
 } as const;
 
 /**
@@ -41,6 +42,7 @@ export class KnowledgeSourcesService {
   ) {
     const collectionIds = [...new Set(dto.knowledgeCollectionIds ?? [])];
     await this.assertCollectionsBelongToOrg(organizationId, collectionIds);
+    await this.assertIntegrationBelongsToOrg(organizationId, dto.integrationId);
 
     // En una transacción: una fuente creada sin sus colecciones sería una fuente cuyo
     // contenido nace invisible, y nada lo delataría hasta que alguien echara de menos sus
@@ -54,6 +56,7 @@ export class KnowledgeSourcesService {
           name: dto.name,
           configEnc: this.encryption.encrypt(JSON.stringify(dto.config ?? {})),
           createdById,
+          integrationId: dto.integrationId ?? null,
         },
         select: PUBLIC_SELECT,
       });
@@ -79,6 +82,28 @@ export class KnowledgeSourcesService {
    * ese fallo de integridad a un error explicable en vez de dejar escapar una violación de
    * restricción sin contexto — mismo criterio que `CollectionAccessService.grant`.
    */
+  /**
+   * La conexión declarada debe ser de ESTA organización.
+   *
+   * La clave foránea compuesta ya lo impide en la base de datos; aquí se traduce a un error
+   * explicable en vez de dejar escapar una violación de restricción sin contexto.
+   */
+  private async assertIntegrationBelongsToOrg(
+    organizationId: string,
+    integrationId?: string,
+  ): Promise<void> {
+    if (!integrationId) return;
+
+    const found = await this.prisma.integration.count({
+      where: { id: integrationId, organizationId },
+    });
+    if (found === 0) {
+      throw new BadRequestException(
+        'La conexión indicada no existe o pertenece a otra organización',
+      );
+    }
+  }
+
   private async assertCollectionsBelongToOrg(
     organizationId: string,
     collectionIds: string[],

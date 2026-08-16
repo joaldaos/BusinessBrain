@@ -190,6 +190,21 @@ export interface ReportRun {
   error: string | null;
 }
 
+export interface Integration {
+  id: string;
+  provider: string;
+  status: string;
+  scope: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  _count?: { knowledgeSources: number };
+}
+
+export interface DriveFolder {
+  id: string;
+  name: string;
+}
+
 export interface KnowledgeCollection {
   id: string;
   name: string;

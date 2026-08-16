@@ -1,4 +1,5 @@
 import { AuditService } from '../../src/audit/audit.service';
+import type { GoogleDriveConnector } from '../../src/integrations/infrastructure/google-drive.connector';
 import { EncryptionService } from '../../src/common/utils/encryption.util';
 import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
@@ -74,6 +75,20 @@ export function encryptionService(): EncryptionService {
   return new EncryptionService({
     get: () => Buffer.alloc(32, 7).toString('base64'),
   } as unknown as ConstructorParameters<typeof EncryptionService>[0]);
+}
+
+/**
+ * Conector de Drive para suites que no lo ejercitan.
+ *
+ * El registro lo exige desde que existe la integración, pero una suite que prueba el reloj o
+ * el conector web no debe arrastrar Google: se declara con lo justo para que el registro lo
+ * acepte, y quien SÍ lo prueba construye el real con un Drive sustituto.
+ */
+export function driveConnector(): GoogleDriveConnector {
+  return {
+    key: 'google_drive_v1',
+    acquisition: 'PULL',
+  } as unknown as GoogleDriveConnector;
 }
 
 export interface TestOrg {

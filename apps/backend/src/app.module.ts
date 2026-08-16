@@ -16,6 +16,7 @@ import { AgentsModule } from './agents/agents.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { AutomationsModule } from './automations/automations.module';
 import { ReportsModule } from './reports/reports.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -34,6 +35,7 @@ import { HealthModule } from './health/health.module';
     RecommendationsModule,
     AutomationsModule,
     ReportsModule,
+    IntegrationsModule,
     HealthModule,
   ],
   providers: [

@@ -1,4 +1,5 @@
 import {
+  InsightFeedbackType,
   InsightStatus,
   InsightType,
   MembershipRole,
@@ -98,6 +99,16 @@ describe('Recommendations (integración)', () => {
         grantedById: target.userId,
       });
     }
+
+    // Desde 7.1 escalar exige curación PROPIA sobre la versión que se escala: una
+    // validación heredada de una versión anterior no autoriza una propuesta de acción.
+    await curate.curate({
+      organizationId: target.orgId,
+      insightId: insight.id,
+      actorUserId: target.userId,
+      type: InsightFeedbackType.CONFIRMATION,
+      comment: 'Validado por una persona antes de escalar',
+    });
 
     return curate.escalateToRecommendation({
       organizationId: target.orgId,

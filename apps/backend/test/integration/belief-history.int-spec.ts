@@ -1,4 +1,5 @@
 import {
+  InsightFeedbackType,
   InsightStatus,
   InsightType,
   MembershipRole,
@@ -6,6 +7,12 @@ import {
 import { NotFoundException } from '@nestjs/common';
 import { BeliefHistoryService } from '../../src/understanding-engine/application/belief-history.service';
 import { BusinessObjectiveService } from '../../src/understanding-engine/application/business-objective.service';
+import { CurateInsightUseCase } from '../../src/understanding-engine/application/curate-insight.use-case';
+import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
+import {
+  ORGANIZATION_WIDE_REASONS,
+  organizationWideScope,
+} from '../../src/knowledge-engine/domain/knowledge-scope';
 import { TriggerAnalysisRunUseCase } from '../../src/understanding-engine/application/trigger-analysis-run.use-case';
 import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/infrastructure/prisma-knowledge-signals.adapter';
 import { KnowledgeSignalStrategy } from '../../src/understanding-engine/infrastructure/strategies/knowledge-signal.strategy';
@@ -417,6 +424,271 @@ describe('Memoria de la creencia (integración)', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
 
       await destroyTestOrg(otra);
+    });
+  });
+
+  describe('la decisión humana sobrevive al versionado (§3.7, 7.1)', () => {
+    const retriever = () => new RetrieveInsightsUseCase(db);
+    const curator = () =>
+      new CurateInsightUseCase(db, insightScope(db), auditService(db));
+
+    /** Lectura por el ÚNICO punto de lectura del sistema, no por consulta directa. */
+    const leer = async (insightId: string) =>
+      (
+        await retriever().execute({
+          organizationId: org.orgId,
+          scope: organizationWideScope(
+            ORGANIZATION_WIDE_REASONS.ANALYSIS_REASONING,
+          ),
+          insightIds: [insightId],
+          historicalMode: true,
+        })
+      )[0];
+
+    const confirmar = (insightId: string, comment?: string) =>
+      curator().curate({
+        organizationId: org.orgId,
+        insightId,
+        actorUserId: org.userId,
+        type: InsightFeedbackType.CONFIRMATION,
+        comment,
+      });
+
+    it('CRÍTICO: una creencia curada conserva la curación al nacer su sucesora', async () => {
+      const base = await doc('Informe');
+      const v1 = await createInsight(org, {
+        subjectIdentity: 'asunto-curado',
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v1.id, 'Correcto, lo hemos revisado');
+
+      await prisma.insight.update({
+        where: { id: v1.id },
+        data: { status: InsightStatus.SUPERSEDED },
+      });
+      const v2 = await createInsight(org, {
+        subjectIdentity: 'asunto-curado',
+        supersedesInsightId: v1.id,
+        evidenceItemIds: [base.id],
+      });
+
+      const leido = await leer(v2.id);
+
+      // Antes de 7.1 esto era `null`: versionar descartaba en silencio el juicio humano.
+      expect(leido.curation).toMatchObject({
+        type: 'CONFIRMATION',
+        comment: 'Correcto, lo hemos revisado',
+        origin: 'INHERITED',
+        curatedVersionId: v1.id,
+        disputed: false,
+      });
+    });
+
+    it('la curación heredada BLOQUEA el decaimiento automático', async () => {
+      const base = await doc('Informe viejo');
+      // Calculada hace mucho: sin curación el decaimiento la habría bajado.
+      const antiguo = new Date('2026-01-01T00:00:00.000Z');
+      const v1 = await createInsight(org, {
+        subjectIdentity: 'asunto-que-decae',
+        confidence: 0.9,
+        confidenceComputedAt: antiguo,
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v1.id);
+      await prisma.insight.update({
+        where: { id: v1.id },
+        data: { status: InsightStatus.SUPERSEDED },
+      });
+      const v2 = await createInsight(org, {
+        subjectIdentity: 'asunto-que-decae',
+        supersedesInsightId: v1.id,
+        confidence: 0.9,
+        confidenceComputedAt: antiguo,
+        evidenceItemIds: [base.id],
+      });
+
+      const leido = await leer(v2.id);
+
+      expect(leido.curation?.origin).toBe('INHERITED');
+      // §3.7: prioridad sobre cualquier recálculo automático, también heredada.
+      expect(leido.confidence).toBe(0.9);
+    });
+
+    it('una curación PROPIA de la sucesora gana sobre la heredable', async () => {
+      const base = await doc('Informe');
+      const v1 = await createInsight(org, {
+        subjectIdentity: 'asunto-recurado',
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v1.id, 'sobre la primera');
+      await prisma.insight.update({
+        where: { id: v1.id },
+        data: { status: InsightStatus.SUPERSEDED },
+      });
+      const v2 = await createInsight(org, {
+        subjectIdentity: 'asunto-recurado',
+        supersedesInsightId: v1.id,
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v2.id, 'sobre la segunda');
+
+      expect(await leer(v2.id).then((i) => i.curation)).toMatchObject({
+        comment: 'sobre la segunda',
+        origin: 'OWN',
+        curatedVersionId: v2.id,
+      });
+    });
+
+    it('una reconciliación real por CONTRADICCIÓN deja la curación EN DISPUTA', async () => {
+      // Cadena producida por el motor de verdad, no sembrada: la traza de reconciliación la
+      // escribe `TriggerAnalysisRun`, y de ahí sale la marca de disputa.
+      const item = await createKnowledgeItem(org, { confidenceScore: 0.05 });
+      await prisma.knowledgeItemCollection.create({
+        data: {
+          knowledgeItemId: item.id,
+          knowledgeCollectionId: baseCollectionId,
+          organizationId: org.orgId,
+        },
+      });
+
+      const sinGenerativa = {
+        key: 'sin-generativa',
+        version: '1.0.0',
+        kind: 'GENERATIVE' as const,
+        baseReliability: 0.6,
+        producibleTypes: [],
+        generate: () => Promise.resolve([]),
+      } as unknown as GenerativeSynthesisStrategy;
+
+      const analizar = (generativa: GenerativeSynthesisStrategy) =>
+        new TriggerAnalysisRunUseCase(
+          db,
+          new PrismaKnowledgeSignalsAdapter(db),
+          new KnowledgeSignalStrategy(),
+          new BusinessObjectiveService(db, auditService(db)),
+          generativa,
+          auditService(db),
+        ).execute({ organizationId: org.orgId });
+
+      await analizar(sinGenerativa);
+
+      const v1 = await prisma.insight.findFirstOrThrow({
+        where: { organizationId: org.orgId },
+      });
+      await confirmar(v1.id);
+
+      // Otra estrategia discrepa sobre la NATURALEZA del asunto: contradicción (§9).
+      const otro = await doc('Fuente discrepante');
+      const discrepante = {
+        key: 'estrategia-discrepante',
+        version: '1.0.0',
+        kind: 'SYMBOLIC' as const,
+        baseReliability: 0.9,
+        producibleTypes: [InsightType.PATTERN],
+        generate: () =>
+          Promise.resolve([
+            {
+              subjectIdentity: v1.subjectIdentity,
+              type: InsightType.PATTERN,
+              summary: 'Discrepa sobre la naturaleza del hallazgo',
+              evidence: [
+                {
+                  kind: 'KNOWLEDGE_ITEM' as const,
+                  role: 'CONTRADICTION' as const,
+                  refId: otro.id,
+                },
+              ],
+              rawConfidence: 1,
+              reasoningTrace: { rule: 'discrepa' },
+            },
+          ]),
+      } as unknown as GenerativeSynthesisStrategy;
+
+      await analizar(discrepante);
+
+      const sucesora = await prisma.insight.findFirstOrThrow({
+        where: { supersedesInsightId: v1.id },
+      });
+
+      expect(await leer(sucesora.id).then((i) => i.curation)).toMatchObject({
+        origin: 'INHERITED',
+        curatedVersionId: v1.id,
+        // La evidencia nueva contradice lo que la persona confirmó: se dice.
+        disputed: true,
+      });
+    });
+
+    it('la curación NO se hereda a través de un DISCARDED', async () => {
+      const base = await doc('Informe');
+      const v1 = await createInsight(org, {
+        subjectIdentity: 'asunto-descartado',
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v1.id);
+      // El asunto se descarta después: deja de sostenerse.
+      await prisma.insight.update({
+        where: { id: v1.id },
+        data: { status: InsightStatus.DISCARDED },
+      });
+      const v2 = await createInsight(org, {
+        subjectIdentity: 'asunto-descartado',
+        supersedesInsightId: v1.id,
+        evidenceItemIds: [base.id],
+      });
+
+      expect(await leer(v2.id).then((i) => i.curation)).toBeNull();
+    });
+
+    it('escalar exige curación PROPIA: la heredada NO autoriza', async () => {
+      const base = await doc('Informe');
+      const v1 = await createInsight(org, {
+        subjectIdentity: 'asunto-escalable',
+        type: InsightType.PATTERN,
+        evidenceItemIds: [base.id],
+      });
+      await confirmar(v1.id);
+      await prisma.insight.update({
+        where: { id: v1.id },
+        data: { status: InsightStatus.SUPERSEDED },
+      });
+      const v2 = await createInsight(org, {
+        subjectIdentity: 'asunto-escalable',
+        type: InsightType.PATTERN,
+        supersedesInsightId: v1.id,
+        evidenceItemIds: [base.id],
+      });
+
+      const contrato = {
+        title: 'Actuar',
+        detected: 'Algo',
+        justification: 'Porque afecta a un objetivo',
+        estimatedImpact: 'Alto',
+        advantages: 'Varias',
+        drawbacks: 'Algunas',
+        affectedAreas: 'Operaciones',
+        migrationPlan: 'No aplica (sin impacto estructural)',
+      };
+
+      // La curación heredada se lee y tiene prioridad sobre el decaimiento, pero no vale
+      // como aprobación de una propuesta de acción sobre una afirmación distinta (§11).
+      await expect(
+        curator().escalateToRecommendation({
+          organizationId: org.orgId,
+          actorUserId: org.userId,
+          insightId: v2.id,
+          contract: contrato,
+        }),
+      ).rejects.toThrow(/curación humana explícita sobre esta versión/i);
+
+      // Confirmar ESTA versión sí autoriza.
+      await confirmar(v2.id);
+      const recomendacion = await curator().escalateToRecommendation({
+        organizationId: org.orgId,
+        actorUserId: org.userId,
+        insightId: v2.id,
+        contract: contrato,
+      });
+      expect(recomendacion.sourceInsightId).toBe(v2.id);
     });
   });
 

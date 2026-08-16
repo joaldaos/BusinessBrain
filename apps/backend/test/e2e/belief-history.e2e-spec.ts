@@ -258,6 +258,76 @@ describe('Memoria de la creencia (E2E)', () => {
     expect(audit?.targetId).toBe(successor.id);
   });
 
+  it('la decisión humana sobrevive a que la máquina cambie de opinión (§3.7)', async () => {
+    const collection = await collectionFor(tenant.owner, 'Ventas');
+    await knowledgeItem({
+      title: 'Política de descuentos comerciales',
+      collectionId: collection.id,
+      confidenceScore: 0.05,
+    });
+
+    await as(tenant.owner, tenant).post('/analysis-runs').send({}).expect(201);
+    const primera = (
+      await as(tenant.owner, tenant).get('/insights').expect(200)
+    ).body.data[0];
+
+    // Una persona valida la conclusión.
+    await as(tenant.owner, tenant)
+      .post(`/insights/${primera.id}/curate`)
+      .send({ type: 'CONFIRMATION', comment: 'Correcto, hay que revisarlo.' })
+      .expect(201);
+
+    const confirmada = (
+      await as(tenant.owner, tenant).get('/insights').expect(200)
+    ).body.data[0];
+    expect(confirmada.curation).toMatchObject({
+      origin: 'OWN',
+      curatedVersionId: primera.id,
+    });
+
+    // Evidencia nueva e independiente: la creencia se versiona.
+    const corroborating = await knowledgeItem({
+      title: 'Auditoría externa de márgenes',
+      collectionId: collection.id,
+      confidenceScore: 0.9,
+    });
+    target.subjectIdentity = (
+      await prisma.insight.findFirstOrThrow({ where: { id: primera.id } })
+    ).subjectIdentity;
+    target.evidenceItemId = corroborating.id;
+    await as(tenant.owner, tenant).post('/analysis-runs').send({}).expect(201);
+
+    const viva = (await as(tenant.owner, tenant).get('/insights').expect(200))
+      .body.data[0];
+    expect(viva.id).not.toBe(primera.id);
+
+    // El juicio humano NO se pierde, y viaja declarado como heredado: nunca se presenta
+    // como si la persona se hubiera pronunciado sobre esta afirmación.
+    expect(viva.curation).toMatchObject({
+      type: 'CONFIRMATION',
+      comment: 'Correcto, hay que revisarlo.',
+      origin: 'INHERITED',
+      curatedVersionId: primera.id,
+      disputed: false,
+    });
+
+    // Y no autoriza a escalar: para proponer una acción hay que validar ESTA versión.
+    await as(tenant.owner, tenant)
+      .post(`/insights/${viva.id}/escalate`)
+      .send({
+        title: 'Revisar la política de descuentos',
+        detected: 'La confianza del documento ha caído bajo el piso.',
+        justification:
+          'Una política desactualizada guía decisiones comerciales.',
+        estimatedImpact: 'Recuperación de 3 puntos de margen.',
+        advantages: 'Margen sostenible.',
+        drawbacks: 'Requiere revisión manual.',
+        affectedAreas: 'Ventas, Finanzas.',
+        migrationPlan: 'no aplica (sin impacto estructural)',
+      })
+      .expect(409);
+  });
+
   it('repetir el MISMO razonamiento sobre la MISMA evidencia no crea versión', async () => {
     const collection = await collectionFor(tenant.owner, 'Ventas');
     await knowledgeItem({

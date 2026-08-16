@@ -19,6 +19,12 @@ import {
   type EvidenceState,
   type EvidenceFreshness,
 } from '../domain/insight-freshness';
+import {
+  MAX_CURATION_LOOKBACK,
+  resolveEffectiveCuration,
+  type CuratedVersion,
+  type EffectiveCuration,
+} from '../domain/belief-curation';
 
 /**
  * `RetrieveInsights` — UNDERSTANDING_ENGINE_DESIGN.md §12, subfase 3.6.
@@ -76,8 +82,14 @@ export interface RetrievedInsight {
   reasoningTrace: unknown;
   evidence: { kind: string; role: string; refId: string | null }[];
   businessObjectives: { id: string; statement: string }[];
-  /** Curación humana vigente, si la hay: tiene prioridad sobre el recálculo (§3.7). */
-  curation: { type: string; comment: string | null; at: Date } | null;
+  /**
+   * Curación humana vigente, si la hay: tiene prioridad sobre el recálculo (§3.7).
+   *
+   * Puede ser PROPIA de esta versión o HEREDADA de una anterior de la misma creencia (7.1).
+   * Viaja siempre declarada: una heredada nunca se presenta como si la persona se hubiera
+   * pronunciado sobre la afirmación actual.
+   */
+  curation: EffectiveCuration | null;
   createdAt: Date;
 }
 
@@ -127,6 +139,11 @@ export class RetrieveInsightsUseCase {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Cadena de supersesión de los que se van a devolver, para poder resolver la curación
+    // heredada (§3.7, 7.1). Se carga por NIVELES, no por Insight: una consulta por escalón
+    // de profundidad, no un N+1 que creciera con el tamaño de la página.
+    const chain = await this.loadCurationChain(params.organizationId, insights);
+
     // Una sola resolución del estado actual de TODAS las evidencias implicadas: es lo que
     // hace implementable la garantía de vista consistente (§3.4), y lo que sería imposible
     // con un recorrido recursivo por Insight.
@@ -158,8 +175,10 @@ export class RetrieveInsightsUseCase {
       if (params.requireFresh && freshnessResult.freshness !== 'FRESH')
         continue;
 
-      // Curación humana: PRIORITARIA sobre cualquier recálculo automático (§3.7).
-      const curation = this.resolveCuration(insight.feedback);
+      // Curación humana: PRIORITARIA sobre cualquier recálculo automático (§3.7). Desde 7.1
+      // se resuelve sobre la CADENA: versionar una creencia ya no descarta el juicio de la
+      // persona que la había curado.
+      const curation = resolveEffectiveCuration(insight.id, chain);
 
       const confidence = curation
         ? insight.confidence
@@ -365,29 +384,114 @@ export class RetrieveInsightsUseCase {
     return states;
   }
 
-  /** Curación vigente: la última entrada no revocada (§3.7). */
-  private resolveCuration(
-    feedback: {
+  /**
+   * Cadena de supersesión de los `Insight` que se van a devolver, hacia atrás.
+   *
+   * Se recorre por NIVELES: en cada vuelta se piden de golpe todas las predecesoras
+   * pendientes. El coste es una consulta por escalón de profundidad de la cadena más larga,
+   * no una por `Insight` — que es lo que convertiría la lectura en un N+1 al crecer el
+   * tenant, justo lo que 6.4 quitó de esta ruta.
+   *
+   * El filtro de organización va en cada vuelta: una cadena no puede salirse del tenant.
+   */
+  private async loadCurationChain(
+    organizationId: string,
+    insights: {
       id: string;
-      type: string;
-      comment: string | null;
-      createdAt: Date;
-      revokesFeedbackId: string | null;
+      status: InsightStatus;
+      supersedesInsightId: string | null;
+      reasoningTrace: Prisma.JsonValue;
+      feedback: {
+        id: string;
+        type: string;
+        comment: string | null;
+        createdAt: Date;
+        revokesFeedbackId: string | null;
+      }[];
     }[],
-  ): { type: string; comment: string | null; at: Date } | null {
-    const revokedIds = new Set(
-      feedback
-        .map((f) => f.revokesFeedbackId)
-        .filter((id): id is string => id !== null),
-    );
+  ): Promise<Map<string, CuratedVersion>> {
+    const chain = new Map<string, CuratedVersion>();
 
-    const current = feedback.find(
-      (f) => f.type !== 'REVOCATION' && !revokedIds.has(f.id),
-    );
+    const add = (row: (typeof insights)[number]) => {
+      chain.set(row.id, {
+        id: row.id,
+        status: row.status,
+        supersedesInsightId: row.supersedesInsightId,
+        feedback: row.feedback,
+        reconciliationOutcome: this.lastReconciliationOutcome(
+          row.reasoningTrace,
+        ),
+      });
+    };
 
-    return current
-      ? { type: current.type, comment: current.comment, at: current.createdAt }
-      : null;
+    for (const insight of insights) add(insight);
+
+    let pending = [
+      ...new Set(
+        insights
+          .map((insight) => insight.supersedesInsightId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    for (let depth = 0; depth < MAX_CURATION_LOOKBACK && pending.length > 0;) {
+      const rows = await this.prisma.insight.findMany({
+        where: { id: { in: pending }, organizationId },
+        select: {
+          id: true,
+          status: true,
+          supersedesInsightId: true,
+          reasoningTrace: true,
+          feedback: {
+            select: {
+              id: true,
+              type: true,
+              comment: true,
+              createdAt: true,
+              revokesFeedbackId: true,
+            },
+          },
+        },
+      });
+      if (rows.length === 0) break;
+
+      for (const row of rows) add(row);
+      depth += 1;
+
+      pending = [
+        ...new Set(
+          rows
+            .map((row) => row.supersedesInsightId)
+            .filter((id): id is string => id !== null)
+            .filter((id) => !chain.has(id)),
+        ),
+      ];
+    }
+
+    return chain;
+  }
+
+  /**
+   * Resultado de la reconciliación que produjo esta versión, si la hubo.
+   *
+   * Lo escribe `TriggerAnalysisRun` al versionar. Se lee la ÚLTIMA entrada porque la traza
+   * acumula el historial completo y lo que importa aquí es la transición que dio lugar a
+   * esta versión concreta.
+   */
+  private lastReconciliationOutcome(raw: Prisma.JsonValue): string | null {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return null;
+    }
+    const reconciliations = (raw as Record<string, unknown>).reconciliations;
+    if (!Array.isArray(reconciliations) || reconciliations.length === 0) {
+      return null;
+    }
+
+    const last: unknown = reconciliations[reconciliations.length - 1];
+    if (typeof last !== 'object' || last === null) return null;
+
+    const outcome = (last as Record<string, unknown>).outcome;
+    return typeof outcome === 'string' ? outcome : null;
   }
 
   private parseClosure(

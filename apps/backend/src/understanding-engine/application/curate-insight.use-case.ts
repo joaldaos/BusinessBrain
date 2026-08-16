@@ -19,6 +19,10 @@ import {
   AUDIT_TARGET_TYPES,
 } from '../../audit/domain/audit-actions';
 import { InsightScopeService } from './insight-scope.service';
+import {
+  authorizesEscalation,
+  resolveOwnCuration,
+} from '../domain/belief-curation';
 
 /**
  * Curación humana y puente con el Principio de Evolución Asistida —
@@ -224,7 +228,7 @@ export class CurateInsightUseCase {
   }): Promise<Recommendation> {
     const insight = await this.prisma.insight.findFirst({
       where: { id: params.insightId, organizationId: params.organizationId },
-      include: { objectiveLinks: true },
+      include: { objectiveLinks: true, feedback: true },
     });
     if (!insight) throw new NotFoundException('Insight no encontrado');
 
@@ -255,6 +259,36 @@ export class CurateInsightUseCase {
       throw new BadRequestException(
         'El plan de migración nunca se omite: si el cambio no requiere migración, ' +
           'declárelo explícitamente como "no aplica (sin impacto estructural)"',
+      );
+    }
+
+    // Curación PROPIA de esta versión, obligatoria para escalar (7.1).
+    //
+    // Una curación HEREDADA de una versión anterior no sirve: dice que alguien validó una
+    // afirmación distinta de la que ahora se propone convertir en acción. Escalar redacta el
+    // contrato de Evolución Asistida sobre esta versión concreta, y §11 exige aprobación
+    // explícita — tomar prestada la de otra afirmación sería fabricarla. Fail-closed: sin
+    // curación propia no se escala.
+    //
+    // Se resuelve solo sobre el feedback de ESTA fila a propósito: no se recorre la cadena,
+    // porque lo único que autoriza aquí es lo que se emitió sobre lo que se está escalando.
+    const own = resolveOwnCuration(insight.feedback);
+    const ownCuration = own
+      ? {
+          type: own.type,
+          comment: own.comment,
+          at: own.at,
+          origin: 'OWN' as const,
+          curatedVersionId: insight.id,
+          disputed: false,
+        }
+      : null;
+
+    if (!authorizesEscalation(ownCuration)) {
+      throw new ConflictException(
+        'Escalar exige curación humana explícita sobre esta versión del Insight. Si una ' +
+          'persona validó una versión anterior, esa validación no se traslada: la ' +
+          'afirmación ha cambiado desde entonces y debe confirmarse de nuevo',
       );
     }
 

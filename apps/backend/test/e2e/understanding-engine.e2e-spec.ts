@@ -741,6 +741,12 @@ describe('Understanding Engine (E2E)', () => {
       const insight = (await as(tenant.owner, tenant).get('/insights')).body
         .data[0];
 
+      // 7.1: escalar exige curación PROPIA sobre esta versión.
+      await as(tenant.owner, tenant)
+        .post(`/insights/${insight.id}/curate`)
+        .send({ type: 'CONFIRMATION' })
+        .expect(201);
+
       const escalated = await as(tenant.owner, tenant)
         .post(`/insights/${insight.id}/escalate`)
         .send(contract)

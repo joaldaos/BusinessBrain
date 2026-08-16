@@ -611,6 +611,14 @@ describe('Understanding Engine (integración)', () => {
         grantedById: org.userId,
       });
 
+      // 7.1: escalar exige curación PROPIA sobre esta versión.
+      await curator.curate({
+        organizationId: org.orgId,
+        insightId: insight.id,
+        actorUserId: org.userId,
+        type: InsightFeedbackType.CONFIRMATION,
+      });
+
       const recommendation = await curator.escalateToRecommendation({
         organizationId: org.orgId,
         actorUserId: org.userId,

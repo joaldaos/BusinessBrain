@@ -13,6 +13,7 @@ import { InsightScopeService } from './application/insight-scope.service';
 import { ManualTriggerAdmissionService } from './application/manual-trigger-admission.service';
 import { AnalysisRunsService } from './application/analysis-runs.service';
 import { BeliefHistoryService } from './application/belief-history.service';
+import { SubjectIdentityService } from './application/subject-identity.service';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { LlmModule } from '../llm/llm.module';
 import { BusinessObjectivesController } from './api/business-objectives.controller';
@@ -74,6 +75,7 @@ import {
     ManualTriggerAdmissionService,
     AnalysisRunsService,
     BeliefHistoryService,
+    SubjectIdentityService,
   ],
   exports: [
     TriggerAnalysisRunUseCase,

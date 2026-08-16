@@ -75,10 +75,14 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
     const floor = Number(signal.facts.floor ?? 0);
 
     return {
-      // Identidad de sujeto (§3.4): describe el ASUNTO, no la evidencia concreta ni el
-      // momento. Dos ejecuciones que observen el mismo decaimiento del mismo documento
-      // producen la misma identidad, y por eso no duplican el Insight.
-      subjectIdentity: `confidence-decay:knowledge-item:${signal.subjectId}`,
+      // Referente y aspecto (§3.4, 7.2): de QUÉ se habla y qué dimensión suya se observa.
+      // Antes esta estrategia componía la cadena entera anteponiendo el nombre de su propia
+      // regla, con lo que ninguna otra estrategia podía llegar jamás al mismo asunto.
+      subjectProposal: {
+        referentType: 'knowledge-item',
+        referentId: signal.subjectId,
+        aspect: 'confianza',
+      },
       type: InsightType.ANOMALY,
       summary:
         `La confianza de "${title}" cayó a ${score.toFixed(2)}, por debajo del umbral ` +
@@ -107,7 +111,11 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
     const affected = Number(signal.facts.affectedKnowledgeItems ?? 0);
 
     return {
-      subjectIdentity: `source-disconnected:knowledge-source:${signal.subjectId}`,
+      subjectProposal: {
+        referentType: 'knowledge-source',
+        referentId: signal.subjectId,
+        aspect: 'disponibilidad',
+      },
       type: InsightType.ANOMALY,
       summary:
         `La fuente "${name}" está en estado ${this.text(signal.facts.status, 'desconocido')} y ha dejado de ` +
@@ -136,7 +144,11 @@ export class KnowledgeSignalStrategy implements ReasoningStrategyPort {
     const count = Number(signal.facts.candidateCount ?? 0);
 
     return {
-      subjectIdentity: `canonicalization-unresolved:canonical-entity:${signal.subjectId}`,
+      subjectProposal: {
+        referentType: 'canonical-entity',
+        referentId: signal.subjectId,
+        aspect: 'coherencia',
+      },
       type: InsightType.ANOMALY,
       summary:
         `${count} documentos describen el mismo hecho sin que el sistema pueda determinar ` +

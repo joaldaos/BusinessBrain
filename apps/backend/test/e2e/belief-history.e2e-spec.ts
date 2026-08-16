@@ -39,11 +39,17 @@ import {
  * Todo lo demás es la aplicación real: guards, controladores, transacciones y Postgres.
  */
 
-/** Sujeto que la estrategia sustituta reclamará. Se fija por test. */
-const target: {
-  subjectIdentity: string | null;
-  evidenceItemId: string | null;
-} = { subjectIdentity: null, evidenceItemId: null };
+/**
+ * Referente que la estrategia sustituta reclamará, y con qué evidencia. Se fija por test.
+ *
+ * Nótese que ya NO se copia la cadena de identidad de otro Insight: se nombra el mismo
+ * documento y la misma dimensión, y el dominio acuña la identidad. Es exactamente lo que
+ * hace posible la corroboración entre estrategias distintas (§9).
+ */
+const target: { referentId: string | null; evidenceItemId: string | null } = {
+  referentId: null,
+  evidenceItemId: null,
+};
 
 /**
  * Estrategia independiente y determinista: llega al MISMO asunto desde OTRA evidencia.
@@ -59,10 +65,14 @@ const independentStrategy = {
   producibleTypes: [InsightType.ANOMALY],
   generate: (): Promise<InsightCandidate[]> =>
     Promise.resolve(
-      target.subjectIdentity && target.evidenceItemId
+      target.referentId && target.evidenceItemId
         ? [
             {
-              subjectIdentity: target.subjectIdentity,
+              subjectProposal: {
+                referentType: 'knowledge-item' as const,
+                referentId: target.referentId,
+                aspect: 'confianza' as const,
+              },
               type: InsightType.ANOMALY,
               summary: 'Una segunda fuente confirma la misma anomalía.',
               evidence: [
@@ -95,7 +105,7 @@ describe('Memoria de la creencia (E2E)', () => {
   });
 
   beforeEach(async () => {
-    target.subjectIdentity = null;
+    target.referentId = null;
     target.evidenceItemId = null;
     tenant = await createTenant('belief');
   });
@@ -191,7 +201,10 @@ describe('Memoria de la creencia (E2E)', () => {
     const subjectIdentity = (
       await prisma.insight.findFirstOrThrow({ where: { id: firstVersion.id } })
     ).subjectIdentity;
-    target.subjectIdentity = subjectIdentity;
+    // La identidad la acuñó el dominio a partir del referente: se comprueba que es la
+    // canónica, no una cadena compuesta por la estrategia.
+    expect(subjectIdentity).toBe(`knowledge-item:${original.id}#confianza`);
+    target.referentId = original.id;
     target.evidenceItemId = corroborating.id;
 
     // 4. Segundo análisis: la creencia se mueve.
@@ -291,9 +304,12 @@ describe('Memoria de la creencia (E2E)', () => {
       collectionId: collection.id,
       confidenceScore: 0.9,
     });
-    target.subjectIdentity = (
-      await prisma.insight.findFirstOrThrow({ where: { id: primera.id } })
-    ).subjectIdentity;
+    target.referentId = (
+      await prisma.insightEvidence.findFirstOrThrow({
+        where: { insightId: primera.id },
+        select: { knowledgeItemId: true },
+      })
+    ).knowledgeItemId;
     target.evidenceItemId = corroborating.id;
     await as(tenant.owner, tenant).post('/analysis-runs').send({}).expect(201);
 

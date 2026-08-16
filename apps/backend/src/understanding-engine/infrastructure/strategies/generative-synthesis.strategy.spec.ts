@@ -52,6 +52,8 @@ describe('GenerativeSynthesisStrategy (§6, generativa)', () => {
 
   const finding = (overrides: Record<string, unknown> = {}) => ({
     subject: 'retrasos-entrega-proveedor',
+    // Dimensión observada. Entra en la identidad; el texto de `subject` no.
+    aspect: 'coherencia',
     type: 'PATTERN',
     summary: 'Varios documentos mencionan retrasos del mismo proveedor',
     reasoning:
@@ -198,14 +200,43 @@ describe('GenerativeSynthesisStrategy (§6, generativa)', () => {
       expect(await run()).toEqual([]);
     });
 
-    it('la identidad de sujeto describe el ASUNTO, no el documento ni el momento (§3.4)', async () => {
-      complete.mockResolvedValue({ content: JSON.stringify([finding()]) });
+    it('la identidad se deriva de lo que CITA, nunca de la prosa del modelo (§3.4, 7.2)', async () => {
+      complete.mockResolvedValue({
+        // Cita fragmentos de UN solo documento: puede derivar el referente con certeza.
+        content: JSON.stringify([finding({ chunkIds: ['c1'] })]),
+      });
 
       const [candidate] = await run();
-      expect(candidate.subjectIdentity).toBe(
-        'generative-synthesis:retrasos-entrega-proveedor',
-      );
-      expect(candidate.subjectIdentity).not.toContain('c1');
+
+      // Antes era `generative-synthesis:<texto del modelo>`: una cadena que no es estable
+      // entre ejecuciones y que ninguna otra estrategia podía alcanzar.
+      expect(candidate.subjectProposal).toEqual({
+        referentType: 'knowledge-item',
+        referentId: 'item-c1',
+        aspect: 'coherencia',
+      });
+    });
+
+    it('SE ABSTIENE cuando su razonamiento cruza varios documentos', async () => {
+      // No puede derivar un referente único con certeza. Elegir uno sería fusionar por
+      // aproximación, y una supersesión falsa no se recupera (§3.4).
+      complete.mockResolvedValue({
+        content: JSON.stringify([finding({ chunkIds: ['c1', 'c2'] })]),
+      });
+
+      const [candidate] = await run();
+      expect(candidate.subjectProposal).toEqual({ novel: true });
+    });
+
+    it('SE ABSTIENE si el aspecto declarado no está en el catálogo', async () => {
+      complete.mockResolvedValue({
+        content: JSON.stringify([
+          finding({ chunkIds: ['c1'], aspect: 'lo-que-al-modelo-le-parezca' }),
+        ]),
+      });
+
+      const [candidate] = await run();
+      expect(candidate.subjectProposal).toEqual({ novel: true });
     });
   });
 });

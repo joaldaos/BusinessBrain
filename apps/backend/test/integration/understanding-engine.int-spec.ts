@@ -27,6 +27,7 @@ import {
   prisma,
   type TestOrg,
   insightScope,
+  subjectIdentity,
 } from './fixtures';
 
 /**
@@ -79,6 +80,7 @@ describe('Understanding Engine (integración)', () => {
       objectives,
       noGenerative,
       auditService(db),
+      subjectIdentity(db),
     );
   });
 
@@ -151,8 +153,10 @@ describe('Understanding Engine (integración)', () => {
       });
 
       expect(insight.type).toBe(InsightType.ANOMALY);
+      // Identidad CANÓNICA (7.2): el referente y la dimensión observada, sin la clave de
+      // la estrategia delante. Es lo que permite que otro mecanismo llegue al mismo asunto.
       expect(insight.subjectIdentity).toBe(
-        `confidence-decay:knowledge-item:${item.id}`,
+        `knowledge-item:${item.id}#confianza`,
       );
       // Confianza compuesta: cruda 1 × fiabilidad 0.9 de la estrategia simbólica (§9).
       expect(insight.confidence).toBeCloseTo(0.9, 4);
@@ -248,7 +252,12 @@ describe('Understanding Engine (integración)', () => {
         generate: () =>
           Promise.resolve([
             {
-              subjectIdentity: before.subjectIdentity,
+              // Nombra el MISMO referente y la MISMA dimensión: no copia una cadena.
+              subjectProposal: {
+                referentType: 'knowledge-item' as const,
+                referentId: item.id,
+                aspect: 'confianza' as const,
+              },
               type: InsightType.ANOMALY,
               summary: 'Mismo asunto, otra vía',
               evidence: [
@@ -271,6 +280,7 @@ describe('Understanding Engine (integración)', () => {
         objectives,
         independent,
         auditService(db),
+        subjectIdentity(db),
       );
       await withIndependent.execute({ organizationId: org.orgId });
 
@@ -298,7 +308,7 @@ describe('Understanding Engine (integración)', () => {
     });
 
     it('una estrategia que discrepa sobre la naturaleza del asunto BAJA la confianza', async () => {
-      await createKnowledgeItem(org, { confidenceScore: 0.1 });
+      const decayed = await createKnowledgeItem(org, { confidenceScore: 0.1 });
       await trigger.execute({ organizationId: org.orgId });
       const before = await prisma.insight.findFirstOrThrow({
         where: { organizationId: org.orgId },
@@ -316,7 +326,11 @@ describe('Understanding Engine (integración)', () => {
         generate: () =>
           Promise.resolve([
             {
-              subjectIdentity: before.subjectIdentity,
+              subjectProposal: {
+                referentType: 'knowledge-item' as const,
+                referentId: decayed.id,
+                aspect: 'confianza' as const,
+              },
               // Afirma que es un patrón sostenido, no una desviación puntual.
               type: InsightType.PATTERN,
               summary: 'Discrepa sobre la naturaleza del hallazgo',
@@ -340,6 +354,7 @@ describe('Understanding Engine (integración)', () => {
         objectives,
         dissenting,
         auditService(db),
+        subjectIdentity(db),
       );
       await withDissent.execute({ organizationId: org.orgId });
 

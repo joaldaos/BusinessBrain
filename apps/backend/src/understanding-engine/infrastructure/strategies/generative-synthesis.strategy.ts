@@ -13,6 +13,11 @@ import type {
   ReasoningContext,
   ReasoningStrategyPort,
 } from '../../domain/ports/reasoning-strategy.port';
+import {
+  deriveSingleReferent,
+  type SubjectAspect,
+  type SubjectProposal,
+} from '../../domain/subject-identity';
 
 /**
  * Estrategia GENERATIVA — UNDERSTANDING_ENGINE_DESIGN.md §6, subfase 3.3.
@@ -44,6 +49,8 @@ const MAX_CANDIDATES_PER_RUN = 5;
 
 interface GenerativeFinding {
   subject: string;
+  /** Dimensión observada. Entra en la identidad de sujeto; el texto libre no. */
+  aspect: string;
   type: string;
   summary: string;
   reasoning: string;
@@ -147,11 +154,13 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
       'patrones recurrentes, anomalías, riesgos u oportunidades.',
       '',
       'Responde ÚNICAMENTE con un array JSON, sin texto adicional ni bloques de código.',
-      'Cada elemento: {"subject": string, "type": string, "summary": string,',
+      'Cada elemento: {"subject": string, "aspect": string, "type": string, "summary": string,',
       '  "reasoning": string, "chunkIds": string[], "confidence": number, "degradesTo": string}',
       '',
-      '- "subject": identificador estable y corto del ASUNTO, en kebab-case. Debe describir el',
-      '  tema, NUNCA el momento ni el documento concreto. Ejemplo: "retrasos-entrega-proveedor".',
+      '- "subject": etiqueta legible y corta del hallazgo, en kebab-case. Es descriptiva y NO',
+      '  identifica el asunto: la identidad la deriva el sistema de los fragmentos que cites.',
+      '- "aspect": qué dimensión del conocimiento observas. Exactamente uno de:',
+      '  confianza | coherencia | vigencia | disponibilidad | cobertura.',
       '- "type": PATTERN | ANOMALY | RISK | OPPORTUNITY.',
       '- "reasoning": explica el razonamiento paso a paso. Es OBLIGATORIO y se audita.',
       '- "chunkIds": los id exactos de los fragmentos que sostienen el hallazgo. Solo de la lista.',
@@ -192,6 +201,56 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
    * Convierte un hallazgo del modelo en candidato, validando todo lo que el modelo pudo
    * alucinar: el tipo, los fragmentos citados y la declaración de degradación.
    */
+  /**
+   * Identidad de sujeto que esta estrategia reconoce — §3.4, §13, 7.2.
+   *
+   * **Se deriva de lo que el hallazgo CITA, nunca de la prosa que produce.** Antes se
+   * componía con el texto del modelo (`generative-synthesis:<subject>`): una cadena que no es
+   * estable entre ejecuciones —el mismo asunto redactado distinto era otro sujeto, y dos
+   * asuntos redactados igual eran el mismo— y que además llevaba delante el nombre de esta
+   * estrategia, con lo que ninguna otra podía llegar nunca al mismo asunto.
+   *
+   * La regla es la abstención: si los fragmentos citados pertenecen a UN solo
+   * `KnowledgeItem`, ése es el referente. Si el razonamiento cruza varios, esta estrategia no
+   * puede derivar un referente único con certeza y se abstiene — §13 lo exige, y §3.4 fija la
+   * asimetría: un duplicado se recupera con curación humana, una supersesión falsa no.
+   */
+  private proposeSubject(
+    finding: GenerativeFinding,
+    evidence: ProposedEvidence[],
+    chunks: RetrievedKnowledge[],
+  ): SubjectProposal {
+    const aspect = this.parseAspect(finding.aspect);
+    if (!aspect) return { novel: true };
+
+    const itemOf = new Map(chunks.map((c) => [c.chunkId, c.knowledgeItemId]));
+    const referent = deriveSingleReferent(
+      evidence.map((piece) => itemOf.get(piece.refId) ?? ''),
+    );
+    if (!referent) return { novel: true };
+
+    return {
+      referentType: 'knowledge-item',
+      referentId: referent.referentId,
+      aspect,
+    };
+  }
+
+  /** Catálogo cerrado: lo que el modelo diga fuera de él no acuña nada. */
+  private parseAspect(raw: unknown): SubjectAspect | null {
+    const aspects: SubjectAspect[] = [
+      'confianza',
+      'coherencia',
+      'vigencia',
+      'disponibilidad',
+      'cobertura',
+    ];
+    return typeof raw === 'string' &&
+      (aspects as string[]).includes(raw.trim().toLowerCase())
+      ? (raw.trim().toLowerCase() as SubjectAspect)
+      : null;
+  }
+
   private toCandidate(
     finding: GenerativeFinding,
     chunks: RetrievedKnowledge[],
@@ -235,6 +294,10 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
       return null;
     }
 
+    // La identidad se deriva de lo CITADO, no de la prosa. Se calcula aquí porque necesita
+    // la evidencia ya validada contra los fragmentos reales.
+    const subjectProposal = this.proposeSubject(finding, evidence, chunks);
+
     const degradesTo = this.parseDegradation(finding.degradesTo);
     const requiresDegradation =
       type === InsightType.RISK || type === InsightType.OPPORTUNITY;
@@ -252,10 +315,17 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
         InsightType.ANOMALY,
         evidence,
         undefined,
+        subjectProposal,
       );
     }
 
-    return this.buildCandidate(finding, type, evidence, degradesTo);
+    return this.buildCandidate(
+      finding,
+      type,
+      evidence,
+      degradesTo,
+      subjectProposal,
+    );
   }
 
   private buildCandidate(
@@ -263,6 +333,7 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
     type: InsightType,
     evidence: ProposedEvidence[],
     degradesTo: Extract<InsightType, 'PATTERN' | 'ANOMALY'> | undefined,
+    subjectProposal: SubjectProposal,
   ): InsightCandidate {
     const rawConfidence =
       typeof finding.confidence === 'number'
@@ -270,7 +341,7 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
         : 0.5;
 
     return {
-      subjectIdentity: `generative-synthesis:${finding.subject}`,
+      subjectProposal,
       type,
       summary: String(finding.summary ?? finding.subject),
       evidence,

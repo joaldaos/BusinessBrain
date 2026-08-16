@@ -24,6 +24,7 @@ import { KnowledgeSignalStrategy } from '../infrastructure/strategies/knowledge-
 import { BusinessObjectiveService } from './business-objective.service';
 import { GenerativeSynthesisStrategy } from '../infrastructure/strategies/generative-synthesis.strategy';
 import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
+import { SubjectIdentityService } from './subject-identity.service';
 import {
   resolveInsightConflict,
   type ConflictParty,
@@ -93,6 +94,7 @@ export class TriggerAnalysisRunUseCase {
     private readonly businessObjectives: BusinessObjectiveService,
     private readonly generativeStrategy: GenerativeSynthesisStrategy,
     private readonly audit: AuditService,
+    private readonly subjectIdentity: SubjectIdentityService,
   ) {}
 
   /**
@@ -177,10 +179,19 @@ export class TriggerAnalysisRunUseCase {
       let alreadyKnown = 0;
 
       for (const { candidate, strategy } of candidates) {
+        // El DOMINIO resuelve la identidad; la estrategia solo la propuso (§13, 7.2). Toda
+        // propuesta inválida, de un referente inexistente o de otra organización acaba en un
+        // sujeto nuevo, jamás aproximada a uno existente (§3.4).
+        const subject = await this.subjectIdentity.resolve({
+          organizationId: params.organizationId,
+          proposal: candidate.subjectProposal,
+        });
+
         const persisted = await this.persistCandidate({
           organizationId: params.organizationId,
           analysisRunId: run.id,
           candidate,
+          subjectIdentity: subject.value,
           strategy,
           confirmedObjectiveIds: confirmedObjectives.map((o) => o.id),
         });
@@ -273,6 +284,8 @@ export class TriggerAnalysisRunUseCase {
     organizationId: string;
     analysisRunId: string;
     candidate: InsightCandidate;
+    /** Ya resuelta por el dominio. La estrategia no la acuña (§13). */
+    subjectIdentity: string;
     strategy: ReasoningStrategyPort;
     confirmedObjectiveIds: string[];
   }): Promise<boolean> {
@@ -306,7 +319,7 @@ export class TriggerAnalysisRunUseCase {
           data: {
             organizationId: params.organizationId,
             analysisRunId: params.analysisRunId,
-            subjectIdentity: candidate.subjectIdentity,
+            subjectIdentity: params.subjectIdentity,
             type: gate.resolvedType,
             summary: candidate.summary,
             status: InsightStatus.ACTIVE,
@@ -367,6 +380,7 @@ export class TriggerAnalysisRunUseCase {
           organizationId: params.organizationId,
           analysisRunId: params.analysisRunId,
           candidate,
+          subjectIdentity: params.subjectIdentity,
           strategy,
           resolvedType: gate.resolvedType,
           confidence,
@@ -394,6 +408,7 @@ export class TriggerAnalysisRunUseCase {
     /** Ejecución que produjo la versión sucesora: es su ancla temporal (Fase 7). */
     analysisRunId: string;
     candidate: InsightCandidate;
+    subjectIdentity: string;
     strategy: ReasoningStrategyPort;
     resolvedType: InsightType;
     confidence: number;
@@ -401,7 +416,7 @@ export class TriggerAnalysisRunUseCase {
     const existing = await this.prisma.insight.findFirst({
       where: {
         organizationId: params.organizationId,
-        subjectIdentity: params.candidate.subjectIdentity,
+        subjectIdentity: params.subjectIdentity,
         status: InsightStatus.ACTIVE,
       },
       select: {
@@ -467,7 +482,7 @@ export class TriggerAnalysisRunUseCase {
         // Otra reconciliación concurrente ya versionó este asunto. La cadena queda con una
         // sola sucesora, que es la garantía que importa. No es un fallo de la ejecución.
         this.logger.warn(
-          `Reconciliación sobre "${params.candidate.subjectIdentity}": ${error.message}`,
+          `Reconciliación sobre "${params.subjectIdentity}": ${error.message}`,
         );
         return;
       }
@@ -482,7 +497,7 @@ export class TriggerAnalysisRunUseCase {
       targetType: AUDIT_TARGET_TYPES.INSIGHT,
       targetId: successorId,
       metadata: {
-        subjectIdentity: params.candidate.subjectIdentity,
+        subjectIdentity: params.subjectIdentity,
         supersededInsightId: existing.id,
         outcome: resolution.outcome,
         previousConfidence: existing.confidence,
@@ -493,7 +508,7 @@ export class TriggerAnalysisRunUseCase {
     });
 
     this.logger.log(
-      `Reconciliación sobre "${params.candidate.subjectIdentity}": ${resolution.outcome} — ` +
+      `Reconciliación sobre "${params.subjectIdentity}": ${resolution.outcome} — ` +
         `${resolution.rationale}. Versión ${existing.id} → ${successorId}`,
     );
   }

@@ -63,16 +63,18 @@ describe('KnowledgeSignalStrategy (§6, simbólica)', () => {
     expect(candidate.degradesTo).toBeUndefined();
   });
 
-  describe('identidad de sujeto (§3.4)', () => {
-    it('describe el ASUNTO, no el momento ni la evidencia concreta', async () => {
+  describe('identidad de sujeto: PROPUESTA, no acuñada (§3.4, §13)', () => {
+    it('propone REFERENTE y ASPECTO, nunca una cadena ya compuesta', async () => {
       const [candidate] = await run([signal()]);
 
-      expect(candidate.subjectIdentity).toBe(
-        'confidence-decay:knowledge-item:item-1',
-      );
-      // No contiene marcas temporales ni valores que cambien entre observaciones.
-      expect(candidate.subjectIdentity).not.toContain('2026');
-      expect(candidate.subjectIdentity).not.toContain('0.15');
+      // Antes esta estrategia componía `confidence-decay:knowledge-item:item-1`,
+      // anteponiendo el nombre de su propia regla: ninguna otra estrategia podía llegar
+      // jamás al mismo asunto. Ahora describe de QUÉ habla y el dominio resuelve.
+      expect(candidate.subjectProposal).toEqual({
+        referentType: 'knowledge-item',
+        referentId: 'item-1',
+        aspect: 'confianza',
+      });
     });
 
     it('es ESTABLE entre observaciones distintas del mismo asunto', async () => {
@@ -89,17 +91,17 @@ describe('KnowledgeSignalStrategy (§6, simbólica)', () => {
         }),
       ]);
 
-      expect(segunda.subjectIdentity).toBe(primera.subjectIdentity);
+      expect(segunda.subjectProposal).toEqual(primera.subjectProposal);
     });
 
     it('distingue asuntos distintos aunque sean del mismo tipo', async () => {
       const [a] = await run([signal({ subjectId: 'item-1' })]);
       const [b] = await run([signal({ subjectId: 'item-2' })]);
 
-      expect(a.subjectIdentity).not.toBe(b.subjectIdentity);
+      expect(a.subjectProposal).not.toEqual(b.subjectProposal);
     });
 
-    it('distingue el mismo sujeto observado por señales de naturaleza distinta', async () => {
+    it('el mismo referente observado en OTRA dimensión es otro asunto', async () => {
       const [decay] = await run([signal({ subjectId: 'x' })]);
       const [disconnected] = await run([
         signal({
@@ -109,7 +111,17 @@ describe('KnowledgeSignalStrategy (§6, simbólica)', () => {
         }),
       ]);
 
-      expect(decay.subjectIdentity).not.toBe(disconnected.subjectIdentity);
+      // Mismo identificador, referente y aspecto distintos: el aspecto es lo que impide
+      // que todo lo que se afirme sobre algo colapse en un solo sujeto.
+      expect(decay.subjectProposal).not.toEqual(disconnected.subjectProposal);
+    });
+
+    it('ninguna propuesta contiene el nombre de la estrategia ni el tipo del hallazgo', async () => {
+      const [candidate] = await run([signal()]);
+
+      const serializada = JSON.stringify(candidate.subjectProposal);
+      expect(serializada).not.toContain('confidence-decay');
+      expect(serializada).not.toContain('ANOMALY');
     });
   });
 

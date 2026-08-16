@@ -1,4 +1,5 @@
 import { AuditService } from '../../src/audit/audit.service';
+import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import {
@@ -47,6 +48,18 @@ export function insightScope(db: unknown): InsightScopeService {
   return new InsightScopeService(
     prismaService,
     new CollectionAccessService(prismaService, auditService(prismaService)),
+  );
+}
+
+/**
+ * `SubjectIdentityService` real sobre el Postgres de pruebas.
+ *
+ * Se construye de verdad: comprueba contra la base de datos que el referente EXISTE y es del
+ * tenant, y doblarlo dejaría sin verificar justamente esa garantía.
+ */
+export function subjectIdentity(db: unknown): SubjectIdentityService {
+  return new SubjectIdentityService(
+    db as ConstructorParameters<typeof SubjectIdentityService>[0],
   );
 }
 

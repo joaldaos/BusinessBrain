@@ -17,6 +17,7 @@ import { TriggerAnalysisRunUseCase } from '../../src/understanding-engine/applic
 import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/infrastructure/prisma-knowledge-signals.adapter';
 import { KnowledgeSignalStrategy } from '../../src/understanding-engine/infrastructure/strategies/knowledge-signal.strategy';
 import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine/infrastructure/strategies/generative-synthesis.strategy';
+import { subjectIdentityOf } from '../../src/understanding-engine/domain/subject-identity';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -28,6 +29,7 @@ import {
   destroyTestOrg,
   insightScope,
   prisma,
+  subjectIdentity,
   type TestOrg,
 } from './fixtures';
 
@@ -568,6 +570,7 @@ describe('Memoria de la creencia (integración)', () => {
           new BusinessObjectiveService(db, auditService(db)),
           generativa,
           auditService(db),
+          subjectIdentity(db),
         ).execute({ organizationId: org.orgId });
 
       await analizar(sinGenerativa);
@@ -588,7 +591,11 @@ describe('Memoria de la creencia (integración)', () => {
         generate: () =>
           Promise.resolve([
             {
-              subjectIdentity: v1.subjectIdentity,
+              subjectProposal: {
+                referentType: 'knowledge-item' as const,
+                referentId: item.id,
+                aspect: 'confianza' as const,
+              },
               type: InsightType.PATTERN,
               summary: 'Discrepa sobre la naturaleza del hallazgo',
               evidence: [
@@ -737,8 +744,15 @@ describe('Memoria de la creencia (integración)', () => {
     it('DOS reconciliaciones simultáneas producen UNA sola sucesora y ninguna falla', async () => {
       // El criterio de §12: la corrección bajo concurrencia la dan la unicidad y la
       // reconciliación, NO un cerrojo. Nada aquí serializa el dominio.
-      const subject = 'asunto-en-disputa';
       const base = await doc('Base');
+      // Identidad CANÓNICA: la que el dominio acuñará al resolver la propuesta de la
+      // estrategia. Sembrar una cadena arbitraria haría que no reconciliara nunca y el test
+      // pasaría por el motivo equivocado.
+      const subject = subjectIdentityOf({
+        referentType: 'knowledge-item',
+        referentId: base.id,
+        aspect: 'confianza',
+      });
       const v1 = await createInsight(org, {
         subjectIdentity: subject,
         confidence: 0.5,
@@ -755,7 +769,11 @@ describe('Memoria de la creencia (integración)', () => {
         generate: () =>
           Promise.resolve([
             {
-              subjectIdentity: subject,
+              subjectProposal: {
+                referentType: 'knowledge-item' as const,
+                referentId: base.id,
+                aspect: 'confianza' as const,
+              },
               type: InsightType.ANOMALY,
               summary: 'Mismo asunto, otra vía',
               evidence: [
@@ -778,6 +796,7 @@ describe('Memoria de la creencia (integración)', () => {
         new BusinessObjectiveService(db, auditService(db)),
         independiente,
         auditService(db),
+        subjectIdentity(db),
       );
 
       const runs = await Promise.all([

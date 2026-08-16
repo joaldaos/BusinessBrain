@@ -8,6 +8,7 @@
  */
 import { InsightType } from '@prisma/client';
 import { KnowledgeSignal } from './knowledge-signals.port';
+import type { SubjectProposal } from '../subject-identity';
 
 /**
  * Categoría del mecanismo. El dominio no distingue entre ellas más allá de su factor de
@@ -36,18 +37,22 @@ export interface ProposedEvidence {
 
 export interface InsightCandidate {
   /**
-   * Identidad de sujeto (§3.4): de qué asunto trata. Declaración epistémica de continuidad
-   * entre afirmaciones, nunca una detección de la realidad.
+   * Identidad de sujeto que la estrategia RECONOCE (§3.4, §13). Una PROPUESTA, no la
+   * identidad: la estrategia propone y el dominio resuelve (`SubjectIdentityService`).
    *
-   * ANTE DUDA, ACUÑAR UNA IDENTIDAD NUEVA — jamás asignar a una existente por aproximación.
-   * Fusionar por error produce una supersesión falsa (un Insight reemplazando en silencio a
-   * otro que no le corresponde); separar por error solo produce duplicados, recuperables
-   * mediante curación humana.
+   * Se declara como referente + aspecto —de qué se habla y qué dimensión suya se observa—,
+   * nunca como una cadena ya compuesta: si la estrategia compusiera la cadena final estaría
+   * acuñando identidad de dominio por su cuenta, que es justo lo que §13 prohíbe.
+   *
+   * ANTE DUDA, ABSTENERSE (`{ novel: true }`) — jamás asignar a un referente por
+   * aproximación. Fusionar por error produce una supersesión falsa (un Insight reemplazando
+   * en silencio a otro que no le corresponde); separar por error solo produce duplicados,
+   * recuperables mediante curación humana.
    *
    * El tipo NUNCA forma parte de la identidad: un mismo sujeto pasa de ANOMALY a RISK
    * cuando aparece un BusinessObjective confirmado que lo hace relevante (§8).
    */
-  subjectIdentity: string;
+  subjectProposal: SubjectProposal;
   type: InsightType;
   summary: string;
   evidence: ProposedEvidence[];

@@ -1308,7 +1308,7 @@ frontend/
 
 | Deuda | Riesgo | Estado |
 |---|---|---|
-| **El token de refresco vive en `localStorage`** (`apps/web/src/api/client.ts`). Un XSS podría leerlo y mantener la sesión indefinidamente. La solución es una **cookie `httpOnly` + `SameSite`** emitida por `AuthModule`, con protección CSRF para las escrituras — es un cambio de BACKEND, no de la interfaz | Alto si aparece cualquier XSS | 🔴 **Prioritaria**. Anotada al construir la interfaz (fase 6.5), no resuelta |
+| ~~El token de refresco vive en `localStorage`~~ | ~~Alto~~ | ✅ **Cerrada**. Viaja en cookie `HttpOnly` + `SameSite=Strict`, con doble envío CSRF en las dos rutas autenticadas por cookie. `/auth/refresh` y `/auth/logout` ya NO aceptan el token en el cuerpo: dejar esa puerta abierta habría anulado el cambio |
 | `ALLOW_LOOPBACK_FETCH` desactiva la comprobación de destino del conector web para poder probarlo contra un servidor local. Está condicionada además a `NODE_ENV !== 'production'`, así que una variable mal puesta en un despliegue real no abre la red interna | Bajo — doble condición | 🟡 Aceptada conscientemente |
 | Sin rate limiting, sin RLS y sin revocación de access tokens ya emitidos (ventana máx. 15 min) | Medio | 🟡 Fase 10 (hardening) |
 

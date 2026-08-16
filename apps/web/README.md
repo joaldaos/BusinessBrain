@@ -27,7 +27,13 @@ El backend calcula con cuidado tres condiciones que aquí deben verse siempre:
 - **Recuentos fuera de alcance**: versiones y cambios que el lector no puede ver se dicen como
   número. Omitirlos presentaría una historia incompleta como si fuera completa.
 
-## Deuda consciente
+## Dónde vive la sesión
 
-El token de acceso vive en memoria y el de refresco en `localStorage`. No es lo ideal —un XSS
-podría leerlo—, pero el backend no emite cookies `httpOnly` todavía. El cambio es de backend.
+El token de acceso, en memoria. El de refresco **no está en este código**: viaja en una cookie
+`HttpOnly` que el navegador adjunta solo y que ningún script puede leer. Un XSS sigue pudiendo
+actuar mientras la pestaña está abierta, pero ya no puede llevarse la sesión de larga vida.
+
+Como una cookie viaja sola en cualquier petición, las dos rutas autenticadas por ella
+—`/auth/refresh` y `/auth/logout`— exigen repetir un testigo CSRF en la cabecera
+`x-csrf-token`. El resto de la API se autentica con `Authorization`, que el navegador nunca
+adjunta por su cuenta, y no lo necesita.

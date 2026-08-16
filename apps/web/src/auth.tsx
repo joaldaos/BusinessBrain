@@ -92,12 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session.refreshToken) {
+    if (!session.maybeAuthenticated) {
       setLoading(false);
       return;
     }
-    // Hay token de refresco pero no de acceso (recarga de página): la primera llamada
-    // devolverá 401 y el cliente lo renovará solo.
+    // Tras una recarga no hay token de acceso en memoria, pero el navegador conserva la
+    // cookie del refresco: la primera llamada dará 401 y el cliente la renovará sola.
     loadUser()
       .catch(() => session.clear())
       .finally(() => setLoading(false));
@@ -107,12 +107,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       const result = await api<{
         accessToken: string;
-        refreshToken: string;
+        csrfToken: string;
       }>('/auth/login', {
         method: 'POST',
         body: { email, password },
         withoutOrganization: true,
       });
+      // La respuesta ya no trae el token de refresco: viaja en una cookie que este código no
+      // puede leer. Lo único que se guarda es el token de acceso y el testigo CSRF.
       session.start(result);
       await loadUser();
     },
@@ -137,16 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    const refreshToken = session.refreshToken;
-    if (refreshToken) {
-      // Se avisa al backend para que invalide el refresco; si falla, la sesión local se
-      // limpia igualmente: dejar al usuario dentro sería peor.
-      void api('/auth/logout', {
-        method: 'POST',
-        body: { refreshToken },
-        withoutOrganization: true,
-      }).catch(() => undefined);
-    }
+    // Cerrar sesión es ahora obligatoriamente cosa del servidor: es quien revoca el token y
+    // quien borra la cookie, porque este código no puede tocarla. Si la llamada falla, la
+    // sesión local se limpia igualmente — dejar a la persona dentro sería peor.
+    void api('/auth/logout', {
+      method: 'POST',
+      withoutOrganization: true,
+      withCsrf: true,
+    }).catch(() => undefined);
+
     session.clear();
     setUser(null);
     setOrganizations([]);

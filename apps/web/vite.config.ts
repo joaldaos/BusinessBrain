@@ -11,5 +11,12 @@ export default defineConfig({
     // detrás de un proxy inverso.
     proxy: { '/api': { target: process.env.BB_API_URL ?? 'http://localhost:3999', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') } },
   },
-  test: { environment: 'jsdom', globals: true, setupFiles: './src/test/setup.ts' },
+  // Los E2E de navegador los ejecuta Playwright, no Vitest: comparten extensión pero no
+  // corredor, y sin excluirlos Vitest intenta cargarlos y falla.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.ts',
+    exclude: ['e2e/**', 'node_modules/**'],
+  },
 });

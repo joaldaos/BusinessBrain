@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
@@ -14,6 +15,10 @@ async function bootstrap() {
     origin: configService.get('frontendUrl', { infer: true }) ?? true,
     credentials: true,
   });
+  // El token de refresco viaja en una cookie `HttpOnly` desde que se cerró la deuda de
+  // seguridad: sin esto, `req.cookies` no existe y no habría forma de leerla.
+  app.use(cookieParser());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

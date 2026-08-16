@@ -1,6 +1,7 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import cookieParser from 'cookie-parser';
 import { PrismaClient, type MembershipRole } from '@businessbrain/database';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
@@ -68,6 +69,11 @@ export async function startTestApp(
   // EXACTAMENTE la misma configuración que `main.ts`. Si aquí divergiera, la suite estaría
   // probando una aplicación que no es la que se despliega — que es justo lo que hace inútil
   // un test de extremo a extremo.
+  // MISMA configuración que `main.ts`. El token de refresco viaja en cookie, así que sin
+  // esto `req.cookies` no existiría y la suite probaría una aplicación que no es la que se
+  // despliega — justo lo que hace inútil un test de extremo a extremo.
+  app.use(cookieParser());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

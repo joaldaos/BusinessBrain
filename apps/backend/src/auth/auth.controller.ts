@@ -3,22 +3,48 @@ import {
   Controller,
   Get,
   Post,
-  Request,
+  Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthService } from './auth.service';
+import { AuthService, type AuthTokens } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
+import { CsrfGuard } from './guards/csrf.guard';
+import {
+  CSRF_COOKIE,
+  REFRESH_COOKIE,
+  generateCsrfToken,
+  readCookie,
+  sessionCookieOptions,
+} from './domain/session-cookies';
 import type { RequestUser } from '../common/types/authenticated-request';
 import type { User } from '@businessbrain/database';
+import type { AppConfig } from '../config/configuration';
 
+/**
+ * Autenticación.
+ *
+ * El token de ACCESO viaja en el cuerpo y vive en memoria de la interfaz: dura quince minutos
+ * y es el que se manda en `Authorization`. El de REFRESCO, que dura mucho más, ya no sale
+ * nunca en una respuesta legible — viaja en una cookie `HttpOnly` que ningún script puede
+ * leer. Ver `domain/session-cookies.ts` para el razonamiento completo.
+ *
+ * Consecuencia deliberada: **`/auth/refresh` y `/auth/logout` ya no aceptan el token en el
+ * cuerpo**. Seguir aceptándolo dejaría abierta exactamente la puerta que este cambio cierra,
+ * y bastaría con que un cliente antiguo la usara para que el token volviera a ser legible.
+ */
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService<AppConfig, true>,
+  ) {}
 
   @Public()
   @Post('register')
@@ -29,26 +55,96 @@ export class AuthController {
   @Public()
   @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Body() _dto: LoginDto, @Request() req: { user: User }) {
+  async login(
+    @Body() _dto: LoginDto,
+    @Req() req: { user: User },
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const tokens = await this.authService.issueTokens(req.user);
-    return { ...tokens, user: this.authService.toPublicUser(req.user) };
+
+    return {
+      accessToken: tokens.accessToken,
+      csrfToken: this.startSession(response, tokens),
+      user: this.authService.toPublicUser(req.user),
+    };
   }
 
+  /**
+   * Renueva la sesión con la cookie que el navegador adjunta.
+   *
+   * `@Public` porque el token de acceso ya ha caducado cuando se llega aquí — autenticar con
+   * él haría el refresco inútil. Quien autentica es la cookie, y `CsrfGuard` es lo que impide
+   * que la provoque un tercero.
+   */
   @Public()
+  @UseGuards(CsrfGuard)
   @Post('refresh')
-  async refresh(@Body() dto: RefreshDto) {
-    return this.authService.refresh(dto.refreshToken);
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const tokens = await this.authService.refresh(
+      readCookie(req, REFRESH_COOKIE) ?? '',
+    );
+
+    return {
+      accessToken: tokens.accessToken,
+      csrfToken: this.startSession(response, tokens),
+    };
   }
 
   @Public()
+  @UseGuards(CsrfGuard)
   @Post('logout')
-  async logout(@Body() dto: RefreshDto) {
-    await this.authService.logout(dto.refreshToken);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const refreshToken = readCookie(req, REFRESH_COOKIE);
+    if (refreshToken) await this.authService.logout(refreshToken);
+
+    // Las cookies se limpian SIEMPRE, aunque no hubiera token o ya estuviera revocado: dejar
+    // al navegador con una cookie muerta haría que cada arranque intentara refrescar contra
+    // algo que no existe.
+    this.clearSession(response);
+
     return { success: true };
   }
 
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return user;
+  }
+
+  /**
+   * Fija las cookies de sesión y devuelve el testigo CSRF.
+   *
+   * El testigo se devuelve además en el cuerpo por comodidad de la interfaz —así no tiene que
+   * leer `document.cookie` tras iniciar sesión— y no es un secreto: su valor está en que
+   * quien ataca desde otro origen no puede leerlo.
+   */
+  private startSession(response: Response, tokens: AuthTokens): string {
+    const csrfToken = generateCsrfToken();
+    const options = sessionCookieOptions({
+      isProduction:
+        this.configService.get('nodeEnv', { infer: true }) === 'production',
+      maxAgeMs: this.authService.refreshTokenLifetimeMs(),
+    });
+
+    response.cookie(REFRESH_COOKIE, tokens.refreshToken, options.refresh);
+    response.cookie(CSRF_COOKIE, csrfToken, options.csrf);
+
+    return csrfToken;
+  }
+
+  private clearSession(response: Response): void {
+    const options = sessionCookieOptions({
+      isProduction:
+        this.configService.get('nodeEnv', { infer: true }) === 'production',
+      maxAgeMs: 0,
+    });
+
+    response.clearCookie(REFRESH_COOKIE, options.refresh);
+    response.clearCookie(CSRF_COOKIE, options.csrf);
   }
 }

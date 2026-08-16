@@ -193,7 +193,26 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/\.pdf$/);
 
-  // ── 13. AUTOMATIZACIÓN que lo encadena todo sin nadie delante ─────────────
+  // ── 13. LA SESIÓN NO ES LEGIBLE POR NINGÚN SCRIPT ─────────────────────────
+  const almacenamiento = await page.evaluate(() => ({
+    local: JSON.stringify(localStorage),
+    // `document.cookie` no ve las cookies `HttpOnly`: es exactamente lo que hace un XSS.
+    cookiesVisibles: document.cookie,
+  }));
+
+  expect(almacenamiento.local).not.toContain('refresh');
+  expect(almacenamiento.cookiesVisibles).not.toContain('bb_refresh');
+  // El testigo CSRF sí es visible, y debe serlo: es la mitad del doble envío.
+  expect(almacenamiento.cookiesVisibles).toContain('bb_csrf');
+
+  // La sesión sobrevive a una recarga completa aunque el token de acceso viva en memoria:
+  // el navegador conserva la cookie y la renueva sola.
+  await page.reload();
+  await expect(
+    page.getByRole('combobox', { name: /organización activa/i }),
+  ).toHaveValue(/.+/);
+
+  // ── 14. AUTOMATIZACIÓN que lo encadena todo sin nadie delante ─────────────
   await page.getByRole('link', { name: 'Automatizaciones', exact: true }).click();
   await page.getByLabel('Nombre').fill('Barrido semanal');
   await page
@@ -211,4 +230,12 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await expect(page.getByText('SUCCESS').first()).toBeVisible({
     timeout: 60_000,
   });
+
+  // ── 15. CERRAR SESIÓN la revoca de verdad ─────────────────────────────────
+  await page.getByRole('button', { name: 'Salir' }).click();
+  await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
+
+  // Y una recarga NO la recupera: el servidor revocó el token y borró la cookie.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
 });

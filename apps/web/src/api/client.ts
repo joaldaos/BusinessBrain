@@ -11,13 +11,17 @@
  *
  * ## Dónde viven los tokens
  *
- * El de acceso, en memoria; el de refresco, en `localStorage`. No es la opción ideal —un XSS
- * podría leerlo—, pero el backend no emite cookies `httpOnly` todavía y la alternativa sería
- * perder la sesión en cada recarga. Queda anotado como deuda consciente, no como descuido: el
- * cambio a cookies de sesión es de backend, no de aquí.
+ * El de acceso, en memoria. **El de refresco no está aquí**: viaja en una cookie `HttpOnly`
+ * que este código no puede leer ni escribir, y el navegador la adjunta solo. Ese es el punto —
+ * un XSS ya no puede llevarse la sesión de larga vida.
+ *
+ * Lo único que esta capa custodia de la sesión es el testigo CSRF, que no es un secreto: su
+ * valor está en que quien ataca desde otro origen no puede leerlo para repetirlo en la
+ * cabecera.
  */
 
-const REFRESH_TOKEN_KEY = 'bb.refreshToken';
+const CSRF_COOKIE = 'bb_csrf';
+const CSRF_HEADER = 'x-csrf-token';
 const ORGANIZATION_KEY = 'bb.organizationId';
 
 /** Toda respuesta 2xx de la API viene envuelta por `TransformResponseInterceptor`. */
@@ -45,27 +49,46 @@ export class ApiError extends Error {
 }
 
 let accessToken: string | null = null;
+let csrfToken: string | null = null;
+
+/** Lee el testigo de su cookie. Tras una recarga es lo único que queda de la sesión. */
+function readCsrfCookie(): string | null {
+  const match = new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`).exec(
+    document.cookie,
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export const session = {
   get accessToken() {
     return accessToken;
   },
-  get refreshToken() {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  get csrfToken() {
+    return csrfToken ?? readCsrfCookie();
+  },
+  /**
+   * ¿Puede haber una sesión que recuperar?
+   *
+   * La cookie del refresco es invisible para este código, así que se pregunta por la del
+   * testigo, que acompaña siempre a la otra. Es solo una pista para no intentar refrescar
+   * cuando es evidente que no hay nada: quien decide de verdad es el servidor.
+   */
+  get maybeAuthenticated() {
+    return readCsrfCookie() !== null;
   },
   get organizationId() {
     return localStorage.getItem(ORGANIZATION_KEY);
   },
-  start(tokens: { accessToken: string; refreshToken: string }) {
+  start(tokens: { accessToken: string; csrfToken?: string }) {
     accessToken = tokens.accessToken;
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    if (tokens.csrfToken) csrfToken = tokens.csrfToken;
   },
   selectOrganization(organizationId: string) {
     localStorage.setItem(ORGANIZATION_KEY, organizationId);
   },
   clear() {
     accessToken = null;
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    csrfToken = null;
     localStorage.removeItem(ORGANIZATION_KEY);
   },
 };
@@ -77,6 +100,8 @@ interface RequestOptions {
   withoutOrganization?: boolean;
   /** Devuelve la respuesta cruda en vez de leerla como JSON (descargas). */
   raw?: boolean;
+  /** Rutas autenticadas POR COOKIE: exigen repetir el testigo CSRF. */
+  withCsrf?: boolean;
 }
 
 function buildHeaders(options: RequestOptions): HeadersInit {
@@ -89,6 +114,13 @@ function buildHeaders(options: RequestOptions): HeadersInit {
   // ninguna ruta lleva el id en el path, esta cabecera es la vía normal.
   if (organizationId && !options.withoutOrganization) {
     headers['x-org-id'] = organizationId;
+  }
+
+  // Doble envío: el mismo valor que lleva la cookie legible. Un sitio de terceros puede
+  // provocar la petición, pero no puede leer la cookie para componer esta cabecera.
+  if (options.withCsrf) {
+    const token = session.csrfToken;
+    if (token) headers[CSRF_HEADER] = token;
   }
 
   return headers;
@@ -116,6 +148,9 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   return fetch(`/api${path}`, {
     method: options.method ?? 'GET',
     headers: buildHeaders(options),
+    // Mismo origen a través del proxy, así que el navegador ya adjuntaría las cookies; se
+    // declara igualmente para que el comportamiento no dependa de cómo se despliegue.
+    credentials: 'same-origin',
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 }
@@ -129,22 +164,23 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
  */
 let refreshing: Promise<boolean> | null = null;
 
-async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = session.refreshToken;
-  if (!refreshToken) return false;
+export async function refreshAccessToken(): Promise<boolean> {
+  // El token de refresco no está aquí: lo lleva el navegador en una cookie `HttpOnly`. Lo
+  // único que este código aporta es el testigo CSRF.
+  if (!session.maybeAuthenticated) return false;
 
   refreshing ??= (async () => {
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const response = await send('/auth/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        withoutOrganization: true,
+        withCsrf: true,
       });
       if (!response.ok) return false;
 
       const body = (await response.json()) as ApiEnvelope<{
         accessToken: string;
-        refreshToken: string;
+        csrfToken: string;
       }>;
       session.start(body.data);
       return true;
@@ -164,7 +200,7 @@ export async function api<T>(
 ): Promise<T> {
   let response = await send(path, options);
 
-  if (response.status === 401 && session.refreshToken) {
+  if (response.status === 401 && session.maybeAuthenticated && !options.withCsrf) {
     const renewed = await refreshAccessToken();
     if (renewed) {
       response = await send(path, options);

@@ -138,6 +138,17 @@ export class AuthService {
     return createHmac('sha256', secret).update(token).digest('hex');
   }
 
+  /**
+   * Cuánto vive el refresco, en milisegundos.
+   *
+   * Lo necesita el controlador para que la cookie caduque a la vez que el token que lleva
+   * dentro. Si la cookie viviera más, el navegador seguiría enviando algo que el servidor ya
+   * rechaza, y cada arranque intentaría refrescar en vano.
+   */
+  refreshTokenLifetimeMs(): number {
+    return this.computeRefreshExpiry().getTime() - Date.now();
+  }
+
   private computeRefreshExpiry(): Date {
     const expiration = this.configService.get('jwt.refreshExpiration', {
       infer: true,

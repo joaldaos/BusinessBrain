@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AgentArea, Prisma, type Agent } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { pageBounds } from '../../common/dto/pagination.dto';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -109,10 +110,20 @@ export class AgentsService {
     return created;
   }
 
+  /**
+   * Agentes de la organización, paginados en SQL (6.4).
+   *
+   * Antes devolvía todos: correcto mientras un tenant tenga diez, insostenible cuando tenga
+   * mil, y el fallo no aparece en desarrollo sino en el cliente más grande.
+   */
   async list(params: {
     organizationId: string;
     includeInactive?: boolean;
+    limit?: number;
+    offset?: number;
   }): Promise<AgentWithScope[]> {
+    const { take, skip } = pageBounds(params);
+
     return this.prisma.agent.findMany({
       where: {
         organizationId: params.organizationId,
@@ -120,6 +131,8 @@ export class AgentsService {
       },
       orderBy: { createdAt: 'desc' },
       include: this.scopeInclude,
+      take,
+      skip,
     });
   }
 

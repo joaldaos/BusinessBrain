@@ -11,7 +11,6 @@ import {
   scopeFilter,
   type KnowledgeScope,
 } from '../../knowledge-engine/domain/knowledge-scope';
-import { InsightScopeService } from './insight-scope.service';
 import { TERMINAL_INSIGHT_STATUSES } from '../domain/insight-status.classification';
 import { TERMINAL_KNOWLEDGE_ITEM_STATUSES } from '../../knowledge-engine/domain/knowledge-item-status.classification';
 import {
@@ -56,6 +55,8 @@ export interface RetrieveInsightsParams {
   /** Ancla de negocio concreta. */
   businessObjectiveId?: string;
   limit?: number;
+  /** Desplazamiento de página, aplicado en SQL (6.4). */
+  offset?: number;
   /** Modo histórico (§12): incluye estados terminales. NUNCA afecta a la autorización. */
   historicalMode?: boolean;
 }
@@ -80,14 +81,15 @@ export interface RetrievedInsight {
   createdAt: Date;
 }
 
+/** Tamaño de página por defecto y techo duro: una petición no puede pedir "todo". */
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
 @Injectable()
 export class RetrieveInsightsUseCase {
   private readonly logger = new Logger(RetrieveInsightsUseCase.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly insightScope: InsightScopeService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async execute(params: RetrieveInsightsParams): Promise<RetrievedInsight[]> {
     // Sin ninguna colección concedida no hay comprensión accesible. Se corta antes de
@@ -104,28 +106,18 @@ export class RetrieveInsightsUseCase {
     const allowedCollectionIds = scopeFilter(params.scope);
     const now = new Date();
 
+    // Selección de IDENTIFICADORES en Postgres (6.4). Antes se cargaba la organización
+    // entera y se filtraba en memoria, y el alcance efectivo de cada `Insight` se proyectaba
+    // con UNA CONSULTA POR INSIGHT — un N+1 que crecía con el tamaño del tenant.
+    const ids = await this.selectInsightIds(params, allowedCollectionIds);
+    if (ids.length === 0) return [];
+
     const insights = await this.prisma.insight.findMany({
       where: {
-        // Filtro de organización: primer filtro, sin excepción.
+        id: { in: ids },
+        // El filtro de organización se repite: la selección anterior ya lo aplicó, y aun
+        // así esta consulta no debe poder devolver nada de otro tenant por su cuenta.
         organizationId: params.organizationId,
-        // Exclusión OBLIGATORIA y no configurable de estados terminales (§12). Solo el
-        // modo histórico explícito la omite, nunca por omisión.
-        ...(params.historicalMode
-          ? {}
-          : {
-              status: {
-                notIn: [...TERMINAL_INSIGHT_STATUSES] as InsightStatus[],
-              },
-            }),
-        ...(params.types ? { type: { in: params.types } } : {}),
-        ...(params.insightIds ? { id: { in: params.insightIds } } : {}),
-        ...(params.businessObjectiveId
-          ? {
-              objectiveLinks: {
-                some: { businessObjectiveId: params.businessObjectiveId },
-              },
-            }
-          : {}),
       },
       include: {
         evidence: true,
@@ -134,8 +126,6 @@ export class RetrieveInsightsUseCase {
       },
       orderBy: { createdAt: 'desc' },
     });
-
-    if (insights.length === 0) return [];
 
     // Una sola resolución del estado actual de TODAS las evidencias implicadas: es lo que
     // hace implementable la garantía de vista consistente (§3.4), y lo que sería imposible
@@ -187,27 +177,6 @@ export class RetrieveInsightsUseCase {
         continue;
       }
 
-      // Alcance efectivo de colección (§3.4): un consumidor solo recupera un Insight si
-      // cubre TODAS las colecciones que sostienen su justificación. Cobertura completa: el
-      // acceso parcial deniega, nunca concede parcialmente.
-      //
-      // El alcance de organización completa se salta la comparación por diseño: lo usa el
-      // razonamiento, que analiza todo el conocimiento de la empresa (§3.4).
-      if (allowedCollectionIds !== null) {
-        // Proyección ÚNICA del sistema (6.1): antes se calculaba aquí y otra vez en
-        // `CurateInsight`. Dos definiciones del mismo alcance son dos criterios.
-        const scope = await this.insightScope.effectiveScopeOf(
-          params.organizationId,
-          insight.transitiveEvidenceClosure,
-        );
-        const allowed = new Set(allowedCollectionIds);
-        const covered = scope.every((collectionId) =>
-          allowed.has(collectionId),
-        );
-        // Alcance vacío = evidencia sin colección o irresoluble: inaccesible por defecto.
-        if (scope.length === 0 || !covered) continue;
-      }
-
       results.push({
         id: insight.id,
         type: insight.type,
@@ -233,7 +202,93 @@ export class RetrieveInsightsUseCase {
       });
     }
 
-    return results.slice(0, params.limit ?? 50);
+    // La página ya viene acotada por SQL. Lo que queda aquí son filtros DERIVADOS que no
+    // pueden expresarse en la consulta —el decaimiento de confianza y la frescura se
+    // calculan sobre el estado vivo de la evidencia—, así que una página puede devolver
+    // menos elementos que el `limit` pedido. Es preferible a duplicar el decaimiento en SQL:
+    // dos implementaciones de la misma curva serían dos criterios de confianza.
+    return results;
+  }
+
+  /**
+   * Identificadores de la página, resueltos ENTERAMENTE en Postgres (6.4).
+   *
+   * Aquí viven los filtros que sí son expresables en SQL: organización, exclusión de estados
+   * terminales, tipo, objetivo de negocio y —lo importante— la regla de cobertura completa
+   * del `EffectiveCollectionScope`.
+   *
+   * `<@` es "contenido en": el alcance efectivo del `Insight` debe ser un subconjunto de lo
+   * concedido, que es literalmente la regla ALL (§3.4). `cardinality(...) > 0` conserva el
+   * fail-closed del alcance vacío — evidencia sin colección o irresoluble es inaccesible por
+   * defecto, nunca visible para todos.
+   *
+   * El alcance se proyecta con un `LATERAL` sobre el cierre de evidencia, protegido por
+   * `jsonb_typeof = 'array'`: un cierre malformado produce alcance vacío y por tanto queda
+   * excluido, en vez de reventar la consulta.
+   */
+  private async selectInsightIds(
+    params: RetrieveInsightsParams,
+    allowedCollectionIds: string[] | null,
+  ): Promise<string[]> {
+    const terminal = [...TERMINAL_INSIGHT_STATUSES] as string[];
+
+    const statusFilter = params.historicalMode
+      ? Prisma.empty
+      : Prisma.sql`AND i."status"::text <> ALL(${terminal}::text[])`;
+
+    const typeFilter = params.types?.length
+      ? Prisma.sql`AND i."type"::text = ANY(${params.types.map(String)}::text[])`
+      : Prisma.empty;
+
+    const idFilter = params.insightIds?.length
+      ? Prisma.sql`AND i."id" = ANY(${params.insightIds}::text[])`
+      : Prisma.empty;
+
+    const objectiveFilter = params.businessObjectiveId
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "InsightObjectiveLink" l
+          WHERE l."insightId" = i."id"
+            AND l."businessObjectiveId" = ${params.businessObjectiveId})`
+      : Prisma.empty;
+
+    // La cobertura solo se compara cuando el alcance ES por colecciones. El de organización
+    // completa la omite por diseño: lo usa el razonamiento (§3.4).
+    const coverage =
+      allowedCollectionIds === null
+        ? Prisma.empty
+        : Prisma.sql`HAVING cardinality(
+             COALESCE(
+               array_agg(DISTINCT kic."knowledgeCollectionId")
+                 FILTER (WHERE kic."knowledgeCollectionId" IS NOT NULL),
+               '{}'::text[])) > 0
+           AND COALESCE(
+               array_agg(DISTINCT kic."knowledgeCollectionId")
+                 FILTER (WHERE kic."knowledgeCollectionId" IS NOT NULL),
+               '{}'::text[]) <@ ${allowedCollectionIds}::text[]`;
+
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT i."id"
+      FROM "Insight" i
+      LEFT JOIN LATERAL (
+        SELECT jsonb_array_elements(i."transitiveEvidenceClosure") AS el
+        WHERE jsonb_typeof(i."transitiveEvidenceClosure") = 'array'
+      ) c ON TRUE
+      LEFT JOIN "KnowledgeItemCollection" kic
+        ON kic."knowledgeItemId" = (c.el->>'refId')
+       AND kic."organizationId" = i."organizationId"
+      WHERE i."organizationId" = ${params.organizationId}
+        ${statusFilter}
+        ${typeFilter}
+        ${idFilter}
+        ${objectiveFilter}
+      GROUP BY i."id", i."createdAt"
+      ${coverage}
+      ORDER BY i."createdAt" DESC
+      LIMIT ${Math.min(params.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)}
+      OFFSET ${Math.max(params.offset ?? 0, 0)}
+    `;
+
+    return rows.map((row) => row.id);
   }
 
   /**

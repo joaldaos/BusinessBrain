@@ -22,7 +22,13 @@ describe('ProviderRegistry', () => {
 
   it('lanza un error legible para un proveedor del enum aún sin implementar (GEMINI/MISTRAL/OLLAMA)', () => {
     expect(() => registry.getLlmProvider('GEMINI')).toThrow(
-      /no implementado todavía/,
+      /no implementa todavía/,
+    );
+
+    // 6.4: es una PRECONDICIÓN OPERATIVA, no una avería. Un 500 mandaría a investigar a
+    // quien no puede arreglarlo; un 503 dice que falta configurar algo.
+    expect(() => registry.getLlmProvider('GEMINI')).toThrow(
+      expect.objectContaining({ status: 503 }),
     );
   });
 
@@ -85,8 +91,11 @@ describe('ProviderRegistry', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
       await expect(registry.resolveForOrganization('org-1')).rejects.toThrow(
-        /ningún LlmProfile/,
+        /ningún perfil de IA configurado/,
       );
+      await expect(
+        registry.resolveForOrganization('org-1'),
+      ).rejects.toMatchObject({ status: 503 });
     });
   });
 });

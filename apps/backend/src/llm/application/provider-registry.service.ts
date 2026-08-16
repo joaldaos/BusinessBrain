@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { LlmProviderName } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AnthropicProvider } from '../infrastructure/providers/anthropic.provider';
@@ -41,8 +41,11 @@ export class ProviderRegistry {
   getLlmProvider(name: LlmProviderName): LlmProviderPort {
     const provider = this.llmProviders[name];
     if (!provider) {
-      throw new Error(
-        `Proveedor LLM "${name}" no implementado todavía (soportados: ${Object.keys(this.llmProviders).join(', ')})`,
+      // Configuración que apunta a un proveedor que esta versión no implementa. Tampoco es
+      // un fallo del código: es un `LlmProfile` que hay que corregir.
+      throw new ServiceUnavailableException(
+        `El perfil de IA declara el proveedor "${name}", que esta versión de la plataforma ` +
+          `no implementa todavía (disponibles: ${Object.keys(this.llmProviders).join(', ')})`,
       );
     }
     return provider;
@@ -51,8 +54,10 @@ export class ProviderRegistry {
   getEmbeddingProvider(name: LlmProviderName): EmbeddingProviderPort {
     const provider = this.embeddingProviders[name];
     if (!provider) {
-      throw new Error(
-        `Proveedor de embeddings "${name}" no implementado todavía (soportados: ${Object.keys(this.embeddingProviders).join(', ')})`,
+      throw new ServiceUnavailableException(
+        `El perfil de IA declara el proveedor de embeddings "${name}", que esta versión de ` +
+          `la plataforma no implementa todavía (disponibles: ` +
+          `${Object.keys(this.embeddingProviders).join(', ')})`,
       );
     }
     return provider;
@@ -75,8 +80,13 @@ export class ProviderRegistry {
       }));
 
     if (!profile) {
-      throw new Error(
-        'No hay ningún LlmProfile por defecto configurado (ni de la organización ni de plataforma)',
+      // PRECONDICIÓN OPERATIVA, no error de programación ni petición mal formada: quien
+      // llama no puede arreglarlo cambiando la petición, hace falta que un administrador
+      // configure un perfil. Un 500 lo presentaría como una avería nuestra y mandaría a la
+      // persona equivocada a investigar.
+      throw new ServiceUnavailableException(
+        'La organización no tiene ningún perfil de IA configurado y la plataforma tampoco ' +
+          'aporta uno por defecto. Configure un LlmProfile antes de usar esta función.',
       );
     }
 

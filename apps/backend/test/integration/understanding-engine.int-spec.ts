@@ -71,7 +71,7 @@ describe('Understanding Engine (integración)', () => {
   beforeAll(() => {
     objectives = new BusinessObjectiveService(db, auditService(db));
     curator = new CurateInsightUseCase(db, insightScope(db), auditService(db));
-    retriever = new RetrieveInsightsUseCase(db, insightScope(db));
+    retriever = new RetrieveInsightsUseCase(db);
     trigger = new TriggerAnalysisRunUseCase(
       db,
       new PrismaKnowledgeSignalsAdapter(db),
@@ -773,6 +773,156 @@ describe('Understanding Engine (integración)', () => {
       expect(
         analysisScope.mode === 'ORGANIZATION_WIDE' && analysisScope.reason,
       ).toContain('§3.4');
+    });
+  });
+
+  // ── 6.4 · Paginación real en SQL y sin N+1 ───────────────────────────────
+  describe('6.4 — paginación en SQL', () => {
+    /** N insights con evidencia en la misma colección, todos accesibles. */
+    const seedInsights = async (count: number) => {
+      const collection = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      const created: string[] = [];
+      for (let i = 0; i < count; i += 1) {
+        const item = await createKnowledgeItem(org);
+        await prisma.knowledgeItemCollection.create({
+          data: {
+            organizationId: org.orgId,
+            knowledgeItemId: item.id,
+            knowledgeCollectionId: collection.id,
+          },
+        });
+        const insight = await createInsight(org, {
+          subjectIdentity: `pag-${i}-${Math.random()}`,
+          evidenceItemIds: [item.id],
+        });
+        created.push(insight.id);
+      }
+      return { collection, created };
+    };
+
+    it('el `limit` y el `offset` se aplican en la CONSULTA', async () => {
+      const { collection } = await seedInsights(5);
+      const scope = collectionsScope([collection.id]);
+
+      const first = await retriever.execute({
+        organizationId: org.orgId,
+        scope,
+        limit: 2,
+      });
+      const second = await retriever.execute({
+        organizationId: org.orgId,
+        scope,
+        limit: 2,
+        offset: 2,
+      });
+
+      expect(first).toHaveLength(2);
+      expect(second).toHaveLength(2);
+      const ids = new Set([...first, ...second].map((i) => i.id));
+      expect(ids.size).toBe(4);
+    });
+
+    it('recorrer las páginas devuelve exactamente el conjunto accesible', async () => {
+      const { collection, created } = await seedInsights(5);
+      const scope = collectionsScope([collection.id]);
+
+      const seen: string[] = [];
+      for (let offset = 0; offset < 12; offset += 2) {
+        const page = await retriever.execute({
+          organizationId: org.orgId,
+          scope,
+          limit: 2,
+          offset,
+        });
+        if (page.length === 0) break;
+        seen.push(...page.map((i) => i.id));
+      }
+
+      expect([...new Set(seen)].sort()).toEqual([...created].sort());
+    });
+
+    it('la paginación NO abre acceso a lo que el alcance deniega', async () => {
+      const { collection } = await seedInsights(2);
+      const rrhh = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'RR. HH.' },
+      });
+      // Un Insight que exige DOS colecciones; el lector solo cubre una.
+      const item = await createKnowledgeItem(org);
+      await prisma.knowledgeItemCollection.createMany({
+        data: [
+          {
+            organizationId: org.orgId,
+            knowledgeItemId: item.id,
+            knowledgeCollectionId: collection.id,
+          },
+          {
+            organizationId: org.orgId,
+            knowledgeItemId: item.id,
+            knowledgeCollectionId: rrhh.id,
+          },
+        ],
+      });
+      const restricted = await createInsight(org, {
+        subjectIdentity: 'restringido-paginado',
+        evidenceItemIds: [item.id],
+      });
+
+      const all: string[] = [];
+      for (let offset = 0; offset < 12; offset += 1) {
+        const page = await retriever.execute({
+          organizationId: org.orgId,
+          scope: collectionsScope([collection.id]),
+          limit: 1,
+          offset,
+        });
+        if (page.length === 0) break;
+        all.push(...page.map((i) => i.id));
+      }
+
+      // La regla ALL se aplica DENTRO de la consulta: ninguna página lo deja aparecer.
+      expect(all).not.toContain(restricted.id);
+    });
+
+    it('el tope duro de página acota aunque se pida más', async () => {
+      const { collection } = await seedInsights(3);
+
+      const page = await retriever.execute({
+        organizationId: org.orgId,
+        scope: collectionsScope([collection.id]),
+        limit: 100000,
+      });
+
+      expect(page.length).toBeLessThanOrEqual(200);
+    });
+
+    it('un cierre de evidencia malformado no rompe la consulta: queda excluido', async () => {
+      // Alcance vacío por construcción: el `LATERAL` está protegido por `jsonb_typeof`.
+      const roto = await prisma.insight.create({
+        data: {
+          organizationId: org.orgId,
+          analysisRunId: org.analysisRunId,
+          subjectIdentity: `cierre-roto-${Math.random()}`,
+          type: 'ANOMALY',
+          summary: 'Cierre no es una lista',
+          status: 'ACTIVE',
+          strategyKey: 'test',
+          strategyVersion: '1.0.0',
+          reasoningTrace: {},
+          confidence: 0.9,
+          confidenceComputedAt: new Date(),
+          transitiveEvidenceClosure: { roto: true },
+        },
+      });
+      const { collection } = await seedInsights(1);
+
+      const page = await retriever.execute({
+        organizationId: org.orgId,
+        scope: collectionsScope([collection.id]),
+      });
+
+      expect(page.map((i) => i.id)).not.toContain(roto.id);
     });
   });
 

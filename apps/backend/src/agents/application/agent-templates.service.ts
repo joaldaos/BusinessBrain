@@ -12,6 +12,7 @@ import {
   type AgentTemplate,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { pageBounds } from '../../common/dto/pagination.dto';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -140,7 +141,11 @@ export class AgentTemplatesService {
     organizationId: string;
     area?: AgentArea;
     visibility?: AgentTemplateVisibility;
+    limit?: number;
+    offset?: number;
   }): Promise<AgentTemplate[]> {
+    const { take, skip } = pageBounds(params);
+
     return this.prisma.agentTemplate.findMany({
       where: {
         publisherOrgId: params.organizationId,
@@ -148,6 +153,8 @@ export class AgentTemplatesService {
         ...(params.visibility ? { visibility: params.visibility } : {}),
       },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
   }
 

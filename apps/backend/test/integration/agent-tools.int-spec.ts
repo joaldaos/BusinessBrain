@@ -15,7 +15,6 @@ import {
   destroyTestOrg,
   prisma,
   type TestOrg,
-  insightScope,
 } from './fixtures';
 
 /**
@@ -45,7 +44,7 @@ describe('Agent tools (integración)', () => {
       execute: retrieveContextSpy,
     } as unknown as RetrieveContextUseCase);
     const insightLookup = new InsightLookupTool(
-      new RetrieveInsightsUseCase(db, insightScope(db)),
+      new RetrieveInsightsUseCase(db),
     );
 
     executeTool = new ExecuteAgentToolUseCase(

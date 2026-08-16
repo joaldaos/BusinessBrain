@@ -12,7 +12,6 @@ import {
   destroyTestOrg,
   prisma,
   type TestOrg,
-  insightScope,
 } from './fixtures';
 
 /**
@@ -41,7 +40,7 @@ describe('RunAgent (integración)', () => {
     runAgent = new RunAgentUseCase(
       agents,
       { execute: retrieveContextSpy } as unknown as RetrieveContextUseCase,
-      new RetrieveInsightsUseCase(db, insightScope(db)),
+      new RetrieveInsightsUseCase(db),
       memoryStore,
       // Registro vacio: estas suites no ejercitan la ejecucion de herramientas.
       [],

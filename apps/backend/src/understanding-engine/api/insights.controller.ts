@@ -71,12 +71,13 @@ export class InsightsController {
       types: query.type ? [query.type] : undefined,
       minimumConfidence: query.minimumConfidence,
       businessObjectiveId: query.businessObjectiveId,
-      limit: query.limit ?? 50,
+      // Paginación REAL en SQL (6.4): el alcance se aplica dentro de la misma consulta, así
+      // que desplazar no puede dejar huecos en las páginas de quien no cubre todo.
+      limit: query.limit,
+      offset: query.offset,
     });
 
-    // La paginación se aplica sobre lo YA autorizado: desplazar antes del filtro de alcance
-    // dejaría huecos en las páginas de quien no cubre todo.
-    return insights.slice(query.offset ?? 0);
+    return insights;
   }
 
   /**

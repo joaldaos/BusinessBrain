@@ -15,6 +15,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 /**
  * Forma EXTERNA de las peticiones del Understanding Engine — subfase 6.1.
@@ -35,24 +36,12 @@ import { Type } from 'class-transformer';
  * quién pregunta. Si viajara en la petición, el cliente podría ampliarlo.
  */
 
-/** Tope duro de página: una petición no puede pedir "todo" (6.1). */
-export const MAX_PAGE_SIZE = 100;
-const DEFAULT_PAGE_SIZE = 50;
-
-export class PaginationQueryDto {
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(MAX_PAGE_SIZE)
-  limit?: number = DEFAULT_PAGE_SIZE;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  offset?: number = 0;
-}
+// La paginación es compartida por toda la API (6.4): un tope por módulo acabaría siendo un
+// módulo sin tope.
+export {
+  MAX_PAGE_SIZE,
+  PaginationQueryDto,
+} from '../../common/dto/pagination.dto';
 
 export class DeclareBusinessObjectiveDto {
   @IsString()

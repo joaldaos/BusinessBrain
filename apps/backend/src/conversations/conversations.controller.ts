@@ -21,6 +21,7 @@ import type {
   RequestUser,
 } from '../common/types/authenticated-request';
 import { ConversationsService } from './conversations.service';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { SendMessageUseCase } from './send-message.use-case';
 import { StreamMessageUseCase } from './stream-message.use-case';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -61,9 +62,12 @@ export class ConversationsController {
   list(
     @CurrentOrg() org: RequestOrganization,
     @CurrentUser() user: RequestUser,
+    @Query() page: PaginationQueryDto,
     @Query('includeArchived') includeArchived?: string,
   ) {
     return this.conversations.listForUser({
+      limit: page.limit,
+      offset: page.offset,
       organizationId: org.id,
       userId: user.id,
       includeArchived: includeArchived === 'true',

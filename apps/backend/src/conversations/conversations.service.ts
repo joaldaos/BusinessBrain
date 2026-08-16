@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Conversation } from '@businessbrain/database';
 import { PrismaService } from '../prisma/prisma.service';
+import { pageBounds } from '../common/dto/pagination.dto';
 
 /**
  * Gestión de conversaciones — BUSINESSBRAIN_MIGRATION_PLAN.md §6, §7.2.
@@ -82,7 +83,11 @@ export class ConversationsService {
     organizationId: string;
     userId: string;
     includeArchived?: boolean;
+    limit?: number;
+    offset?: number;
   }) {
+    const { take, skip } = pageBounds(params);
+
     return this.prisma.conversation.findMany({
       where: {
         organizationId: params.organizationId,
@@ -91,6 +96,9 @@ export class ConversationsService {
       },
       orderBy: { updatedAt: 'desc' },
       include: { _count: { select: { messages: true } } },
+      // Paginación en SQL (6.4): el historial de una persona crece sin límite natural.
+      take,
+      skip,
     });
   }
 

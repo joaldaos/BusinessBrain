@@ -27,6 +27,7 @@ import { InstallAgentTemplateUseCase } from '../application/install-agent-templa
 import { CreateAgentTemplateDto } from '../dto/create-agent-template.dto';
 import { UpdateAgentTemplateDto } from '../dto/update-agent-template.dto';
 import { InstallAgentTemplateDto } from '../dto/install-agent-template.dto';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 /**
  * Catálogo de plantillas de agente — subfase 5.7.
@@ -74,6 +75,7 @@ export class AgentTemplatesController {
   @OrgRoles(MembershipRole.MEMBER)
   list(
     @CurrentOrg() org: RequestOrganization,
+    @Query() page: PaginationQueryDto,
     @Query('area') area?: AgentArea,
     @Query('visibility') visibility?: AgentTemplateVisibility,
   ) {
@@ -81,6 +83,8 @@ export class AgentTemplatesController {
       organizationId: org.id,
       area,
       visibility,
+      limit: page.limit,
+      offset: page.offset,
     });
   }
 

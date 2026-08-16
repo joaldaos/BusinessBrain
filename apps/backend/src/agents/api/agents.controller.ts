@@ -21,6 +21,7 @@ import type {
 import { AgentsService } from '../application/agents.service';
 import { CreateAgentDto } from '../dto/create-agent.dto';
 import { UpdateAgentDto } from '../dto/update-agent.dto';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 /**
  * Rutas con `:agentId` (no `:id`) por el mismo motivo que en el resto de módulos:
@@ -62,11 +63,14 @@ export class AgentsController {
   @OrgRoles(MembershipRole.MEMBER)
   list(
     @CurrentOrg() org: RequestOrganization,
+    @Query() page: PaginationQueryDto,
     @Query('includeInactive') includeInactive?: string,
   ) {
     return this.agents.list({
       organizationId: org.id,
       includeInactive: includeInactive === 'true',
+      limit: page.limit,
+      offset: page.offset,
     });
   }
 

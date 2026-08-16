@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { LlmProviderName, Prisma } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -153,7 +157,12 @@ export class RetrieveContextUseCase {
         where: { organizationId: null, isDefault: true },
       }));
     if (!profile) {
-      throw new Error('No hay ningún LlmProfile por defecto configurado');
+      // Precondición operativa: hace falta que un administrador configure un perfil. No es
+      // un fallo del sistema ni una petición mal formada.
+      throw new ServiceUnavailableException(
+        'La organización no tiene ningún perfil de IA configurado y la plataforma tampoco ' +
+          'aporta uno por defecto. Configure un LlmProfile antes de ingerir o consultar.',
+      );
     }
 
     const provider = this.providerRegistry.getEmbeddingProvider(

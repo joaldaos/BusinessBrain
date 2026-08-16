@@ -34,8 +34,13 @@ export function InsightDetailPage() {
     [insightId],
   );
 
-  if (insight.loading) return <Empty>Cargando…</Empty>;
-  if (insight.error) return <ErrorNote error={insight.error} />;
+  // Solo se muestra el estado de carga cuando NO hay nada que enseñar todavía.
+  //
+  // Vaciar la pantalla en cada recarga desmontaría los formularios y perdería lo que la
+  // persona acababa de hacer: el mensaje de "decisión registrada" desaparecía antes de que
+  // nadie pudiera leerlo, y un comentario a medio escribir se perdía al recargar.
+  if (insight.loading && !insight.data) return <Empty>Cargando…</Empty>;
+  if (insight.error && !insight.data) return <ErrorNote error={insight.error} />;
   if (!insight.data) return <Empty>No encontrada.</Empty>;
 
   const data = insight.data;

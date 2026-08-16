@@ -5,6 +5,7 @@ import {
   hasRole,
   type Automation,
   type AutomationRun,
+  type KnowledgeSource,
   type Report,
 } from '../api/types';
 import {
@@ -42,11 +43,22 @@ export function AutomationsPage() {
 
   const automations = useResource(() => api<Automation[]>('/automations'));
   const reports = useResource(() => api<Report[]>('/reports'));
+  const sources = useResource(() => api<KnowledgeSource[]>('/knowledge-sources'));
+
+  // Solo las fuentes que van a BUSCAR su contenido pueden programarse. Una de subida manual
+  // dejaría una automatización fallando cada semana esperando un archivo que nadie sube.
+  const syncable = (sources.data ?? []).filter(
+    (source) => source.type === 'WEBSITE',
+  );
 
   return (
     <>
       {canAdmin && (
-        <CreateCard reports={reports.data ?? []} onCreated={automations.reload} />
+        <CreateCard
+          reports={reports.data ?? []}
+          sources={syncable}
+          onCreated={automations.reload}
+        />
       )}
 
       <Card title={`Automatizaciones (${automations.data?.length ?? 0})`}>
@@ -76,13 +88,16 @@ export function AutomationsPage() {
 
 function CreateCard({
   reports,
+  sources,
   onCreated,
 }: {
   reports: Report[];
+  sources: KnowledgeSource[];
   onCreated: () => void;
 }) {
   const [name, setName] = useState('');
   const [cron, setCron] = useState(SCHEDULES[0].cron);
+  const [sourceId, setSourceId] = useState('');
   const [analyze, setAnalyze] = useState(true);
   const [reportId, setReportId] = useState('');
   const action = useAction();
@@ -94,7 +109,19 @@ function CreateCard({
       <form
         className="space-y-3"
         onSubmit={action.onSubmit(async () => {
-          const actions: { type: string; reportId?: string }[] = [];
+          const actions: {
+            type: string;
+            reportId?: string;
+            knowledgeSourceId?: string;
+          }[] = [];
+          // El orden importa: primero entra el conocimiento, después se comprende y por
+          // último se informa. Al revés, el informe hablaría de lo de la semana pasada.
+          if (sourceId) {
+            actions.push({
+              type: 'SYNC_KNOWLEDGE_SOURCE',
+              knowledgeSourceId: sourceId,
+            });
+          }
           if (analyze) actions.push({ type: 'RUN_ANALYSIS' });
           if (reportId) actions.push({ type: 'GENERATE_REPORT', reportId });
 
@@ -109,6 +136,7 @@ function CreateCard({
           });
           setName('');
           setReportId('');
+          setSourceId('');
           onCreated();
         })}
       >
@@ -143,6 +171,24 @@ function CreateCard({
 
         <fieldset className="space-y-1">
           <legend className="text-xs font-medium text-gray-700">Qué hará</legend>
+          {sources.length > 0 && (
+            <label className="flex flex-wrap items-center gap-2 text-sm">
+              <span>Volver a leer</span>
+              <select
+                aria-label="Fuente a sincronizar"
+                className={`${inputClass} max-w-64`}
+                value={sourceId}
+                onChange={(e) => setSourceId(e.target.value)}
+              >
+                <option value="">(ninguna fuente)</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -173,7 +219,10 @@ function CreateCard({
         </fieldset>
 
         <ErrorNote error={action.error} />
-        <Button type="submit" disabled={action.busy || (!analyze && !reportId)}>
+        <Button
+          type="submit"
+          disabled={action.busy || (!analyze && !reportId && !sourceId)}
+        >
           Crear
         </Button>
       </form>

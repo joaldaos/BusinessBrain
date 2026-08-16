@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ConnectorPort } from '../../domain/ports/connector.port';
 import { FileUploadConnector } from './file-upload.connector';
+import { WebPageConnector } from './web-page.connector';
 
 /**
  * Único punto del sistema que sabe qué conectores concretos existen (mismo patrón que
@@ -11,10 +12,19 @@ import { FileUploadConnector } from './file-upload.connector';
 export class ConnectorRegistry {
   private readonly connectors: Record<string, ConnectorPort>;
 
-  constructor(fileUploadConnector: FileUploadConnector) {
+  constructor(
+    fileUploadConnector: FileUploadConnector,
+    webPageConnector: WebPageConnector,
+  ) {
     this.connectors = {
       [fileUploadConnector.key]: fileUploadConnector,
+      [webPageConnector.key]: webPageConnector,
     };
+  }
+
+  /** Claves soportadas. La superficie las ofrece en vez de codificarlas. */
+  keys(): string[] {
+    return Object.keys(this.connectors);
   }
 
   get(connectorKey: string): ConnectorPort {

@@ -15,6 +15,8 @@ import {
 import { TriggerAnalysisRunUseCase } from '../../understanding-engine/application/trigger-analysis-run.use-case';
 import { AnalysisRunTrigger } from '@businessbrain/database';
 import { ReportsService } from '../../reports/application/reports.service';
+import { IngestFromSourceUseCase } from '../../knowledge-engine/application/ingest-from-source.use-case';
+import { IngestionTriggerType } from '@businessbrain/database';
 import { parseAutomationActions } from '../domain/automation-plan';
 
 /** Una línea del diario de la ejecución. Se guarda en `AutomationRun.logs`. */
@@ -52,6 +54,7 @@ export class RunAutomationUseCase {
     private readonly audit: AuditService,
     private readonly analysis: TriggerAnalysisRunUseCase,
     private readonly reports: ReportsService,
+    private readonly ingest: IngestFromSourceUseCase,
   ) {}
 
   async execute(automation: Automation): Promise<{
@@ -89,6 +92,33 @@ export class RunAutomationUseCase {
             });
             if (result.status !== 'SUCCESS') {
               throw new Error(`El análisis terminó en estado ${result.status}`);
+            }
+            break;
+          }
+
+          case 'SYNC_KNOWLEDGE_SOURCE': {
+            // El conocimiento entra SOLO. La idempotencia no la pone esta acción: la garantiza
+            // la deduplicación de la tubería — mismo contenido, mismo hash, duplicado exacto
+            // reconocido; contenido cambiado, versión nueva con su arista de linaje.
+            const result = await this.ingest.execute({
+              organizationId: automation.organizationId,
+              knowledgeSourceId: action.knowledgeSourceId,
+              connectorInput: {},
+              triggerType: IngestionTriggerType.SCHEDULE,
+            });
+            logs.push({
+              at: new Date().toISOString(),
+              action: action.type,
+              outcome: result.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+              detail:
+                `IngestionJob ${result.ingestionJobId}: ${result.stats.itemsCreated} ` +
+                `nuevo(s), ${result.stats.itemsUpdated} actualizado(s), ` +
+                `${result.stats.itemsSkippedDuplicate} sin cambios`,
+            });
+            if (result.status !== 'SUCCESS') {
+              throw new Error(
+                `La sincronización terminó en estado ${result.status}`,
+              );
             }
             break;
           }

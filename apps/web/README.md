@@ -8,7 +8,7 @@ Convierte el backend en una aplicación usable. React + TypeScript + Vite + Tail
 npm run dev --workspace @businessbrain/web
 ```
 
-El backend debe estar en `http://localhost:3000`; Vite proxea `/api` hacia él, así que el
+El backend debe estar en `http://localhost:3999` (o donde diga `BB_API_URL`); Vite proxea `/api` hacia él, así que el
 frontend no necesita saber dónde vive la API ni lidiar con CORS.
 
 ## Principio: la interfaz nunca amplía autorización

@@ -1,11 +1,15 @@
 import { ConnectorRegistry } from './connector-registry.service';
 import { FileUploadConnector } from './file-upload.connector';
+import { WebPageConnector } from './web-page.connector';
 
 describe('ConnectorRegistry', () => {
   let registry: ConnectorRegistry;
 
   beforeEach(() => {
-    registry = new ConnectorRegistry(new FileUploadConnector());
+    registry = new ConnectorRegistry(
+      new FileUploadConnector(),
+      new WebPageConnector(),
+    );
   });
 
   it('resuelve un conector registrado por su connectorKey', () => {

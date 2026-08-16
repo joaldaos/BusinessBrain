@@ -28,6 +28,7 @@ export interface FileUploadConnectorInput {
 @Injectable()
 export class FileUploadConnector implements ConnectorPort {
   readonly key = 'file_upload_v1';
+  readonly acquisition = 'PUSH' as const;
 
   extract(input: FileUploadConnectorInput): Promise<ExtractedContent[]> {
     return Promise.resolve([

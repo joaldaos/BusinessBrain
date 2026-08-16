@@ -7,3 +7,7 @@ coverage/
 
 # Artefacto incremental de TypeScript: no es codigo fuente.
 apps/web/tsconfig.tsbuildinfo
+
+# Resultados y trazas de Playwright: artefactos, no codigo fuente.
+apps/web/test-results/
+apps/web/playwright-report/

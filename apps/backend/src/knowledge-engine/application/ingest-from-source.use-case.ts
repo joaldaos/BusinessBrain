@@ -11,6 +11,7 @@ import {
   type KnowledgeSourceType,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EncryptionService } from '../../common/utils/encryption.util';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import { ClassifyContentUseCase } from './classify-content.use-case';
 import { computeInitialConfidence } from '../domain/confidence';
@@ -85,6 +86,7 @@ export class IngestFromSourceUseCase {
     private readonly prisma: PrismaService,
     private readonly connectorRegistry: ConnectorRegistry,
     private readonly classifyContent: ClassifyContentUseCase,
+    private readonly encryption: EncryptionService,
   ) {}
 
   async execute(
@@ -125,7 +127,17 @@ export class IngestFromSourceUseCase {
       const connector = this.connectorRegistry.get(
         knowledgeSource.connectorKey,
       );
-      const extracted = await connector.extract(params.connectorInput);
+      // Al conector se le entrega SU config, ya descifrada. Un conector que TRAE contenido
+      // (`PULL`) no recibe nada en la petición: todo lo que necesita para ir a buscarlo —una
+      // dirección, mañana una carpeta o un buzón— está declarado en la fuente, que es lo que
+      // KNOWLEDGE_ENGINE_DESIGN.md §3.2 llama su alcance.
+      //
+      // El descifrado ocurre aquí y no en la superficie a propósito: la config puede contener
+      // secretos, y no debe pasar por un controlador ni asomarse a una respuesta HTTP.
+      const extracted = await connector.extract({
+        ...(params.connectorInput as Record<string, unknown> | undefined),
+        config: this.readConfig(knowledgeSource.configEnc),
+      });
 
       const stats: IngestionStats = {
         itemsFound: extracted.length,
@@ -523,6 +535,30 @@ export class IngestFromSourceUseCase {
       await tx.knowledgeItemCollection.create({
         data: { organizationId, knowledgeItemId, knowledgeCollectionId },
       });
+    }
+  }
+
+  /**
+   * Config de la fuente, descifrada.
+   *
+   * Una config ilegible NO tumba la ingesta con un error de cifrado: se entrega vacía y es el
+   * conector quien dice qué le falta, en su idioma. `configEnc` puede venir de una fuente
+   * antigua o de una clave rotada, y "no se pudo descifrar" no le dice nada a nadie.
+   */
+  private readConfig(configEnc: string): Record<string, unknown> {
+    if (!configEnc) return {};
+    try {
+      const parsed: unknown = JSON.parse(this.encryption.decrypt(configEnc));
+      return typeof parsed === 'object' &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer la configuracion de la fuente: ${(error as Error).message}`,
+      );
+      return {};
     }
   }
 }

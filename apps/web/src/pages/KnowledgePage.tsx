@@ -174,6 +174,8 @@ function SourcesCard({
 }) {
   const [name, setName] = useState('');
   const [collectionId, setCollectionId] = useState('');
+  const [kind, setKind] = useState<'FILE_UPLOAD' | 'WEBSITE'>('FILE_UPLOAD');
+  const [url, setUrl] = useState('');
   const create = useAction();
 
   return (
@@ -195,30 +197,67 @@ function SourcesCard({
       <form
         className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
         onSubmit={create.onSubmit(async () => {
+          const web = kind === 'WEBSITE';
           await api('/knowledge-sources', {
             method: 'POST',
             body: {
               name,
-              type: 'FILE_UPLOAD',
-              connectorKey: 'file_upload_v1',
+              type: kind,
+              connectorKey: web ? 'web_page_v1' : 'file_upload_v1',
+              ...(web ? { config: { url: url.trim() } } : {}),
               knowledgeCollectionIds: collectionId ? [collectionId] : [],
             },
           });
           setName('');
+          setUrl('');
           onChanged();
         })}
       >
+        <div className="min-w-40">
+          <Field label="Tipo de fuente">
+            <select
+              aria-label="Tipo de fuente"
+              className={inputClass}
+              value={kind}
+              onChange={(e) =>
+                setKind(e.target.value as 'FILE_UPLOAD' | 'WEBSITE')
+              }
+            >
+              <option value="FILE_UPLOAD">Documentos que subo yo</option>
+              <option value="WEBSITE">Una página web</option>
+            </select>
+          </Field>
+        </div>
         <div className="min-w-48 flex-1">
           <Field label="Nueva fuente">
             <input
               className={inputClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Documentos de ventas"
+              placeholder={
+                kind === 'WEBSITE' ? 'Política de descuentos' : 'Documentos de ventas'
+              }
               required
             />
           </Field>
         </div>
+        {kind === 'WEBSITE' && (
+          <div className="min-w-64 flex-1">
+            <Field
+              label="Dirección web"
+              hint="Debe ser accesible desde internet. BusinessBrain la leerá y la volverá a leer cuando lo pidas."
+            >
+              <input
+                type="url"
+                className={inputClass}
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://ejemplo.com/politica-de-descuentos"
+                required
+              />
+            </Field>
+          </div>
+        )}
         <div className="min-w-48">
           <Field
             label="Colección de destino"
@@ -307,24 +346,45 @@ function SourceRow({
         {action.error instanceof Error && (
           <span className="text-xs text-red-700">{action.error.message}</span>
         )}
-        <input
-          ref={fileInput}
-          type="file"
-          className="hidden"
-          accept=".txt,.md,.pdf,.docx,.html"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void upload(file);
-            event.target.value = '';
-          }}
-        />
-        <Button
-          variant="secondary"
-          disabled={action.busy}
-          onClick={() => fileInput.current?.click()}
-        >
-          {action.busy ? 'Subiendo…' : 'Subir documento'}
-        </Button>
+
+        {source.type === 'WEBSITE' ? (
+          // Una fuente web va a buscar su contenido: no hay nada que subir. Volver a
+          // sincronizar no duplica — si la página no cambió, el sistema lo reconoce.
+          <Button
+            disabled={action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                await api(`/knowledge-sources/${source.id}/sync`, {
+                  method: 'POST',
+                });
+                onSynced();
+              })
+            }
+          >
+            {action.busy ? 'Leyendo…' : 'Leer la página'}
+          </Button>
+        ) : (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              className="hidden"
+              accept=".txt,.md,.pdf,.docx,.html"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = '';
+              }}
+            />
+            <Button
+              variant="secondary"
+              disabled={action.busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              {action.busy ? 'Subiendo…' : 'Subir documento'}
+            </Button>
+          </>
+        )}
       </div>
     </li>
   );

@@ -11,6 +11,7 @@ import type {
 } from '../../common/types/authenticated-request';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { CollectionAccessService } from '../application/collection-access.service';
 import {
   AUDIT_ACTIONS,
   AUDIT_TARGET_TYPES,
@@ -49,6 +50,7 @@ export class KnowledgeCollectionsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly access: CollectionAccessService,
   ) {}
 
   @Get()
@@ -93,6 +95,20 @@ export class KnowledgeCollectionsController {
       targetType: AUDIT_TARGET_TYPES.KNOWLEDGE_COLLECTION,
       targetId: collection.id,
       metadata: { name: dto.name },
+    });
+
+    // Quien crea la colección recibe acceso a ella.
+    //
+    // Sin esto, la persona que define una frontera de acceso queda fuera de ella: sube
+    // documentos, lanza un análisis y no ve ni una conclusión, sin ningún error que lo
+    // explique. No amplía autoridad —es un ADMIN de la organización concediéndose lo que
+    // acaba de definir— y se registra como cualquier otra concesión, con su actor y su
+    // posibilidad de revocarla.
+    await this.access.grant({
+      organizationId: org.id,
+      knowledgeCollectionId: collection.id,
+      userId: user.id,
+      grantedById: user.id,
     });
 
     return collection;

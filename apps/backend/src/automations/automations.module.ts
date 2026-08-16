@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UnderstandingEngineModule } from '../understanding-engine/understanding-engine.module';
 import { ReportsModule } from '../reports/reports.module';
+import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { AutomationsController } from './api/automations.controller';
 import { AutomationsService } from './application/automations.service';
 import { AutomationSchedulerService } from './application/automation-scheduler.service';
@@ -26,7 +27,12 @@ import { CronSchedulerAdapter } from './infrastructure/cron-scheduler.adapter';
  * tocar el dominio.
  */
 @Module({
-  imports: [ScheduleModule.forRoot(), UnderstandingEngineModule, ReportsModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    UnderstandingEngineModule,
+    ReportsModule,
+    KnowledgeEngineModule,
+  ],
   controllers: [AutomationsController],
   providers: [
     AutomationsService,

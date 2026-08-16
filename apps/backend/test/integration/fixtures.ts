@@ -1,4 +1,5 @@
 import { AuditService } from '../../src/audit/audit.service';
+import { EncryptionService } from '../../src/common/utils/encryption.util';
 import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
@@ -61,6 +62,18 @@ export function subjectIdentity(db: unknown): SubjectIdentityService {
   return new SubjectIdentityService(
     db as ConstructorParameters<typeof SubjectIdentityService>[0],
   );
+}
+
+/**
+ * `EncryptionService` real sobre una clave de pruebas.
+ *
+ * Se construye de verdad: la config de una fuente se guarda cifrada y el conector la recibe
+ * descifrada, así que doblarlo dejaría sin verificar justo ese ida y vuelta.
+ */
+export function encryptionService(): EncryptionService {
+  return new EncryptionService({
+    get: () => Buffer.alloc(32, 7).toString('base64'),
+  } as unknown as ConstructorParameters<typeof EncryptionService>[0]);
 }
 
 export interface TestOrg {

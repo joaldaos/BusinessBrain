@@ -16,5 +16,18 @@ export interface ExtractedContent {
  */
 export interface ConnectorPort {
   readonly key: string;
+  /**
+   * Cómo llega el contenido.
+   *
+   * - `PUSH`: alguien lo entrega en la petición (una subida manual). Sin ese contenido no hay
+   *   nada que ingerir, así que la superficie debe exigirlo.
+   * - `PULL`: el conector va a buscarlo con lo que declara la fuente (una URL, y en el futuro
+   *   una carpeta o un buzón). No hace falta que nadie esté delante — y por eso es la que
+   *   permite sincronizar de forma programada.
+   *
+   * La distinción vive en el puerto y no en la superficie a propósito: si el controlador
+   * decidiera por clave de conector, cada conector nuevo obligaría a tocarlo.
+   */
+  readonly acquisition: 'PUSH' | 'PULL';
   extract(input: unknown): Promise<ExtractedContent[]>;
 }

@@ -42,6 +42,7 @@ export interface Organization {
 export interface KnowledgeSource {
   id: string;
   name: string;
+  /** `FILE_UPLOAD` recibe contenido; `WEBSITE` va a buscarlo y puede programarse. */
   type: string;
   connectorKey: string;
   status: string;

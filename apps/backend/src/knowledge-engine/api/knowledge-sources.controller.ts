@@ -22,6 +22,7 @@ import type {
 import { KnowledgeSourcesService } from '../application/knowledge-sources.service';
 import { IngestFromSourceUseCase } from '../application/ingest-from-source.use-case';
 import { CreateKnowledgeSourceDto } from '../dto/create-knowledge-source.dto';
+import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { UploadedFilePayload } from '../infrastructure/connectors/file-upload.connector';
 
 /** Límite de cordura para la subfase 2.1 — sin él, un único archivo podría agotar memoria. */
@@ -39,6 +40,7 @@ export class KnowledgeSourcesController {
   constructor(
     private readonly knowledgeSourcesService: KnowledgeSourcesService,
     private readonly ingestFromSource: IngestFromSourceUseCase,
+    private readonly connectorRegistry: ConnectorRegistry,
   ) {}
 
   @Post()
@@ -74,15 +76,26 @@ export class KnowledgeSourcesController {
     @Param('knowledgeSourceId') knowledgeSourceId: string,
     @UploadedFile() file: UploadedFilePayload,
   ) {
-    if (!file) {
+    // Qué necesita la sincronización lo decide el CONECTOR, no la ruta. Uno que recibe
+    // contenido (`PUSH`) exige el archivo; uno que va a buscarlo (`PULL`) no necesita que
+    // nadie suba nada — y por eso puede ejecutarse sin persona delante, que es lo que
+    // habilita la sincronización programada.
+    const source = await this.knowledgeSourcesService.findOne(
+      org.id,
+      knowledgeSourceId,
+    );
+    const connector = this.connectorRegistry.get(source.connectorKey);
+
+    if (connector.acquisition === 'PUSH' && !file) {
       throw new BadRequestException(
         'Falta el archivo a sincronizar (campo de formulario "file")',
       );
     }
+
     return this.ingestFromSource.execute({
       organizationId: org.id,
       knowledgeSourceId,
-      connectorInput: { file },
+      connectorInput: file ? { file } : {},
     });
   }
 }

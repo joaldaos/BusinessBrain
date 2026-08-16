@@ -10,10 +10,11 @@
  * el principio no lo garantizaría la arquitectura sino la buena fe de quien redacta el JSON.
  *
  * El catálogo solo crece cuando la acción es ejecutable de principio a fin. `GENERATE_REPORT`
- * entra al existir `ReportsModule`, que es el destino de su salida. `RUN_AGENT` sigue fuera
- * por lo mismo: la respuesta de un agente no tiene todavía dónde ir. Declarar aquí una acción
- * que pudiera crearse pero no ejecutarse dejaría una automatización que falla de madrugada,
- * en silencio.
+ * entró al existir `ReportsModule`, que es el destino de su salida; `SYNC_KNOWLEDGE_SOURCE`
+ * entra al existir el primer conector que va a buscar contenido en lugar de recibirlo.
+ * `RUN_AGENT` sigue fuera por lo mismo: la respuesta de un agente no tiene todavía dónde ir.
+ * Declarar aquí una acción que pudiera crearse pero no ejecutarse dejaría una automatización
+ * que falla de madrugada, en silencio.
  *
  * Una automatización ORQUESTA capacidades internas que ya existen y que ya son seguras por su
  * cuenta. No añade ninguna capacidad nueva, y sobre todo no añade la de tocar el mundo
@@ -45,12 +46,22 @@ export const AUTOMATION_ACTION_TYPES = [
    * quiere. Enviarlo sería un efecto externo, y eso es `IntegrationsModule`.
    */
   'GENERATE_REPORT',
+  /**
+   * Sincroniza una fuente de conocimiento que va a buscar su contenido.
+   *
+   * Solo tiene sentido con conectores `PULL`: uno que espera un archivo subido no puede
+   * ejecutarse sin nadie delante. Es lo que cierra el bucle — el conocimiento entra solo, el
+   * motor lo comprende solo y el informe se genera solo.
+   */
+  'SYNC_KNOWLEDGE_SOURCE',
 ] as const;
 
 export type AutomationActionType = (typeof AUTOMATION_ACTION_TYPES)[number];
 
 export type AutomationAction =
-  { type: 'RUN_ANALYSIS' } | { type: 'GENERATE_REPORT'; reportId: string };
+  | { type: 'RUN_ANALYSIS' }
+  | { type: 'GENERATE_REPORT'; reportId: string }
+  | { type: 'SYNC_KNOWLEDGE_SOURCE'; knowledgeSourceId: string };
 
 /** Tope de pasos por automatización: una lista sin cota es una ejecución sin cota. */
 export const MAX_ACTIONS_PER_AUTOMATION = 10;
@@ -115,6 +126,22 @@ function parseAction(raw: unknown, index: number): AutomationAction {
         );
       }
       return { type: 'GENERATE_REPORT', reportId: reportId.trim() };
+    }
+
+    case 'SYNC_KNOWLEDGE_SOURCE': {
+      const knowledgeSourceId = action.knowledgeSourceId;
+      if (
+        typeof knowledgeSourceId !== 'string' ||
+        knowledgeSourceId.trim().length === 0
+      ) {
+        throw new InvalidAutomationPlanError(
+          `${position}: knowledgeSourceId es obligatorio`,
+        );
+      }
+      return {
+        type: 'SYNC_KNOWLEDGE_SOURCE',
+        knowledgeSourceId: knowledgeSourceId.trim(),
+      };
     }
   }
 }

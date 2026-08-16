@@ -3,6 +3,7 @@ import { Prisma } from '@businessbrain/database';
 import { ClassifyContentUseCase } from './classify-content.use-case';
 import { IngestFromSourceUseCase } from './ingest-from-source.use-case';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { EncryptionService } from '../../common/utils/encryption.util';
 import type { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { ExtractedContent } from '../domain/ports/connector.port';
 
@@ -107,6 +108,12 @@ describe('IngestFromSourceUseCase', () => {
       prisma as unknown as PrismaService,
       connectorRegistry as unknown as ConnectorRegistry,
       classifyContent as unknown as ClassifyContentUseCase,
+      // Cifrado real: la config de la fuente llega al conector descifrada, y doblarlo
+      // dejaría sin verificar que un `configEnc` ilegible no tumba la ingesta.
+      {
+        encrypt: (value: string) => value,
+        decrypt: (value: string) => value,
+      } as unknown as EncryptionService,
     );
   });
 

@@ -29,6 +29,7 @@ import {
   SCHEDULER_PORT,
   type SchedulerPort,
 } from '../domain/ports/scheduler.port';
+import { ConnectorRegistry } from '../../knowledge-engine/infrastructure/connectors/connector-registry.service';
 
 /**
  * Ciclo de vida de las automatizaciones — BUSINESSBRAIN_MIGRATION_PLAN.md §5, §10 (fase 6).
@@ -46,6 +47,7 @@ export class AutomationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Inject(SCHEDULER_PORT) private readonly scheduler: SchedulerPort,
+    private readonly connectors: ConnectorRegistry,
   ) {}
 
   async create(params: {
@@ -63,6 +65,7 @@ export class AutomationsService {
       actions: params.actions,
     });
     await this.assertReferencesBelongToOrg(params.organizationId, actions);
+    await this.assertSourcesAreSchedulable(params.organizationId, actions);
 
     const automation = await this.prisma.automation.create({
       data: {
@@ -171,6 +174,7 @@ export class AutomationsService {
     });
 
     await this.assertReferencesBelongToOrg(params.organizationId, plan.actions);
+    await this.assertSourcesAreSchedulable(params.organizationId, plan.actions);
 
     const updated = await this.prisma.automation.update({
       where: { id: existing.id },
@@ -330,6 +334,55 @@ export class AutomationsService {
       throw new BadRequestException(
         'Alguno de los informes indicados no existe o pertenece a otra organización',
       );
+    }
+  }
+
+  /**
+   * Las fuentes que se van a sincronizar deben existir en ESTA organización y —además— saber
+   * ir a buscar su contenido.
+   *
+   * Programar la sincronización de una fuente de subida manual dejaría una automatización que
+   * falla cada semana de madrugada esperando un archivo que nadie va a subir. Se rechaza al
+   * crearla, no al dispararla.
+   */
+  private async assertSourcesAreSchedulable(
+    organizationId: string,
+    actions: AutomationAction[],
+  ): Promise<void> {
+    const sourceIds = [
+      ...new Set(
+        actions
+          .filter(
+            (
+              action,
+            ): action is Extract<
+              AutomationAction,
+              { type: 'SYNC_KNOWLEDGE_SOURCE' }
+            > => action.type === 'SYNC_KNOWLEDGE_SOURCE',
+          )
+          .map((action) => action.knowledgeSourceId),
+      ),
+    ];
+    if (sourceIds.length === 0) return;
+
+    const sources = await this.prisma.knowledgeSource.findMany({
+      where: { id: { in: sourceIds }, organizationId },
+      select: { id: true, name: true, connectorKey: true },
+    });
+    if (sources.length !== sourceIds.length) {
+      throw new BadRequestException(
+        'Alguna de las fuentes indicadas no existe o pertenece a otra organización',
+      );
+    }
+
+    for (const source of sources) {
+      if (this.connectors.get(source.connectorKey).acquisition !== 'PULL') {
+        throw new BadRequestException(
+          `La fuente "${source.name}" espera que alguien suba un archivo, así que no ` +
+            `puede sincronizarse sola. Solo las fuentes que van a buscar su contenido ` +
+            `—como una dirección web— pueden programarse`,
+        );
+      }
     }
   }
 }

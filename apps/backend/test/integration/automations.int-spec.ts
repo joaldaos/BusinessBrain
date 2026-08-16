@@ -20,6 +20,11 @@ import { PdfRenderer } from '../../src/reports/infrastructure/pdf-renderer';
 import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
+import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
+import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
+import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
+import { IngestFromSourceUseCase } from '../../src/knowledge-engine/application/ingest-from-source.use-case';
+import type { ClassifyContentUseCase } from '../../src/knowledge-engine/application/classify-content.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
@@ -29,6 +34,7 @@ import {
   destroyTestOrg,
   prisma,
   subjectIdentity,
+  encryptionService,
   type TestOrg,
 } from './fixtures';
 
@@ -57,7 +63,16 @@ describe('Automatizaciones (integración)', () => {
   } as unknown as GenerativeSynthesisStrategy;
 
   beforeAll(() => {
-    service = new AutomationsService(db, auditService(db), scheduler);
+    const connectors = new ConnectorRegistry(
+      new FileUploadConnector(),
+      new WebPageConnector(),
+    );
+    service = new AutomationsService(
+      db,
+      auditService(db),
+      scheduler,
+      connectors,
+    );
     reports = new ReportsService(
       db,
       auditService(db),
@@ -83,6 +98,15 @@ describe('Automatizaciones (integración)', () => {
         subjectIdentity(db),
       ),
       reports,
+      new IngestFromSourceUseCase(
+        db,
+        connectors,
+        {
+          execute: () =>
+            Promise.resolve({ businessArea: null, tags: [], certainty: 0 }),
+        } as unknown as ClassifyContentUseCase,
+        encryptionService(),
+      ),
     );
     clock = new AutomationSchedulerService(db, runner, scheduler);
   });

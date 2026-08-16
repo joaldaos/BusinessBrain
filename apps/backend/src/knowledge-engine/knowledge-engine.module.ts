@@ -6,6 +6,7 @@ import { KnowledgeItemsService } from './application/knowledge-items.service';
 import { IngestFromSourceUseCase } from './application/ingest-from-source.use-case';
 import { FileUploadConnector } from './infrastructure/connectors/file-upload.connector';
 import { ConnectorRegistry } from './infrastructure/connectors/connector-registry.service';
+import { WebPageConnector } from './infrastructure/connectors/web-page.connector';
 import { EncryptionService } from '../common/utils/encryption.util';
 import { TaxonomyService } from './application/taxonomy.service';
 import { ClassifyContentUseCase } from './application/classify-content.use-case';
@@ -39,8 +40,17 @@ import { LlmModule } from '../llm/llm.module';
     CollectionAccessService,
     FileUploadConnector,
     ConnectorRegistry,
+    WebPageConnector,
     EncryptionService,
   ],
-  exports: [RetrieveContextUseCase, CollectionAccessService],
+  exports: [
+    RetrieveContextUseCase,
+    CollectionAccessService,
+    // Los consume `AutomationsModule` para sincronizar sin nadie delante: el registro dice
+    // si una fuente sabe ir a buscar su contenido, y el caso de uso es la ÚNICA tubería de
+    // ingesta — no se construye una segunda.
+    IngestFromSourceUseCase,
+    ConnectorRegistry,
+  ],
 })
 export class KnowledgeEngineModule {}

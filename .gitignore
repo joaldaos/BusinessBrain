@@ -4,3 +4,6 @@ dist/
 *.local
 .DS_Store
 coverage/
+
+# Artefacto incremental de TypeScript: no es codigo fuente.
+apps/web/tsconfig.tsbuildinfo

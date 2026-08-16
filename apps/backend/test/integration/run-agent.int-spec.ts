@@ -132,7 +132,7 @@ describe('RunAgent (integración)', () => {
       expect(retrieveContextSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationId: org.orgId,
-          knowledgeCollectionIds: [ventas.id],
+          scope: { mode: 'COLLECTIONS', collectionIds: [ventas.id] },
         }),
       );
     });

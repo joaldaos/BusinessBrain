@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { RetrieveContextUseCase } from '../../knowledge-engine/application/retrieve-context.use-case';
+import {
+  ORGANIZATION_WIDE_REASONS,
+  organizationWideScope,
+} from '../../knowledge-engine/domain/knowledge-scope';
 import type {
   KnowledgeRetrievalPort,
   KnowledgeRetrievalQuery,
@@ -24,6 +28,13 @@ export class RetrieverKnowledgeRetrievalAdapter implements KnowledgeRetrievalPor
       organizationId: query.organizationId,
       query: query.query,
       limit: query.limit,
+      // ÚNICO uso legítimo de organización completa: el razonamiento analiza todo el
+      // conocimiento de la empresa (§3.4). Acotarlo por persona dejaría a la organización
+      // con conclusiones distintas según quién lanzara la ejecución. El alcance por persona
+      // se aplica al LEER la comprensión, no al producirla.
+      scope: organizationWideScope(
+        ORGANIZATION_WIDE_REASONS.ANALYSIS_REASONING,
+      ),
     });
 
     return results.map((result) => ({

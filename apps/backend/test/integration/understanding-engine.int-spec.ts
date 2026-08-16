@@ -12,6 +12,11 @@ import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/in
 import { KnowledgeSignalStrategy } from '../../src/understanding-engine/infrastructure/strategies/knowledge-signal.strategy';
 import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine/infrastructure/strategies/generative-synthesis.strategy';
 import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
+import {
+  ORGANIZATION_WIDE_REASONS,
+  collectionsScope,
+  organizationWideScope,
+} from '../../src/knowledge-engine/domain/knowledge-scope';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
@@ -42,6 +47,18 @@ const noGenerative = {
   producibleTypes: [],
   generate: () => Promise.resolve([]),
 } as unknown as GenerativeSynthesisStrategy;
+
+/**
+ * Alcance de estas lecturas de verificación.
+ *
+ * Estas suites comprueban el RAZONAMIENTO —idempotencia, reconciliación, frescura,
+ * decaimiento—, no la autorización por persona, que tiene sus propios tests. Leer con el
+ * mismo alcance que usa el motor mantiene la verificación sobre lo que produce, y desde 6.3
+ * hay que declararlo: ya no se puede omitir sin darse cuenta.
+ */
+const analysisScope = organizationWideScope(
+  ORGANIZATION_WIDE_REASONS.ANALYSIS_REASONING,
+);
 
 describe('Understanding Engine (integración)', () => {
   const db = prisma as unknown as PrismaService;
@@ -406,7 +423,12 @@ describe('Understanding Engine (integración)', () => {
       });
 
       expect(
-        (await retriever.execute({ organizationId: org.orgId }))[0].freshness,
+        (
+          await retriever.execute({
+            organizationId: org.orgId,
+            scope: analysisScope,
+          })
+        )[0].freshness,
       ).toBe('FRESH');
 
       // Se cambia la evidencia sin notificar absolutamente nada al Understanding Engine.
@@ -415,12 +437,16 @@ describe('Understanding Engine (integración)', () => {
         data: { confidenceComputedAt: new Date('2026-09-01') },
       });
 
-      const after = await retriever.execute({ organizationId: org.orgId });
+      const after = await retriever.execute({
+        organizationId: org.orgId,
+        scope: analysisScope,
+      });
       expect(after[0].id).toBe(insight.id);
       expect(after[0].freshness).toBe('STALE');
       expect(
         await retriever.execute({
           organizationId: org.orgId,
+          scope: analysisScope,
           requireFresh: true,
         }),
       ).toHaveLength(0);
@@ -439,7 +465,12 @@ describe('Understanding Engine (integración)', () => {
       });
 
       expect(
-        (await retriever.execute({ organizationId: org.orgId }))[0].freshness,
+        (
+          await retriever.execute({
+            organizationId: org.orgId,
+            scope: analysisScope,
+          })
+        )[0].freshness,
       ).toBe('UNRESOLVABLE');
     });
 
@@ -451,7 +482,10 @@ describe('Understanding Engine (integración)', () => {
       });
 
       const decayed = (
-        await retriever.execute({ organizationId: org.orgId })
+        await retriever.execute({
+          organizationId: org.orgId,
+          scope: analysisScope,
+        })
       )[0];
       expect(decayed.confidence).toBeLessThan(0.9);
 
@@ -463,7 +497,10 @@ describe('Understanding Engine (integración)', () => {
       });
 
       const curated = (
-        await retriever.execute({ organizationId: org.orgId })
+        await retriever.execute({
+          organizationId: org.orgId,
+          scope: analysisScope,
+        })
       )[0];
       expect(curated.confidence).toBe(0.9);
       expect(curated.curation?.type).toBe('CONFIRMATION');
@@ -495,7 +532,12 @@ describe('Understanding Engine (integración)', () => {
         }),
       ).toBe(2);
       expect(
-        (await retriever.execute({ organizationId: org.orgId }))[0].curation,
+        (
+          await retriever.execute({
+            organizationId: org.orgId,
+            scope: analysisScope,
+          })
+        )[0].curation,
       ).toBeNull();
     });
 
@@ -512,11 +554,15 @@ describe('Understanding Engine (integración)', () => {
       });
 
       expect(
-        await retriever.execute({ organizationId: org.orgId }),
+        await retriever.execute({
+          organizationId: org.orgId,
+          scope: analysisScope,
+        }),
       ).toHaveLength(0);
       expect(
         await retriever.execute({
           organizationId: org.orgId,
+          scope: analysisScope,
           historicalMode: true,
         }),
       ).toHaveLength(1);
@@ -685,14 +731,65 @@ describe('Understanding Engine (integración)', () => {
     });
   });
 
+  // ── 6.3 · El alcance vacío significa NADA, jamás TODO ────────────────────
+  describe('6.3 — alcance obligatorio por construcción', () => {
+    it('un alcance de colecciones VACÍO no devuelve comprensión alguna', async () => {
+      const item = await createKnowledgeItem(org);
+      const collection = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      await prisma.knowledgeItemCollection.create({
+        data: {
+          organizationId: org.orgId,
+          knowledgeItemId: item.id,
+          knowledgeCollectionId: collection.id,
+        },
+      });
+      await createInsight(org, {
+        subjectIdentity: 'alcance-vacio',
+        evidenceItemIds: [item.id],
+      });
+
+      // Con el alcance de la organización sí se ve: la comprensión existe.
+      expect(
+        await retriever.execute({
+          organizationId: org.orgId,
+          scope: analysisScope,
+        }),
+      ).toHaveLength(1);
+
+      // Sin ninguna colección concedida, nada. Antes de 6.3 una lista vacía era
+      // indistinguible de "sin filtro" en el Retriever de conocimiento.
+      expect(
+        await retriever.execute({
+          organizationId: org.orgId,
+          scope: collectionsScope([]),
+        }),
+      ).toHaveLength(0);
+    });
+
+    it('el alcance de organización completa queda declarado con su motivo', () => {
+      // No es un booleano suelto: exige un motivo del catálogo, y eso lo hace revisable.
+      expect(
+        analysisScope.mode === 'ORGANIZATION_WIDE' && analysisScope.reason,
+      ).toContain('§3.4');
+    });
+  });
+
   describe('3.6 — RetrieveInsights: aislamiento y alcance (§12)', () => {
     it('ninguna organización ve Insight de otra', async () => {
       const other = await createTestOrg('ue-int-b');
       await createInsight(org, { subjectIdentity: 'de-a' });
       await createInsight(other, { subjectIdentity: 'secreto-de-b' });
 
-      const fromA = await retriever.execute({ organizationId: org.orgId });
-      const fromB = await retriever.execute({ organizationId: other.orgId });
+      const fromA = await retriever.execute({
+        organizationId: org.orgId,
+        scope: analysisScope,
+      });
+      const fromB = await retriever.execute({
+        organizationId: other.orgId,
+        scope: analysisScope,
+      });
 
       expect(fromA).toHaveLength(1);
       expect(fromA[0].summary).toContain('de-a');
@@ -736,14 +833,14 @@ describe('Understanding Engine (integración)', () => {
       expect(
         await retriever.execute({
           organizationId: org.orgId,
-          allowedCollectionIds: [hr.id],
+          scope: collectionsScope([hr.id]),
         }),
       ).toHaveLength(0);
 
       expect(
         await retriever.execute({
           organizationId: org.orgId,
-          allowedCollectionIds: [hr.id, legal.id],
+          scope: collectionsScope([hr.id, legal.id]),
         }),
       ).toHaveLength(1);
     });
@@ -758,7 +855,7 @@ describe('Understanding Engine (integración)', () => {
       expect(
         await retriever.execute({
           organizationId: org.orgId,
-          allowedCollectionIds: ['cualquiera'],
+          scope: collectionsScope(['cualquiera']),
         }),
       ).toHaveLength(0);
     });

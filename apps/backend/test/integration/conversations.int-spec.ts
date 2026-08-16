@@ -8,6 +8,7 @@ import {
 import { ConversationTurnService } from '../../src/conversations/conversation-turn.service';
 import { PromptBuilderService } from '../../src/conversations/prompt-builder.service';
 import { AgentsService } from '../../src/agents/application/agents.service';
+import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import { RunAgentUseCase } from '../../src/agents/application/run-agent.use-case';
 import { RecordAgentMemoryUseCase } from '../../src/agents/application/record-agent-memory.use-case';
 import { AgentToolLoopUseCase } from '../../src/agents/application/agent-tool-loop.use-case';
@@ -59,9 +60,10 @@ describe('Conversations (integración)', () => {
   let retrievedInsights: unknown[];
   let agents: AgentsService;
   let memoryStore: PrismaMemoryStoreAdapter;
+  let collectionAccess: CollectionAccessService;
   let resolvedProfileIds: (string | null)[];
   /** Con qué alcance se llamó al Retriever desde la herramienta de búsqueda. */
-  let retrieveContextCalls: { knowledgeCollectionIds?: string[] }[];
+  let retrieveContextCalls: { scope?: unknown }[];
 
   beforeEach(async () => {
     org = await createTestOrg('conv-int');
@@ -79,12 +81,13 @@ describe('Conversations (integración)', () => {
     >(() => toStream(['Según ', '[1], ', 'son 23 días.']));
 
     agents = new AgentsService(db, auditService(db));
+    collectionAccess = new CollectionAccessService(db, auditService(db));
     memoryStore = new PrismaMemoryStoreAdapter(db);
     // Registro REAL de herramientas: el turno debe poder ejecutarlas de verdad (5.9).
     // Se anota con qué alcance se llamó para poder demostrar que lo dicta el agente.
     retrieveContextCalls = [];
     const knowledgeSearch = new KnowledgeSearchTool({
-      execute: (args: { knowledgeCollectionIds?: string[] }) => {
+      execute: (args: { scope?: unknown }) => {
         retrieveContextCalls.push(args);
         return Promise.resolve(retrievedChunks);
       },
@@ -127,6 +130,9 @@ describe('Conversations (integración)', () => {
           toolRegistry,
         ),
       ),
+      // Acceso REAL por persona: desde 6.3 el chat sin agente se acota igual que todo lo
+      // demás, y doblarlo dejaría sin verificar justo el cambio de esta subfase.
+      collectionAccess,
     );
     resolvedProfileIds = [];
     const registry = {
@@ -1447,9 +1453,10 @@ describe('Conversations (integración)', () => {
 
       // La búsqueda se acotó a la colección del agente: el alcance viene de la
       // configuración persistida, nunca de la petición ni del prompt.
-      expect(retrieveContextCalls.at(-1)?.knowledgeCollectionIds).toEqual([
-        coleccion.id,
-      ]);
+      expect(retrieveContextCalls.at(-1)?.scope).toEqual({
+        mode: 'COLLECTIONS',
+        collectionIds: [coleccion.id],
+      });
     });
 
     it('el streaming ejecuta las MISMAS herramientas que la vía síncrona', async () => {

@@ -22,6 +22,8 @@ import {
   DirectiveStreamFilter,
   type ParsedDirectives,
 } from '../agents/domain/agent-directives';
+import { CollectionAccessService } from '../knowledge-engine/application/collection-access.service';
+import { collectionsScope } from '../knowledge-engine/domain/knowledge-scope';
 import { ConversationsService } from './conversations.service';
 import {
   PromptBuilderService,
@@ -45,6 +47,11 @@ import {
  *
  * No contiene lógica de RAG ni de razonamiento propia: no reordena, no filtra por confianza,
  * no decide qué es relevante. Todo eso ya ocurrió aguas arriba.
+ *
+ * **El alcance es el de la PERSONA, con agente y sin él** (6.3). Antes, una conversación sin
+ * agente leía toda la organización: dos criterios de acceso al mismo conocimiento según por
+ * qué puerta se entrara. Hoy el criterio es único — usuario → colecciones concedidas — y con
+ * agente se acota además al alcance declarado del propio agente, que nunca puede ampliarlo.
  *
  * **Con `agentId`, el turno lo prepara `RunAgentUseCase`** (subfase 5.6), no una copia de su
  * lógica aquí. Eso importa por seguridad, no por limpieza: `RunAgentUseCase` es quien impone
@@ -114,6 +121,7 @@ export class ConversationTurnService {
     private readonly runAgent: RunAgentUseCase,
     private readonly recordMemory: RecordAgentMemoryUseCase,
     private readonly toolLoop: AgentToolLoopUseCase,
+    private readonly collectionAccess: CollectionAccessService,
   ) {}
 
   /**
@@ -153,9 +161,22 @@ export class ConversationTurnService {
       });
     }
 
+    // Alcance de la PERSONA (6.3, opción A). Hasta aquí este camino leía toda la
+    // organización, de modo que convivían dos criterios de acceso al mismo conocimiento
+    // según por qué puerta se entrara: con agente, acotado; sin agente, todo. A partir de
+    // ahora el criterio es único en todo BusinessBrain — usuario → colecciones concedidas →
+    // conocimiento, comprensión y recomendaciones accesibles.
+    const scope = collectionsScope(
+      await this.collectionAccess.accessibleCollectionIds({
+        organizationId: params.organizationId,
+        userId: params.userId,
+      }),
+    );
+
     // 1. COMPRENSIÓN primero: qué sabe ya la organización sobre este asunto.
     const insights = await this.retrieveInsights.execute({
       organizationId: params.organizationId,
+      scope,
       limit: MAX_INSIGHTS,
     });
 
@@ -163,6 +184,7 @@ export class ConversationTurnService {
     const retrieved = await this.retrieveContext.execute({
       organizationId: params.organizationId,
       query: params.content,
+      scope,
       limit: KNOWLEDGE_CHUNKS,
     });
 

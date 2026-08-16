@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LlmProviderName, Prisma } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  isEmptyScope,
+  scopeFilter,
+  type KnowledgeScope,
+} from '../domain/knowledge-scope';
 import { ProviderRegistry } from '../../llm/application/provider-registry.service';
 import { CanonicalizeUseCase } from './canonicalize.use-case';
 import {
@@ -36,8 +41,14 @@ export interface RetrieveContextParams {
   /** Obligatorio y no negociable: primer filtro, sin excepción (§13, paso 3). */
   organizationId: string;
   query: string;
-  /** Acotación por colecciones permitidas al consumidor (§13, paso 5). */
-  knowledgeCollectionIds?: string[];
+  /**
+   * Alcance de conocimiento del consumidor (§13 paso 5, §535). OBLIGATORIO desde 6.3.
+   *
+   * Antes era una lista opcional, y omitirla devolvía toda la organización: la corrección
+   * dependía de que cada llamante se acordara, y el olvido no producía ningún error visible.
+   * Ahora omitirlo no compila, y leer toda la organización exige declararlo con motivo.
+   */
+  scope: KnowledgeScope;
   /** Endurece el piso de confianza; nunca puede relajarlo (§8.5). */
   minimumConfidence?: number;
   limit?: number;
@@ -76,6 +87,20 @@ export class RetrieveContextUseCase {
   ) {}
 
   async execute(params: RetrieveContextParams): Promise<RetrievedChunk[]> {
+    // Sin ninguna colección concedida no hay nada que recuperar. Se corta aquí: construir la
+    // consulta con una lista vacía no es SQL válido, y —más importante— este retorno hace
+    // explícito que "sin concesiones" significa "nada", jamás "todo".
+    if (isEmptyScope(params.scope)) return [];
+
+    if (params.scope.mode === 'ORGANIZATION_WIDE') {
+      // Leer toda la organización queda declarado en el registro con su motivo: es la única
+      // forma de que una lectura sin acotar sea revisable después.
+      this.logger.debug(
+        `Recuperación de alcance ORGANIZATION_WIDE en ${params.organizationId}: ` +
+          params.scope.reason,
+      );
+    }
+
     const now = new Date();
 
     // Paso 1 — vectorización de la consulta con el MISMO modelo activo para la organización:
@@ -176,13 +201,18 @@ export class RetrieveContextUseCase {
         : Prisma.empty;
 
     // Paso 5 — alcance por colección permitida al consumidor.
+    //
+    // `scopeFilter` devuelve `null` SOLO para el alcance de organización completa. Una lista
+    // vacía sigue siendo una lista: filtra por nada y no devuelve nada. Confundir ambos casos
+    // era el fail-open que 6.3 cierra.
+    const allowedCollectionIds = scopeFilter(params.scope);
     const collectionFilter =
-      params.knowledgeCollectionIds && params.knowledgeCollectionIds.length > 0
-        ? Prisma.sql`AND EXISTS (
+      allowedCollectionIds === null
+        ? Prisma.empty
+        : Prisma.sql`AND EXISTS (
             SELECT 1 FROM "KnowledgeItemCollection" kic
             WHERE kic."knowledgeItemId" = ki."id"
-              AND kic."knowledgeCollectionId" IN (${Prisma.join(params.knowledgeCollectionIds)}))`
-        : Prisma.empty;
+              AND kic."knowledgeCollectionId" IN (${Prisma.join(allowedCollectionIds)}))`;
 
     const rows = await this.prisma.$queryRaw<
       {

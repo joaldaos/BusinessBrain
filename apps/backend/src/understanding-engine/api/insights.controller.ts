@@ -18,6 +18,7 @@ import type {
   RequestUser,
 } from '../../common/types/authenticated-request';
 import { CollectionAccessService } from '../../knowledge-engine/application/collection-access.service';
+import { collectionsScope } from '../../knowledge-engine/domain/knowledge-scope';
 import { RetrieveInsightsUseCase } from '../application/retrieve-insights.use-case';
 import { CurateInsightUseCase } from '../application/curate-insight.use-case';
 import { InsightScopeService } from '../application/insight-scope.service';
@@ -66,7 +67,7 @@ export class InsightsController {
 
     const insights = await this.retrieveInsights.execute({
       organizationId: org.id,
-      allowedCollectionIds,
+      scope: collectionsScope(allowedCollectionIds),
       types: query.type ? [query.type] : undefined,
       minimumConfidence: query.minimumConfidence,
       businessObjectiveId: query.businessObjectiveId,
@@ -97,7 +98,7 @@ export class InsightsController {
 
     const [found] = await this.retrieveInsights.execute({
       organizationId: org.id,
-      allowedCollectionIds,
+      scope: collectionsScope(allowedCollectionIds),
       insightIds: [insightId],
       limit: 1,
     });

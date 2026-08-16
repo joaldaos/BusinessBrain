@@ -18,6 +18,7 @@ import {
   toolProtocolDirective,
 } from '../domain/agent-directives';
 import { TOOL_REGISTRY, type ToolPort } from '../domain/ports/tool.port';
+import { collectionsScope } from '../../knowledge-engine/domain/knowledge-scope';
 import {
   memoryBlock,
   memoryRecallLimit,
@@ -141,7 +142,7 @@ export class RunAgentUseCase {
     // 1. COMPRENSIÓN primero, acotada al alcance del agente.
     const insights = await this.retrieveInsights.execute({
       organizationId: params.organizationId,
-      allowedCollectionIds,
+      scope: collectionsScope(allowedCollectionIds),
       limit: MAX_INSIGHTS,
     });
 
@@ -149,7 +150,7 @@ export class RunAgentUseCase {
     const retrieved = await this.retrieveContext.execute({
       organizationId: params.organizationId,
       query: params.query,
-      knowledgeCollectionIds: allowedCollectionIds,
+      scope: collectionsScope(allowedCollectionIds),
       limit: KNOWLEDGE_CHUNKS,
     });
 

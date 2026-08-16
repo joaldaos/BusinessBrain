@@ -498,6 +498,77 @@ describe('Agentes y conversaciones (E2E)', () => {
     });
   });
 
+  // ── 6.3 · Criterio de acceso único, por HTTP ─────────────────────────────
+  describe('alcance por persona, con agente y sin él (6.3)', () => {
+    it('el chat SIN agente respeta las colecciones concedidas', async () => {
+      const collection = await prisma.knowledgeCollection.create({
+        data: { organizationId: tenant.organizationId, name: 'Ventas' },
+      });
+      await seedUnderstanding(tenant, collection.id);
+
+      const sinAcceso = await addMember(
+        tenant,
+        MembershipRole.MEMBER,
+        'sinacc',
+      );
+      extraUsers.push(sinAcceso.userId);
+
+      // Sin concesiones: la conversación no encuentra material que mostrar.
+      const conversation = await as(sinAcceso, tenant)
+        .post('/conversations')
+        .send({})
+        .expect(201);
+      llmScript.answers = ['Respuesta.'];
+      const sinNada = await as(sinAcceso, tenant)
+        .post(`/conversations/${conversation.body.data.id}/messages`)
+        .send({ content: '¿qué sabes de descuentos?' })
+        .expect(201);
+      expect(sinNada.body.data.insightsUsed).toHaveLength(0);
+
+      // Con la colección concedida, la misma pregunta sí encuentra comprensión.
+      await as(tenant.owner, tenant)
+        .post(`/knowledge-collections/${collection.id}/access`)
+        .send({ userId: sinAcceso.userId })
+        .expect(201);
+
+      llmScript.answers = ['Respuesta con material.'];
+      const conAcceso = await as(sinAcceso, tenant)
+        .post(`/conversations/${conversation.body.data.id}/messages`)
+        .send({ content: '¿qué sabes de descuentos?' })
+        .expect(201);
+      expect(conAcceso.body.data.insightsUsed.length).toBeGreaterThan(0);
+    });
+
+    it('el criterio es el MISMO en chat, insights y recomendaciones', async () => {
+      const collection = await prisma.knowledgeCollection.create({
+        data: { organizationId: tenant.organizationId, name: 'Ventas' },
+      });
+      await seedUnderstanding(tenant, collection.id);
+      const member = await addMember(tenant, MembershipRole.MEMBER, 'unico');
+      extraUsers.push(member.userId);
+
+      // Sin concesión: las tres superficies coinciden en no mostrar nada.
+      expect(
+        (await as(member, tenant).get('/insights').expect(200)).body.data,
+      ).toHaveLength(0);
+      expect(
+        (await as(member, tenant).get('/recommendations').expect(200)).body
+          .data,
+      ).toHaveLength(0);
+
+      await as(tenant.owner, tenant)
+        .post(`/knowledge-collections/${collection.id}/access`)
+        .send({ userId: member.userId })
+        .expect(201);
+
+      // Con concesión, también coinciden en mostrarlo.
+      expect(
+        (await as(member, tenant).get('/insights').expect(200)).body.data
+          .length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
   // ── Instalación de plantillas ────────────────────────────────────────────
   describe('instalación de plantillas', () => {
     it('instala una plantilla propia y conserva templateId', async () => {

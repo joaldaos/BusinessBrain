@@ -235,8 +235,11 @@ describe('Agent tools (integración)', () => {
 
       await run(agent.id, 'knowledge_search');
 
+      // Desde 6.3 el alcance viaja como valor explícito, no como lista opcional.
       expect(retrieveContextSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ knowledgeCollectionIds: [collectionId] }),
+        expect.objectContaining({
+          scope: { mode: 'COLLECTIONS', collectionIds: [collectionId] },
+        }),
       );
     });
 

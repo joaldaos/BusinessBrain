@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { RetrieveContextUseCase } from '../../../knowledge-engine/application/retrieve-context.use-case';
 import { citationLabel } from '../../../knowledge-engine/domain/context-builder';
 import type { KnownTool } from '../../domain/agent-configuration';
+import { collectionsScope } from '../../../knowledge-engine/domain/knowledge-scope';
 import type {
   ToolExecutionScope,
   ToolPort,
@@ -35,7 +36,7 @@ export class KnowledgeSearchTool implements ToolPort {
     const chunks = await this.retrieveContext.execute({
       organizationId: scope.organizationId,
       query: input,
-      knowledgeCollectionIds: scope.allowedCollectionIds,
+      scope: collectionsScope(scope.allowedCollectionIds),
       limit: MAX_RESULTS,
     });
 

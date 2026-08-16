@@ -6,6 +6,11 @@ import {
   Prisma,
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  isEmptyScope,
+  scopeFilter,
+  type KnowledgeScope,
+} from '../../knowledge-engine/domain/knowledge-scope';
 import { InsightScopeService } from './insight-scope.service';
 import { TERMINAL_INSIGHT_STATUSES } from '../domain/insight-status.classification';
 import { TERMINAL_KNOWLEDGE_ITEM_STATUSES } from '../../knowledge-engine/domain/knowledge-item-status.classification';
@@ -33,8 +38,13 @@ export interface RetrieveInsightsParams {
   organizationId: string;
   types?: InsightType[];
   minimumConfidence?: number;
-  /** Colecciones a las que el consumidor tiene acceso concedido (§3.4, §12). */
-  allowedCollectionIds?: string[];
+  /**
+   * Alcance de conocimiento del consumidor (§3.4, §12). OBLIGATORIO desde 6.3.
+   *
+   * Antes era opcional y omitirlo devolvía TODA la comprensión de la organización. Ahora
+   * omitirlo no compila, y leerla entera exige declararlo con motivo.
+   */
+  scope: KnowledgeScope;
   /**
    * Acota a unos identificadores concretos (6.1). Existe para que leer UN `Insight` recorra
    * exactamente el mismo camino que leer la lista —decaimiento, frescura y curación
@@ -80,6 +90,18 @@ export class RetrieveInsightsUseCase {
   ) {}
 
   async execute(params: RetrieveInsightsParams): Promise<RetrievedInsight[]> {
+    // Sin ninguna colección concedida no hay comprensión accesible. Se corta antes de
+    // consultar: es la respuesta correcta, no un caso degenerado.
+    if (isEmptyScope(params.scope)) return [];
+
+    if (params.scope.mode === 'ORGANIZATION_WIDE') {
+      this.logger.debug(
+        `Lectura de comprensión de alcance ORGANIZATION_WIDE en ` +
+          `${params.organizationId}: ${params.scope.reason}`,
+      );
+    }
+
+    const allowedCollectionIds = scopeFilter(params.scope);
     const now = new Date();
 
     const insights = await this.prisma.insight.findMany({
@@ -168,14 +190,17 @@ export class RetrieveInsightsUseCase {
       // Alcance efectivo de colección (§3.4): un consumidor solo recupera un Insight si
       // cubre TODAS las colecciones que sostienen su justificación. Cobertura completa: el
       // acceso parcial deniega, nunca concede parcialmente.
-      if (params.allowedCollectionIds) {
+      //
+      // El alcance de organización completa se salta la comparación por diseño: lo usa el
+      // razonamiento, que analiza todo el conocimiento de la empresa (§3.4).
+      if (allowedCollectionIds !== null) {
         // Proyección ÚNICA del sistema (6.1): antes se calculaba aquí y otra vez en
         // `CurateInsight`. Dos definiciones del mismo alcance son dos criterios.
         const scope = await this.insightScope.effectiveScopeOf(
           params.organizationId,
           insight.transitiveEvidenceClosure,
         );
-        const allowed = new Set(params.allowedCollectionIds);
+        const allowed = new Set(allowedCollectionIds);
         const covered = scope.every((collectionId) =>
           allowed.has(collectionId),
         );

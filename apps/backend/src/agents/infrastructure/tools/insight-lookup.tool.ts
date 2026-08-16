@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RetrieveInsightsUseCase } from '../../../understanding-engine/application/retrieve-insights.use-case';
 import type { KnownTool } from '../../domain/agent-configuration';
+import { collectionsScope } from '../../../knowledge-engine/domain/knowledge-scope';
 import type {
   ToolExecutionScope,
   ToolPort,
@@ -33,7 +34,7 @@ export class InsightLookupTool implements ToolPort {
   ): Promise<ToolResult> {
     const insights = await this.retrieveInsights.execute({
       organizationId: scope.organizationId,
-      allowedCollectionIds: scope.allowedCollectionIds,
+      scope: collectionsScope(scope.allowedCollectionIds),
       limit: MAX_RESULTS,
     });
 

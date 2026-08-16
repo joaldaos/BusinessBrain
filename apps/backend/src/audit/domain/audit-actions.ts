@@ -28,6 +28,16 @@ export const AUDIT_ACTIONS = {
   /** Una ejecución desatendida terminó. Sin actor: no la provocó una persona. */
   AUTOMATION_RUN_FINISHED: 'automation.run.finished',
 
+  // ── Informes ──────────────────────────────────────────────────────────────
+  //
+  // El PDF no se almacena: se entrega y se descarta. La traza de generación es, por tanto,
+  // el ÚNICO registro de qué contenía — por eso guarda el alcance con el que se leyó y la
+  // evidencia exacta de cada sección, no solo que alguien lo pidió.
+  REPORT_CREATED: 'report.created',
+  REPORT_UPDATED: 'report.updated',
+  REPORT_DELETED: 'report.deleted',
+  REPORT_GENERATED: 'report.generated',
+
   // ── Plantillas: instalar concede capacidades ya configuradas ──────────────
   AGENT_TEMPLATE_CREATED: 'agent_template.created',
   AGENT_TEMPLATE_UPDATED: 'agent_template.updated',
@@ -75,6 +85,7 @@ export const AUDIT_TARGET_TYPES = {
   AGENT: 'Agent',
   AGENT_TEMPLATE: 'AgentTemplate',
   AUTOMATION: 'Automation',
+  REPORT: 'Report',
   KNOWLEDGE_COLLECTION: 'KnowledgeCollection',
   BUSINESS_OBJECTIVE: 'BusinessObjective',
   ANALYSIS_RUN: 'AnalysisRun',

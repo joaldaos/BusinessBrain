@@ -15,6 +15,7 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { AgentsModule } from './agents/agents.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { AutomationsModule } from './automations/automations.module';
+import { ReportsModule } from './reports/reports.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -32,6 +33,7 @@ import { HealthModule } from './health/health.module';
     AgentsModule,
     RecommendationsModule,
     AutomationsModule,
+    ReportsModule,
     HealthModule,
   ],
   providers: [

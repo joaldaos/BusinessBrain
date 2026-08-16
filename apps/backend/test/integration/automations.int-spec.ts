@@ -14,6 +14,12 @@ import { TriggerAnalysisRunUseCase } from '../../src/understanding-engine/applic
 import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/infrastructure/prisma-knowledge-signals.adapter';
 import { KnowledgeSignalStrategy } from '../../src/understanding-engine/infrastructure/strategies/knowledge-signal.strategy';
 import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine/infrastructure/strategies/generative-synthesis.strategy';
+import { ReportsService } from '../../src/reports/application/reports.service';
+import { ComposeReportUseCase } from '../../src/reports/application/compose-report.use-case';
+import { PdfRenderer } from '../../src/reports/infrastructure/pdf-renderer';
+import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
+import type { RetrieveContextUseCase } from '../../src/knowledge-engine/application/retrieve-context.use-case';
+import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
@@ -39,6 +45,7 @@ describe('Automatizaciones (integración)', () => {
   let service: AutomationsService;
   let runner: RunAutomationUseCase;
   let clock: AutomationSchedulerService;
+  let reports: ReportsService;
 
   const noGenerative = {
     key: 'generative-synthesis',
@@ -51,6 +58,18 @@ describe('Automatizaciones (integración)', () => {
 
   beforeAll(() => {
     service = new AutomationsService(db, auditService(db), scheduler);
+    reports = new ReportsService(
+      db,
+      auditService(db),
+      new ComposeReportUseCase(
+        new RetrieveInsightsUseCase(db),
+        {
+          execute: () => Promise.resolve([]),
+        } as unknown as RetrieveContextUseCase,
+        new CollectionAccessService(db, auditService(db)),
+      ),
+      new PdfRenderer(),
+    );
     runner = new RunAutomationUseCase(
       db,
       auditService(db),
@@ -63,6 +82,7 @@ describe('Automatizaciones (integración)', () => {
         auditService(db),
         subjectIdentity(db),
       ),
+      reports,
     );
     clock = new AutomationSchedulerService(db, runner, scheduler);
   });
@@ -323,6 +343,103 @@ describe('Automatizaciones (integración)', () => {
       expect(despues.nextRunAt).toBeNull();
 
       await destroyTestOrg(otra);
+    });
+  });
+
+  describe('GENERATE_REPORT: la cadena completa sin nadie delante', () => {
+    const crearInforme = () =>
+      reports.create({
+        organizationId: org.orgId,
+        actorUserId: org.userId,
+        name: 'Resumen automatico',
+        template: {
+          sections: [{ type: 'INSIGHTS', title: 'Comprension', limit: 10 }],
+        },
+      });
+
+    it('CRITERIO DE CIERRE: analisis y despues informe, ambos desatendidos', async () => {
+      const item = await createKnowledgeItem(org, { confidenceScore: 0.05 });
+      const collection = await prisma.knowledgeCollection.create({
+        data: { organizationId: org.orgId, name: 'Ventas' },
+      });
+      await prisma.knowledgeItemCollection.create({
+        data: {
+          knowledgeItemId: item.id,
+          knowledgeCollectionId: collection.id,
+          organizationId: org.orgId,
+        },
+      });
+      await new CollectionAccessService(db, auditService(db)).grant({
+        organizationId: org.orgId,
+        knowledgeCollectionId: collection.id,
+        userId: org.userId,
+        grantedById: org.userId,
+      });
+
+      const report = await crearInforme();
+      const automation = await crear({
+        actions: [
+          { type: 'RUN_ANALYSIS' },
+          { type: 'GENERATE_REPORT', reportId: report.id },
+        ],
+      });
+      await prisma.automation.update({
+        where: { id: automation.id },
+        data: { nextRunAt: new Date(Date.now() - 60_000) },
+      });
+
+      expect(await clock.runDueAutomations()).toContain(automation.id);
+
+      const run = await prisma.automationRun.findFirstOrThrow({
+        where: { automationId: automation.id },
+      });
+      expect(run.status).toBe(RunStatus.SUCCESS);
+      const diario = JSON.stringify(run.logs);
+      expect(diario).toMatch(/AnalysisRun/);
+      expect(diario).toMatch(/ReportRun/);
+      // El PDF se genero y NO se guardo: eso seria un efecto que nadie pidio.
+      expect(diario).toMatch(/NO almacenados/);
+
+      const reportRun = await prisma.reportRun.findFirstOrThrow({
+        where: { reportId: report.id },
+      });
+      expect(reportRun.status).toBe(RunStatus.SUCCESS);
+      expect(reportRun.fileUrl).toBeNull();
+
+      // El informe se genero con el alcance de quien creo la automatizacion, y la traza lo
+      // deja escrito.
+      const log = await prisma.auditLog.findFirstOrThrow({
+        where: { action: 'report.generated', targetId: report.id },
+      });
+      expect(log.actorId).toBe(org.userId);
+      expect(
+        log.metadata as { trigger: string; externalActionExecuted: boolean },
+      ).toMatchObject({ trigger: 'AUTOMATION', externalActionExecuted: false });
+    });
+
+    it('RECHAZA apuntar al informe de OTRA organizacion', async () => {
+      const otra = await createTestOrg('automations-ajena');
+      const suyo = await reports.create({
+        organizationId: otra.orgId,
+        actorUserId: otra.userId,
+        name: 'El de la vecina',
+        template: { sections: [{ type: 'INSIGHTS', title: 'x', limit: 5 }] },
+      });
+
+      // Sin esto, el reloj generaria el informe de otro tenant de madrugada.
+      await expect(
+        crear({ actions: [{ type: 'GENERATE_REPORT', reportId: suyo.id }] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      await destroyTestOrg(otra);
+    });
+
+    it('RECHAZA apuntar a un informe inexistente', async () => {
+      await expect(
+        crear({
+          actions: [{ type: 'GENERATE_REPORT', reportId: 'no-existe' }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

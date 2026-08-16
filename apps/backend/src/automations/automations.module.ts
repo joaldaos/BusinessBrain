@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UnderstandingEngineModule } from '../understanding-engine/understanding-engine.module';
+import { ReportsModule } from '../reports/reports.module';
 import { AutomationsController } from './api/automations.controller';
 import { AutomationsService } from './application/automations.service';
 import { AutomationSchedulerService } from './application/automation-scheduler.service';
@@ -15,8 +16,8 @@ import { CronSchedulerAdapter } from './infrastructure/cron-scheduler.adapter';
  * pulsaba un botón: la Fase 7 construyó la memoria de la creencia sin que casi nada la
  * alimentase, porque una trayectoria necesita ejecuciones repetidas en el tiempo.
  *
- * Este módulo **no importa `AgentsModule`, `LlmModule` ni ningún cliente HTTP**, y no es un
- * descuido. Una automatización solo puede orquestar capacidades internas que ya existen; no
+ * Este módulo **no importa `AgentsModule`, `LlmModule` ni ningún cliente HTTP, de correo o de
+ * almacenamiento**, y no es un descuido. Una automatización solo puede orquestar capacidades internas que ya existen; no
  * teniendo con qué llamar al exterior, "nunca modifica automáticamente" (Principio de
  * Evolución Asistida) queda garantizado por la estructura del código y no por una regla que
  * alguien deba recordar.
@@ -25,7 +26,7 @@ import { CronSchedulerAdapter } from './infrastructure/cron-scheduler.adapter';
  * tocar el dominio.
  */
 @Module({
-  imports: [ScheduleModule.forRoot(), UnderstandingEngineModule],
+  imports: [ScheduleModule.forRoot(), UnderstandingEngineModule, ReportsModule],
   controllers: [AutomationsController],
   providers: [
     AutomationsService,

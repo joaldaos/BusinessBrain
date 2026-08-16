@@ -9,11 +9,11 @@
  * Asistida ("siempre propone, nunca modifica automáticamente") dejaría de sostenerse, porque
  * el principio no lo garantizaría la arquitectura sino la buena fe de quien redacta el JSON.
  *
- * El catálogo arranca con una sola acción a propósito: `RUN_ANALYSIS` es la que hace que el
- * motor de comprensión funcione solo, y es ejecutable de principio a fin hoy. Ejecutar un
- * agente o generar un informe necesitan un DESTINO para su salida, y ese destino es
- * `ReportsModule` — llegan con él. Declarar aquí una acción que pudiera crearse pero no
- * ejecutarse dejaría una automatización que falla de madrugada, en silencio.
+ * El catálogo solo crece cuando la acción es ejecutable de principio a fin. `GENERATE_REPORT`
+ * entra al existir `ReportsModule`, que es el destino de su salida. `RUN_AGENT` sigue fuera
+ * por lo mismo: la respuesta de un agente no tiene todavía dónde ir. Declarar aquí una acción
+ * que pudiera crearse pero no ejecutarse dejaría una automatización que falla de madrugada,
+ * en silencio.
  *
  * Una automatización ORQUESTA capacidades internas que ya existen y que ya son seguras por su
  * cuenta. No añade ninguna capacidad nueva, y sobre todo no añade la de tocar el mundo
@@ -39,11 +39,18 @@
 export const AUTOMATION_ACTION_TYPES = [
   /** Lanza un `AnalysisRun`: el motor de comprensión razona sobre el conocimiento actual. */
   'RUN_ANALYSIS',
+  /**
+   * Genera un informe existente. El PDF no se almacena ni se envía a nadie: la generación
+   * queda registrada como `ReportRun` con su evidencia, y una persona lo descarga cuando
+   * quiere. Enviarlo sería un efecto externo, y eso es `IntegrationsModule`.
+   */
+  'GENERATE_REPORT',
 ] as const;
 
 export type AutomationActionType = (typeof AUTOMATION_ACTION_TYPES)[number];
 
-export type AutomationAction = { type: 'RUN_ANALYSIS' };
+export type AutomationAction =
+  { type: 'RUN_ANALYSIS' } | { type: 'GENERATE_REPORT'; reportId: string };
 
 /** Tope de pasos por automatización: una lista sin cota es una ejecución sin cota. */
 export const MAX_ACTIONS_PER_AUTOMATION = 10;
@@ -99,6 +106,16 @@ function parseAction(raw: unknown, index: number): AutomationAction {
   switch (type as AutomationActionType) {
     case 'RUN_ANALYSIS':
       return { type: 'RUN_ANALYSIS' };
+
+    case 'GENERATE_REPORT': {
+      const reportId = action.reportId;
+      if (typeof reportId !== 'string' || reportId.trim().length === 0) {
+        throw new InvalidAutomationPlanError(
+          `${position}: reportId es obligatorio`,
+        );
+      }
+      return { type: 'GENERATE_REPORT', reportId: reportId.trim() };
+    }
   }
 }
 

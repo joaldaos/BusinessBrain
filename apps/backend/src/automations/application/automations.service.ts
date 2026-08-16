@@ -62,6 +62,7 @@ export class AutomationsService {
       triggerConfig: params.triggerConfig,
       actions: params.actions,
     });
+    await this.assertReferencesBelongToOrg(params.organizationId, actions);
 
     const automation = await this.prisma.automation.create({
       data: {
@@ -168,6 +169,8 @@ export class AutomationsService {
       // Reanudarla vuelve a calcularla, así que pausar no pierde el calendario.
       paused: status !== AutomationStatus.ACTIVE,
     });
+
+    await this.assertReferencesBelongToOrg(params.organizationId, plan.actions);
 
     const updated = await this.prisma.automation.update({
       where: { id: existing.id },
@@ -290,5 +293,43 @@ export class AutomationsService {
     }
 
     return { actions, triggerConfig: schedule, nextRunAt };
+  }
+
+  /**
+   * Todo lo que el plan NOMBRA debe existir en ESTA organización.
+   *
+   * Se comprueba también al modificar, no solo al crear: una automatización que apuntaba a un
+   * informe existente no puede seguir apuntándolo después de que lo retiren, ni empezar a
+   * apuntar al de otro tenant. Sin esto, el reloj sería una vía para generar el informe de
+   * otra organización a las tres de la mañana, cuando no hay nadie mirando.
+   */
+  private async assertReferencesBelongToOrg(
+    organizationId: string,
+    actions: AutomationAction[],
+  ): Promise<void> {
+    const reportIds = [
+      ...new Set(
+        actions
+          .filter(
+            (
+              action,
+            ): action is Extract<
+              AutomationAction,
+              { type: 'GENERATE_REPORT' }
+            > => action.type === 'GENERATE_REPORT',
+          )
+          .map((action) => action.reportId),
+      ),
+    ];
+    if (reportIds.length === 0) return;
+
+    const found = await this.prisma.report.count({
+      where: { id: { in: reportIds }, organizationId },
+    });
+    if (found !== reportIds.length) {
+      throw new BadRequestException(
+        'Alguno de los informes indicados no existe o pertenece a otra organización',
+      );
+    }
   }
 }

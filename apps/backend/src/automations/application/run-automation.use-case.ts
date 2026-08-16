@@ -14,6 +14,7 @@ import {
 } from '../../audit/domain/audit-actions';
 import { TriggerAnalysisRunUseCase } from '../../understanding-engine/application/trigger-analysis-run.use-case';
 import { AnalysisRunTrigger } from '@businessbrain/database';
+import { ReportsService } from '../../reports/application/reports.service';
 import { parseAutomationActions } from '../domain/automation-plan';
 
 /** Una línea del diario de la ejecución. Se guarda en `AutomationRun.logs`. */
@@ -50,6 +51,7 @@ export class RunAutomationUseCase {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly analysis: TriggerAnalysisRunUseCase,
+    private readonly reports: ReportsService,
   ) {}
 
   async execute(automation: Automation): Promise<{
@@ -88,6 +90,29 @@ export class RunAutomationUseCase {
             if (result.status !== 'SUCCESS') {
               throw new Error(`El análisis terminó en estado ${result.status}`);
             }
+            break;
+          }
+
+          case 'GENERATE_REPORT': {
+            // EN NOMBRE de quien creó la automatización, cuya membresía se acaba de
+            // verificar. De ahí sale el alcance: el informe no puede contener nada que esa
+            // persona no pudiera leer por HTTP. Que corra sin nadie delante no relaja nada.
+            const generated = await this.reports.generate({
+              organizationId: automation.organizationId,
+              actorUserId: automation.createdById,
+              reportId: action.reportId,
+              trigger: 'AUTOMATION',
+            });
+            // El PDF no se guarda ni se envía a nadie: enviarlo sería un efecto externo, y
+            // eso es `IntegrationsModule`. Queda el `ReportRun` con su evidencia.
+            logs.push({
+              at: new Date().toISOString(),
+              action: action.type,
+              outcome: 'SUCCESS',
+              detail:
+                `ReportRun ${generated.runId}: ${generated.content.length} bytes ` +
+                `generados y NO almacenados`,
+            });
             break;
           }
         }

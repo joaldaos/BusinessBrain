@@ -4,6 +4,7 @@ import { ClassifyContentUseCase } from './classify-content.use-case';
 import { IngestFromSourceUseCase } from './ingest-from-source.use-case';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { EncryptionService } from '../../common/utils/encryption.util';
+import type { AuditService } from '../../audit/audit.service';
 import type { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { ExtractedContent } from '../domain/ports/connector.port';
 
@@ -114,6 +115,9 @@ describe('IngestFromSourceUseCase', () => {
         encrypt: (value: string) => value,
         decrypt: (value: string) => value,
       } as unknown as EncryptionService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditService,
     );
   });
 

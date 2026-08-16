@@ -23,9 +23,13 @@ import type { GenerativeSynthesisStrategy } from '../../src/understanding-engine
 import type { ClassifyContentUseCase } from '../../src/knowledge-engine/application/classify-content.use-case';
 import type { ReportsService } from '../../src/reports/application/reports.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import { CollectionAccessService } from '../../src/knowledge-engine/application/collection-access.service';
+import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
+import { collectionsScope } from '../../src/knowledge-engine/domain/knowledge-scope';
 import { FakeGoogleDrive } from '../fake-google-drive';
 import {
   auditService,
+  createInsight,
   createTestOrg,
   destroyTestOrg,
   encryptionService,
@@ -80,6 +84,7 @@ describe('Google Drive (integración)', () => {
       connectors,
       classify,
       encryptionService(),
+      auditService(db),
     );
     sources = new KnowledgeSourcesService(db, encryptionService());
 
@@ -436,6 +441,272 @@ describe('Google Drive (integración)', () => {
       ).rejects.toThrow(/no encontrada/i);
 
       await destroyTestOrg(otra);
+    });
+  });
+
+  describe('un documento que desaparece del origen NO se elimina', () => {
+    /** Deja el conocimiento ingerido y devuelve la fuente y el item. */
+    const seedSynced = async () => {
+      const integration = await connect();
+      const { source, collection } = await createDriveSource(integration.id);
+      await sync(source.id);
+      const item = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { organizationId: org.orgId },
+      });
+      return { source, collection, item };
+    };
+
+    it('1. el conocimiento se CONSERVA y queda marcado como ausente en su origen', async () => {
+      const { source, item } = await seedSynced();
+
+      drive.removeFile('doc-1');
+      const result = await sync(source.id);
+
+      expect(result.status).toBe(RunStatus.SUCCESS);
+
+      const after = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { id: item.id },
+      });
+      // El contenido sigue entero: esto es una observacion, no una supresion.
+      expect(after.contentText).toBe(item.contentText);
+      expect(after.sourceMissingSince).toBeInstanceOf(Date);
+    });
+
+    it('2. si REAPARECE se recupera, sobre el MISMO item', async () => {
+      const { source, item } = await seedSynced();
+      drive.removeFile('doc-1');
+      await sync(source.id);
+
+      // Alguien lo devuelve a la carpeta.
+      drive.putFile({
+        id: 'doc-1',
+        name: 'Política de descuentos',
+        text: POLITICA,
+        modifiedTime: '2026-08-01T10:00:00.000Z',
+      });
+      await sync(source.id);
+
+      const after = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { id: item.id },
+      });
+      // Mismo identificador: no nace una identidad nueva.
+      expect(after.id).toBe(item.id);
+      expect(after.sourceMissingSince).toBeNull();
+    });
+
+    it('3. NUNCA se genera ELIMINADO', async () => {
+      const { source, item } = await seedSynced();
+
+      drive.removeFile('doc-1');
+      await sync(source.id);
+
+      const after = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { id: item.id },
+      });
+      // Eliminar es una decision humana o administrativa (§5). Una sincronizacion observa,
+      // no decide.
+      expect(after.status).toBe('INDEXED');
+      expect(
+        await prisma.knowledgeItem.count({
+          where: { organizationId: org.orgId, status: 'DELETED' },
+        }),
+      ).toBe(0);
+    });
+
+    it('4. no se DUPLICA el KnowledgeItem', async () => {
+      const { source } = await seedSynced();
+
+      drive.removeFile('doc-1');
+      await sync(source.id);
+      drive.putFile({
+        id: 'doc-1',
+        name: 'Política de descuentos',
+        text: POLITICA,
+        modifiedTime: '2026-08-01T10:00:00.000Z',
+      });
+      await sync(source.id);
+
+      expect(
+        await prisma.knowledgeItem.count({
+          where: { organizationId: org.orgId },
+        }),
+      ).toBe(1);
+    });
+
+    it('5. el historial y el linaje quedan INTACTOS', async () => {
+      const integration = await connect();
+      const { source } = await createDriveSource(integration.id);
+      await sync(source.id);
+
+      // Se edita: nace una version con su arista.
+      drive.putFile({
+        id: 'doc-1',
+        name: 'Política de descuentos',
+        text: `${POLITICA} Revisado en agosto de 2026.`,
+        modifiedTime: '2026-08-20T10:00:00.000Z',
+      });
+      const edited = await sync(source.id);
+      expect(edited.stats.itemsUpdated).toBe(1);
+
+      const edgesBefore = await prisma.knowledgeItemLineageEdge.count({
+        where: { organizationId: org.orgId },
+      });
+      const itemsBefore = await prisma.knowledgeItem.count({
+        where: { organizationId: org.orgId },
+      });
+
+      drive.removeFile('doc-1');
+      await sync(source.id);
+
+      expect(
+        await prisma.knowledgeItemLineageEdge.count({
+          where: { organizationId: org.orgId },
+        }),
+      ).toBe(edgesBefore);
+      expect(
+        await prisma.knowledgeItem.count({
+          where: { organizationId: org.orgId },
+        }),
+      ).toBe(itemsBefore);
+
+      // Y la version superada NO recibe la marca: ya no representaba el origen.
+      const superseded = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { organizationId: org.orgId, status: 'SUPERSEDED' },
+      });
+      expect(superseded.sourceMissingSince).toBeNull();
+    });
+
+    it('6. otra organizacion no puede provocarlo ni observarlo', async () => {
+      const { item } = await seedSynced();
+      const otra = await createTestOrg('drive-vecina');
+
+      // Su propia sincronizacion no puede alcanzar items ajenos.
+      const suyaIntegration = await integrations.completeConnection({
+        organizationId: otra.orgId,
+        userId: otra.userId,
+        provider: IntegrationProvider.GOOGLE_DRIVE,
+        tokens: {
+          accessToken: 'acceso-vecina',
+          refreshToken: 'refresco-vecina',
+          expiresAt: new Date(Date.now() + 3_600_000),
+          scope: 'https://www.googleapis.com/auth/drive.readonly',
+        },
+      });
+      const suyaCollection = await prisma.knowledgeCollection.create({
+        data: { organizationId: otra.orgId, name: 'Drive' },
+      });
+      const suyaSource = await sources.create(otra.orgId, otra.userId, {
+        name: 'Su carpeta',
+        type: 'GOOGLE_DRIVE',
+        connectorKey: 'google_drive_v1',
+        integrationId: suyaIntegration.id,
+        config: { integrationId: suyaIntegration.id, folderId: 'folder-vacia' },
+        knowledgeCollectionIds: [suyaCollection.id],
+      });
+
+      await ingest.execute({
+        organizationId: otra.orgId,
+        knowledgeSourceId: suyaSource.id,
+        connectorInput: {},
+      });
+
+      // El item de la primera organizacion sigue intacto: la conciliacion esta acotada por
+      // organizacion Y por fuente.
+      const after = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { id: item.id },
+      });
+      expect(after.sourceMissingSince).toBeNull();
+
+      await destroyTestOrg(otra);
+    });
+
+    it('7. la automatizacion programada respeta el comportamiento', async () => {
+      const { source, item } = await seedSynced();
+      drive.removeFile('doc-1');
+
+      const automations = new AutomationsService(
+        db,
+        auditService(db),
+        new CronSchedulerAdapter(),
+        connectors,
+      );
+      const runner = new RunAutomationUseCase(
+        db,
+        auditService(db),
+        { execute: () => Promise.resolve({ status: 'SUCCESS' }) } as never,
+        { generate: () => Promise.resolve({}) } as unknown as ReportsService,
+        ingest,
+      );
+
+      const automation = await automations.create({
+        organizationId: org.orgId,
+        actorUserId: org.userId,
+        name: 'Leer el Drive',
+        triggerType: AutomationTriggerType.MANUAL,
+        triggerConfig: {},
+        actions: [
+          { type: 'SYNC_KNOWLEDGE_SOURCE', knowledgeSourceId: source.id },
+        ],
+      });
+      const run = await runner.execute(automation);
+
+      expect(run.status).toBe(RunStatus.SUCCESS);
+      const after = await prisma.knowledgeItem.findFirstOrThrow({
+        where: { id: item.id },
+      });
+      // Sin nadie delante se comporta igual: marca, no elimina.
+      expect(after.status).toBe('INDEXED');
+      expect(after.sourceMissingSince).toBeInstanceOf(Date);
+    });
+
+    it('queda TRAZA, y declara que no se elimino nada', async () => {
+      const { source } = await seedSynced();
+
+      drive.removeFile('doc-1');
+      await sync(source.id);
+
+      const log = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          organizationId: org.orgId,
+          action: 'knowledge_source.presence_reconciled',
+          targetId: source.id,
+        },
+      });
+      // Sin actor: no lo provoco una persona sino una sincronizacion.
+      expect(log.actorId).toBeNull();
+      expect(log.metadata).toMatchObject({
+        markedMissing: 1,
+        restored: 0,
+        deletedAny: false,
+      });
+    });
+
+    it('la comprension deja de presentarse como vigente, sin retirarse', async () => {
+      const { source, collection, item } = await seedSynced();
+      await new CollectionAccessService(db, auditService(db)).grant({
+        organizationId: org.orgId,
+        knowledgeCollectionId: collection.id,
+        userId: org.userId,
+        grantedById: org.userId,
+      });
+      await createInsight(org, {
+        subjectIdentity: 'asunto-del-drive',
+        evidenceItemIds: [item.id],
+      });
+
+      drive.removeFile('doc-1');
+      await sync(source.id);
+
+      const [leido] = await new RetrieveInsightsUseCase(db).execute({
+        organizationId: org.orgId,
+        scope: collectionsScope([collection.id]),
+      });
+
+      // Sigue siendo consultable —no se ha retirado nada— pero no se sirve como vigente, y
+      // el motivo dice exactamente lo que pasa.
+      expect(leido).toBeDefined();
+      expect(leido.freshness).toBe('STALE');
+      expect(leido.freshnessRationale).toMatch(/fuente sincronizada/i);
     });
   });
 

@@ -29,8 +29,14 @@ export interface GoogleDriveConnectorInput {
   cursor?: string;
   /** Devuelve el marcador nuevo para que la ingesta lo guarde. */
   onCursor?: (cursor: string) => void;
-  /** Ficheros que ya no están en la carpeta. Se informan; no se decide nada sobre ellos. */
-  onRemoved?: (fileIds: string[]) => void;
+  /**
+   * Qué sigue existiendo en el origen, por su `sourceUrl`.
+   *
+   * Se informa lo PRESENTE y no lo ausente a propósito: el conector sabe qué hay en la
+   * carpeta, pero no qué tiene BusinessBrain. Comparar es cosa de la ingesta, que es quien
+   * conoce ambos lados — y así la desaparición y la reaparición salen del mismo dato.
+   */
+  onPresentAtSource?: (sourceUrls: string[]) => void;
 }
 
 /** Tope de documentos por sincronización: un Drive grande no puede agotar una ejecución. */
@@ -101,8 +107,15 @@ export class GoogleDriveConnector implements ConnectorPort {
     });
 
     input.onCursor?.(listing.cursor);
-    if (listing.removedFileIds.length > 0) {
-      input.onRemoved?.(listing.removedFileIds);
+
+    // Consulta aparte y barata: solo identificadores. El listado incremental no sirve para
+    // esto porque solo trae lo cambiado, y lo que ha desaparecido nunca aparece en él.
+    if (input.onPresentAtSource) {
+      const presentIds = await this.drive.listPresentFileIds({
+        accessToken,
+        folderId,
+      });
+      input.onPresentAtSource(presentIds.map((id) => this.sourceUrlOf(id)));
     }
 
     const files = listing.files.slice(0, MAX_FILES_PER_SYNC);
@@ -151,7 +164,7 @@ export class GoogleDriveConnector implements ConnectorPort {
         mimeType: 'text/plain',
         sizeBytes: rawContent.byteLength,
         // Enlace citable al documento real: es lo que permite a una persona ir a comprobarlo.
-        sourceUrl: `https://drive.google.com/file/d/${file.id}/view`,
+        sourceUrl: this.sourceUrlOf(file.id),
         rawContent,
       };
     } catch (error) {
@@ -160,6 +173,11 @@ export class GoogleDriveConnector implements ConnectorPort {
       );
       return null;
     }
+  }
+
+  /** Enlace citable, y a la vez la identidad estable del documento en su origen. */
+  private sourceUrlOf(fileId: string): string {
+    return `https://drive.google.com/file/d/${fileId}/view`;
   }
 
   private readConfig(input: GoogleDriveConnectorInput): {

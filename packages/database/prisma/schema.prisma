@@ -524,6 +524,19 @@ model KnowledgeItem {
   contentHash String // hash del contenido normalizado; base de la deduplicación (§7)
 
   status    KnowledgeItemStatus @default(PENDING)
+  // El documento ya no esta en la fuente sincronizada que lo trajo.
+  //
+  // NO es un estado del ciclo de vida, y por eso no entra en `KnowledgeItemStatus`: el item
+  // sigue siendo conocimiento valido, con su contenido, su linaje y sus versiones intactos.
+  // Es un ATRIBUTO que cambia sobre el mismo item sin crear version, exactamente como la
+  // clasificacion, la confianza o la pertenencia a colecciones — §5 lo permite explicitamente.
+  //
+  // Se distingue de ELIMINADO porque ELIMINADO es una decision humana o administrativa; esto
+  // es una OBSERVACION del sincronizador. Sacar un fichero de la carpeta vigilada es
+  // indistinguible de borrarlo, asi que el sistema informa y no decide.
+  //
+  // Nulo = presente en su origen, o el origen no permite saberlo (subida manual).
+  sourceMissingSince DateTime?
   error     String?
   createdAt DateTime            @default(now())
   indexedAt DateTime?

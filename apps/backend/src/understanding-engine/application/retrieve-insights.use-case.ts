@@ -161,6 +161,7 @@ export class RetrieveInsightsUseCase {
           evidenceStates.get(ref.refId) ?? {
             refId: ref.refId,
             lastChangedAt: null,
+            missingAtSource: false,
             // Una referencia que no resuelve contra nada existente es irresoluble: se
             // trata como fail-closed, nunca como si estuviera intacta.
             unresolvable: true,
@@ -337,6 +338,7 @@ export class RetrieveInsightsUseCase {
         confidenceComputedAt: true,
         indexedAt: true,
         createdAt: true,
+        sourceMissingSince: true,
       },
     });
 
@@ -351,6 +353,9 @@ export class RetrieveInsightsUseCase {
           item.confidenceComputedAt ?? item.indexedAt ?? item.createdAt,
         // Un ítem reemplazado o eliminado ya no sostiene nada.
         unresolvable: isTerminal,
+        // Sigue existiendo, pero ya no está en su origen. El Knowledge Engine entrega el
+        // HECHO; que eso invalide o no un razonamiento lo decide este dominio (§3.4).
+        missingAtSource: item.sourceMissingSince !== null,
       });
     }
 

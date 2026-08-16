@@ -94,9 +94,16 @@ export function KnowledgePage() {
                 <td className="px-2 py-2">{item.title}</td>
                 <td className="px-2 py-2 text-gray-600">{item.businessArea}</td>
                 <td className="px-2 py-2">
-                  <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
-                    {item.status}
-                  </Badge>
+                  <span className="flex flex-wrap items-center gap-1">
+                    <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
+                      {item.status}
+                    </Badge>
+                    {item.sourceMissingSince && (
+                      // No se ha borrado nada: el documento sigue aquí entero. Lo que ya no
+                      // se puede es volver a comprobarlo contra su origen.
+                      <Badge tone="warn">ya no está en su origen</Badge>
+                    )}
+                  </span>
                 </td>
                 <td className="px-2 py-2 text-gray-600">
                   {item.confidenceScore?.toFixed(2) ?? '—'}

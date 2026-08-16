@@ -108,6 +108,7 @@ describe('Automatizaciones (integración)', () => {
             Promise.resolve({ businessArea: null, tags: [], certainty: 0 }),
         } as unknown as ClassifyContentUseCase,
         encryptionService(),
+        auditService(db),
       ),
     );
     clock = new AutomationSchedulerService(db, runner, scheduler);

@@ -12,6 +12,11 @@ import {
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { AuditService } from '../../audit/audit.service';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../../audit/domain/audit-actions';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import { ClassifyContentUseCase } from './classify-content.use-case';
 import { computeInitialConfidence } from '../domain/confidence';
@@ -87,6 +92,7 @@ export class IngestFromSourceUseCase {
     private readonly connectorRegistry: ConnectorRegistry,
     private readonly classifyContent: ClassifyContentUseCase,
     private readonly encryption: EncryptionService,
+    private readonly audit: AuditService,
   ) {}
 
   async execute(
@@ -138,7 +144,7 @@ export class IngestFromSourceUseCase {
       // BIEN. Guardarlo antes haría que una ejecución fallida avanzara el marcador y se
       // perdieran para siempre los cambios de esa ventana.
       let nextCursor: string | null = null;
-      const removedAtSource: string[] = [];
+      let presentAtSource: string[] | null = null;
 
       const extracted = await connector.extract({
         ...(params.connectorInput as Record<string, unknown> | undefined),
@@ -151,8 +157,8 @@ export class IngestFromSourceUseCase {
         onCursor: (cursor: string) => {
           nextCursor = cursor;
         },
-        onRemoved: (fileIds: string[]) => {
-          removedAtSource.push(...fileIds);
+        onPresentAtSource: (sourceUrls: string[]) => {
+          presentAtSource = sourceUrls;
         },
       });
 
@@ -218,10 +224,19 @@ export class IngestFromSourceUseCase {
         }
       }
 
+      // Una sincronización que no trae nada NO es un fallo.
+      //
+      // Con ingesta incremental, "sin cambios" es el caso NORMAL: la mayoría de las noches
+      // no se toca ningún documento. Tratarlo como fallo dejaría cada fuente en ERROR cada
+      // madrugada y acabaría deteniendo la automatización que la sincroniza. Solo hay fallo
+      // cuando había candidatos y NINGUNO pudo procesarse.
       const anySucceeded =
         stats.itemsCreated + stats.itemsUpdated + stats.itemsSkippedDuplicate >
         0;
-      const status = anySucceeded ? RunStatus.SUCCESS : RunStatus.FAILED;
+      const status =
+        stats.itemsFound === 0 || anySucceeded
+          ? RunStatus.SUCCESS
+          : RunStatus.FAILED;
       const jobError = itemErrors.length > 0 ? itemErrors.join('; ') : null;
 
       await this.prisma.ingestionJob.update({
@@ -233,20 +248,12 @@ export class IngestFromSourceUseCase {
           finishedAt: new Date(),
         },
       });
-      if (removedAtSource.length > 0) {
-        // Se INFORMA de lo que ya no está en el origen, y no se toca nada más.
-        //
-        // Qué debe ocurrir con un documento que desaparece de su fuente es una decisión de
-        // producto que el diseño congelado no resuelve: §5 y §6 definen qué SIGNIFICA el
-        // estado ELIMINADO y cómo se restaura, pero no dicen si una sincronización debe
-        // aplicarlo por su cuenta. Y la diferencia importa: sacar un fichero de la carpeta
-        // vigilada es indistinguible de borrarlo, así que aplicarlo automáticamente
-        // retiraría conocimiento que la empresa sigue usando. Pendiente de decisión.
-        this.logger.warn(
-          `${removedAtSource.length} documento(s) ya no están en el origen de la fuente ` +
-            `${knowledgeSource.id}. No se modifica su estado: la política de supresión está ` +
-            `pendiente de una decisión de producto`,
-        );
+      if (status === RunStatus.SUCCESS && presentAtSource !== null) {
+        await this.reconcileSourcePresence({
+          organizationId: params.organizationId,
+          knowledgeSourceId: knowledgeSource.id,
+          presentSourceUrls: presentAtSource,
+        });
       }
 
       await this.prisma.knowledgeSource.update({
@@ -597,5 +604,86 @@ export class IngestFromSourceUseCase {
       );
       return {};
     }
+  }
+
+  /**
+   * Concilia lo que hay AHORA en el origen con lo que tenemos.
+   *
+   * Marca lo que ya no está y desmarca lo que ha vuelto. **No cambia el estado de nadie**: la
+   * desaparición de un documento en su fuente no es una eliminación, es una observación.
+   * Sacar un fichero de la carpeta vigilada es indistinguible de borrarlo, y aplicar
+   * `DELETED` por nuestra cuenta retiraría conocimiento que la empresa sigue usando —
+   * exactamente lo que §5 reserva a una decisión humana o administrativa.
+   *
+   * El contenido, el linaje y las versiones quedan intactos: esto es un atributo del mismo
+   * ítem, como la confianza o la pertenencia a colecciones, que §5 ya permite cambiar sin
+   * crear una versión nueva.
+   *
+   * Si el documento reaparece, se limpia la marca sobre EL MISMO ítem: no nace una identidad
+   * nueva ni se duplica nada.
+   */
+  private async reconcileSourcePresence(params: {
+    organizationId: string;
+    knowledgeSourceId: string;
+    presentSourceUrls: string[];
+  }): Promise<void> {
+    const present = params.presentSourceUrls.filter(
+      (url) => typeof url === 'string' && url.length > 0,
+    );
+
+    // Solo se juzgan los ítems VIVOS de esta fuente. Uno superado ya no representa
+    // conocimiento actual, y uno eliminado lo decidió una persona: ni uno ni otro deben
+    // recibir una marca que solo habla de disponibilidad en el origen.
+    const scope = {
+      organizationId: params.organizationId,
+      currentKnowledgeSourceId: params.knowledgeSourceId,
+      status: {
+        notIn: TERMINAL_KNOWLEDGE_ITEM_STATUSES as KnowledgeItemStatus[],
+      },
+    };
+
+    const missing = await this.prisma.knowledgeItem.updateMany({
+      where: {
+        ...scope,
+        sourceMissingSince: null,
+        ...(present.length > 0 ? { sourceUrl: { notIn: present } } : {}),
+      },
+      data: { sourceMissingSince: new Date() },
+    });
+
+    const restored =
+      present.length > 0
+        ? await this.prisma.knowledgeItem.updateMany({
+            where: {
+              ...scope,
+              sourceMissingSince: { not: null },
+              sourceUrl: { in: present },
+            },
+            data: { sourceMissingSince: null },
+          })
+        : { count: 0 };
+
+    if (missing.count === 0 && restored.count === 0) return;
+
+    // Queda traza, y sin actor: no lo provocó una persona sino una sincronización.
+    await this.audit.record({
+      organizationId: params.organizationId,
+      action: AUDIT_ACTIONS.KNOWLEDGE_SOURCE_PRESENCE_RECONCILED,
+      targetType: AUDIT_TARGET_TYPES.KNOWLEDGE_SOURCE,
+      targetId: params.knowledgeSourceId,
+      metadata: {
+        markedMissing: missing.count,
+        restored: restored.count,
+        presentAtSource: present.length,
+        // Se declara explícitamente: esto NO es una eliminación.
+        deletedAny: false,
+      },
+    });
+
+    this.logger.log(
+      `Presencia en el origen de la fuente ${params.knowledgeSourceId}: ` +
+        `${missing.count} ausente(s), ${restored.count} recuperado(s). Ningún documento ` +
+        `se elimina — la supresión es siempre una decisión humana`,
+    );
   }
 }

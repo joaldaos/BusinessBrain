@@ -126,6 +126,17 @@ export class FakeGoogleDrive implements GoogleDrivePort {
     });
   }
 
+  listPresentFileIds(params: {
+    accessToken: string;
+    folderId: string;
+  }): Promise<string[]> {
+    return Promise.resolve(
+      [...this.files.values()]
+        .filter((entry) => entry.folderId === params.folderId)
+        .map((entry) => entry.file.id),
+    );
+  }
+
   downloadText(params: { file: DriveFile }): Promise<string> {
     const entry = this.files.get(params.file.id);
     if (!entry) return Promise.reject(new Error('no existe'));

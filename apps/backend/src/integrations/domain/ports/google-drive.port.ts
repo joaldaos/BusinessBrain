@@ -76,6 +76,18 @@ export interface GoogleDrivePort {
     cursor?: string;
   }): Promise<DriveListing>;
 
+  /**
+   * Identificadores de lo que hay AHORA en la carpeta.
+   *
+   * Es una consulta de metadatos, sin descargar nada: barata incluso en carpetas grandes. Va
+   * aparte de `listFiles` porque esa devuelve solo lo CAMBIADO desde el marcador, y con un
+   * listado incremental es imposible saber qué ha dejado de estar.
+   */
+  listPresentFileIds(params: {
+    accessToken: string;
+    folderId: string;
+  }): Promise<string[]>;
+
   /** Texto del documento. Google Docs se exporta; los ficheros de texto se descargan. */
   downloadText(params: {
     accessToken: string;

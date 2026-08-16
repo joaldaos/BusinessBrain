@@ -56,6 +56,7 @@ describe('Conector de página web (integración)', () => {
     connectors,
     classify,
     encryptionService(),
+    auditService(db),
   );
   const sources = new KnowledgeSourcesService(db, encryptionService());
 

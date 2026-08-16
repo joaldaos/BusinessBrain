@@ -21,6 +21,15 @@ export interface EvidenceState {
   lastChangedAt: Date | null;
   /** La evidencia ya no existe: purgada, o el `Insight` citado fue descartado o superado. */
   unresolvable: boolean;
+  /**
+   * La evidencia existe, pero ya no está en la fuente sincronizada que la trajo.
+   *
+   * NO es lo mismo que irresoluble: el documento sigue ahí y se puede leer y auditar. Lo que
+   * ya no puede hacerse es volver a comprobarlo contra su origen, así que la conclusión no
+   * puede presentarse como vigente — pero tampoco se retira, porque nadie ha decidido
+   * eliminarla.
+   */
+  missingAtSource?: boolean;
 }
 
 export interface FreshnessInput {
@@ -35,6 +44,8 @@ export interface FreshnessResult {
   /** Evidencias que han cambiado desde el cálculo. */
   changedRefIds: string[];
   unresolvableRefIds: string[];
+  /** Evidencias que siguen existiendo pero ya no están en su fuente sincronizada. */
+  missingAtSourceRefIds: string[];
   rationale: string;
 }
 
@@ -49,6 +60,10 @@ export interface FreshnessResult {
 export function evaluateFreshness(input: FreshnessInput): FreshnessResult {
   const unresolvableRefIds = input.evidenceStates
     .filter((state) => state.unresolvable)
+    .map((state) => state.refId);
+
+  const missingAtSourceRefIds = input.evidenceStates
+    .filter((state) => !state.unresolvable && state.missingAtSource === true)
     .map((state) => state.refId);
 
   const changedRefIds = input.evidenceStates
@@ -67,9 +82,30 @@ export function evaluateFreshness(input: FreshnessInput): FreshnessResult {
       freshness: 'UNRESOLVABLE',
       changedRefIds,
       unresolvableRefIds,
+      missingAtSourceRefIds,
       rationale:
         `${unresolvableRefIds.length} pieza(s) de evidencia ya no pueden resolverse: ` +
         `el razonamiento no es verificable y queda pendiente de recálculo`,
+    };
+  }
+
+  if (missingAtSourceRefIds.length > 0) {
+    // El documento existe y se puede auditar, pero ya no está en su origen: no se puede
+    // volver a comprobar contra la realidad. Se dice explícitamente en lugar de servir la
+    // conclusión como si su fuente siguiera disponible.
+    //
+    // Se clasifica como STALE y no como un cuarto valor: `EvidenceFreshness` distingue
+    // "cambió" de "no se puede resolver", y esto es lo primero — cambió la disponibilidad de
+    // la evidencia. Inventar un valor nuevo obligaría a reclasificar cada consumidor.
+    return {
+      freshness: 'STALE',
+      changedRefIds,
+      unresolvableRefIds,
+      missingAtSourceRefIds,
+      rationale:
+        `${missingAtSourceRefIds.length} documento(s) que la sostienen ya no están en su ` +
+        `fuente sincronizada: la conclusión sigue siendo consultable y auditable, pero no ` +
+        `puede volver a comprobarse contra su origen`,
     };
   }
 
@@ -78,6 +114,7 @@ export function evaluateFreshness(input: FreshnessInput): FreshnessResult {
       freshness: 'STALE',
       changedRefIds,
       unresolvableRefIds,
+      missingAtSourceRefIds,
       rationale:
         `${changedRefIds.length} pieza(s) de evidencia han cambiado desde que se calculó: ` +
         `la conclusión sigue siendo consultable, pero no se presenta como vigente`,
@@ -88,6 +125,7 @@ export function evaluateFreshness(input: FreshnessInput): FreshnessResult {
     freshness: 'FRESH',
     changedRefIds: [],
     unresolvableRefIds: [],
+    missingAtSourceRefIds: [],
     rationale: 'Toda la evidencia sigue intacta desde el último cálculo',
   };
 }

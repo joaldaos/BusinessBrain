@@ -1309,7 +1309,7 @@ frontend/
 | Deuda | Riesgo | Estado |
 |---|---|---|
 | ~~El token de refresco vive en `localStorage`~~ | ~~Alto~~ | ✅ **Cerrada**. Viaja en cookie `HttpOnly` + `SameSite=Strict`, con doble envío CSRF en las dos rutas autenticadas por cookie. `/auth/refresh` y `/auth/logout` ya NO aceptan el token en el cuerpo: dejar esa puerta abierta habría anulado el cambio |
-| **Política de supresión sin definir**: un documento que desaparece de su fuente no cambia de estado. Se registra en los logs de la sincronización y nada más. §5/§6 del Knowledge Engine definen qué SIGNIFICA `ELIMINADO`, pero no si una sincronización debe aplicarlo sola | Medio — conocimiento obsoleto que sigue sosteniendo conclusiones | 🟠 **Pendiente de decisión de producto** |
+| ~~Política de supresión sin definir~~ | ~~Medio~~ | ✅ **Resuelta (opción B)**. Un documento ausente en su origen recibe una señal NO destructiva (`KnowledgeItem.sourceMissingSince`), nunca `ELIMINADO`. No es un estado del ciclo de vida: es un atributo del mismo ítem, como la confianza o la pertenencia a colecciones, que §5 ya permite cambiar sin crear versión. La comprensión que se apoya en él deja de servirse como vigente y dice por qué; si el documento reaparece, la señal se limpia sobre el MISMO ítem |
 | `ALLOW_LOOPBACK_FETCH` desactiva la comprobación de destino del conector web para poder probarlo contra un servidor local. Está condicionada además a `NODE_ENV !== 'production'`, así que una variable mal puesta en un despliegue real no abre la red interna | Bajo — doble condición | 🟡 Aceptada conscientemente |
 | Sin rate limiting, sin RLS y sin revocación de access tokens ya emitidos (ventana máx. 15 min) | Medio | 🟡 Fase 10 (hardening) |
 

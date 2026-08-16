@@ -54,6 +54,13 @@ export interface KnowledgeItem {
   id: string;
   title: string;
   status: string;
+  /**
+   * El documento ya no está en la fuente sincronizada que lo trajo.
+   *
+   * NO es una eliminación: el conocimiento sigue entero y consultable. Lo que ya no puede
+   * hacerse es volver a comprobarlo contra su origen, y eso debe verse.
+   */
+  sourceMissingSince?: string | null;
   businessArea: string;
   confidenceScore: number;
   indexedAt: string | null;

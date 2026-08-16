@@ -152,11 +152,36 @@ export class GoogleDriveAdapter implements GoogleDrivePort {
 
     return {
       files,
-      // Detectar desapariciones exige comparar el listado completo, y hoy no se hace ninguna
-      // política con ellas: se declara vacío en lugar de insinuar una capacidad que no hay.
+      // Las desapariciones NO se deducen de este listado: es incremental y solo trae lo
+      // cambiado. Quien las detecta es `listPresentFileIds`, comparando lo que hay ahora
+      // contra lo que nosotros tenemos.
       removedFileIds: [],
       cursor: latest,
     };
+  }
+
+  /**
+   * Solo identificadores: `fields` limitado a `files(id)`.
+   *
+   * Es lo que permite detectar desapariciones sin renunciar al incremental — la alternativa
+   * seria pedir el listado completo con metadatos en cada sincronizacion.
+   */
+  async listPresentFileIds(params: {
+    accessToken: string;
+    folderId: string;
+  }): Promise<string[]> {
+    const query = new URLSearchParams({
+      q: `'${params.folderId}' in parents and trashed = false`,
+      fields: 'files(id)',
+      pageSize: '1000',
+    });
+
+    const body = await this.get<{ files?: { id: string }[] }>(
+      `${DRIVE_API}/files?${query.toString()}`,
+      params.accessToken,
+    );
+
+    return (body.files ?? []).map((file) => file.id);
   }
 
   async downloadText(params: {

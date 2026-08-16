@@ -33,6 +33,14 @@ export const AUDIT_ACTIONS = {
   // Conectar concede a BusinessBrain acceso de lectura al Drive de una empresa; desconectar
   // se lo retira y detiene lo que dependía de él. Ambas son cambios de permisos sobre un
   // sistema ajeno, y son justo lo que alguien querría poder reconstruir después.
+  /**
+   * Una sincronización comparó lo que hay en el origen con lo que tenemos.
+   *
+   * NUNCA elimina nada: marca lo ausente y desmarca lo que ha vuelto. La traza lo declara
+   * explícitamente para que nadie tenga que deducirlo.
+   */
+  KNOWLEDGE_SOURCE_PRESENCE_RECONCILED: 'knowledge_source.presence_reconciled',
+
   INTEGRATION_CONNECTED: 'integration.connected',
   INTEGRATION_DISCONNECTED: 'integration.disconnected',
 

@@ -864,6 +864,16 @@ model Automation {
   actions        Json // pasos ordenados: [{ type, config }, ...]
   status         AutomationStatus      @default(ACTIVE)
   lastRunAt      DateTime?
+  // Proximo disparo previsto, calculado al crear/modificar y al terminar cada ejecucion.
+  //
+  // Existe para que reclamar lo vencido sea una sola escritura condicional en Postgres:
+  // varias instancias del backend compiten por la misma fila y solo una gana, sin cerrojo
+  // aplicativo. Calcularlo en cada tic evaluando cron sobre `lastRunAt` habria dejado la
+  // decision en memoria de cada proceso, y dos procesos habrian disparado lo mismo.
+  //
+  // Nulo cuando la automatizacion no es programada o esta pausada: lo que no tiene fecha no
+  // se reclama nunca.
+  nextRunAt      DateTime?
   createdById    String
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
@@ -872,6 +882,8 @@ model Automation {
   runs         AutomationRun[]
 
   @@index([organizationId])
+  // Sostiene el barrido de vencidas: se consulta por fecha y estado, nunca por organizacion.
+  @@index([nextRunAt, status])
 }
 
 model AutomationRun {

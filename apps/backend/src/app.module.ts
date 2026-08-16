@@ -14,6 +14,7 @@ import { UnderstandingEngineModule } from './understanding-engine/understanding-
 import { ConversationsModule } from './conversations/conversations.module';
 import { AgentsModule } from './agents/agents.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { AutomationsModule } from './automations/automations.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { HealthModule } from './health/health.module';
     ConversationsModule,
     AgentsModule,
     RecommendationsModule,
+    AutomationsModule,
     HealthModule,
   ],
   providers: [

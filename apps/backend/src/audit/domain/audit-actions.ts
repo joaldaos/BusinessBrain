@@ -17,6 +17,17 @@ export const AUDIT_ACTIONS = {
   /** Denegación del gate de políticas. Ya existía desde 5.2; ahora pasa por el servicio. */
   AGENT_TOOL_DENIED: 'agent.tool.denied',
 
+  // ── Automatizaciones: conceder ejecución DESATENDIDA ──────────────────────
+  //
+  // Crear una automatización no ejecuta nada por sí misma, pero concede que algo se ejecute
+  // sin nadie delante y de forma repetida. Eso está al nivel de conceder capacidades a un
+  // agente, no al de guardar una preferencia.
+  AUTOMATION_CREATED: 'automation.created',
+  AUTOMATION_UPDATED: 'automation.updated',
+  AUTOMATION_DELETED: 'automation.deleted',
+  /** Una ejecución desatendida terminó. Sin actor: no la provocó una persona. */
+  AUTOMATION_RUN_FINISHED: 'automation.run.finished',
+
   // ── Plantillas: instalar concede capacidades ya configuradas ──────────────
   AGENT_TEMPLATE_CREATED: 'agent_template.created',
   AGENT_TEMPLATE_UPDATED: 'agent_template.updated',
@@ -63,6 +74,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 export const AUDIT_TARGET_TYPES = {
   AGENT: 'Agent',
   AGENT_TEMPLATE: 'AgentTemplate',
+  AUTOMATION: 'Automation',
   KNOWLEDGE_COLLECTION: 'KnowledgeCollection',
   BUSINESS_OBJECTIVE: 'BusinessObjective',
   ANALYSIS_RUN: 'AnalysisRun',

@@ -10,6 +10,7 @@ import type { ClassifyContentUseCase } from '../../src/knowledge-engine/applicat
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  chunkAndEmbed,
   connectorRegistry,
   restrictedPerimeter,
   createTestOrg,
@@ -52,6 +53,7 @@ describe('Conector de página web (integración)', () => {
     encryptionService(),
     auditService(db),
     restrictedPerimeter(db, connectors),
+    chunkAndEmbed(db),
   );
   const sources = new KnowledgeSourcesService(
     db,

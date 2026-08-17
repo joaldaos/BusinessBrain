@@ -7,11 +7,12 @@ import type {
   GmailSyncResult,
 } from '../domain/ports/gmail.port';
 import { GMAIL_SCOPES } from '../domain/oauth-state';
-import { GoogleOAuthClient, googleEndpoint } from './google-oauth.client';
+import { GoogleOAuthClient } from './google-oauth.client';
+import { externalEndpoint } from '../../common/utils/external-endpoint';
 
 /** Base de la API. Redirigible fuera de producción para poder probar el flujo entero. */
 const gmailApi = () =>
-  googleEndpoint(
+  externalEndpoint(
     'https://gmail.googleapis.com/gmail/v1/users/me',
     'GMAIL_API_URL',
   );

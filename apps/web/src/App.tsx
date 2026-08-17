@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Shell } from './components/Shell';
 import { LoginPage } from './pages/LoginPage';
+import { AskPage } from './pages/AskPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { KnowledgePage } from './pages/KnowledgePage';
 import { InsightsPage } from './pages/InsightsPage';
@@ -32,6 +33,7 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<Protected />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/preguntar" element={<AskPage />} />
           <Route path="/conocimiento" element={<KnowledgePage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/insights/:insightId" element={<InsightDetailPage />} />

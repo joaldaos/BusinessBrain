@@ -1,9 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { OnboardingPage } from '../pages/OnboardingPage';
 import { Button } from './ui';
 
 const NAV = [
   { to: '/', label: 'Panel', end: true },
+  // Segundo, y a propósito: preguntar es lo que una persona quiere hacer al entrar, y lo que
+  // hace evidente para qué sirve todo lo demás.
+  { to: '/preguntar', label: 'Preguntar' },
   { to: '/conocimiento', label: 'Conocimiento' },
   { to: '/insights', label: 'Comprensión' },
   { to: '/objetivos', label: 'Objetivos' },
@@ -24,19 +28,10 @@ export function Shell() {
   const { user, organizations, organizationId, role, selectOrganization, logout } =
     useAuth();
 
+  // Sin organización no hay producto: casi toda la API la resuelve desde `x-org-id`. Antes
+  // esta rama era un callejón sin salida que remitía a la API; ahora es el primer paso.
   if (organizations.length === 0) {
-    return (
-      <main className="mx-auto max-w-lg p-8">
-        <h1 className="text-lg font-semibold">Sin organización</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Tu cuenta no pertenece todavía a ninguna organización. Pide a alguien
-          que te invite, o crea una desde la API.
-        </p>
-        <Button className="mt-4" variant="secondary" onClick={logout}>
-          Salir
-        </Button>
-      </main>
-    );
+    return <OnboardingPage />;
   }
 
   return (

@@ -8,6 +8,7 @@ import type { AuditService } from '../../audit/audit.service';
 import type { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { ExtractedContent } from '../domain/ports/connector.port';
 import type { RestrictedPerimeterService } from './restricted-perimeter.service';
+import type { ChunkAndEmbedUseCase } from './chunk-and-embed.use-case';
 
 describe('IngestFromSourceUseCase', () => {
   let tx: {
@@ -39,6 +40,7 @@ describe('IngestFromSourceUseCase', () => {
     $transaction: jest.Mock;
   };
   let classifyContent: { execute: jest.Mock };
+  let chunkAndEmbed: { execute: jest.Mock };
   let connectorRegistry: { get: jest.Mock };
   let useCase: IngestFromSourceUseCase;
 
@@ -106,6 +108,16 @@ describe('IngestFromSourceUseCase', () => {
       }),
     };
 
+    // Devuelve fragmentos: lo normal es que un documento con contenido sea preguntable.
+    chunkAndEmbed = {
+      execute: jest.fn().mockResolvedValue({
+        knowledgeItemId: 'item-1',
+        chunksCreated: 2,
+        embeddingsReused: 0,
+        embeddingsComputed: 2,
+      }),
+    };
+
     useCase = new IngestFromSourceUseCase(
       prisma as unknown as PrismaService,
       connectorRegistry as unknown as ConnectorRegistry,
@@ -125,6 +137,10 @@ describe('IngestFromSourceUseCase', () => {
         assertPerimeterFor: jest.fn().mockResolvedValue(undefined),
         collectionIdsOf: jest.fn().mockResolvedValue([]),
       } as unknown as RestrictedPerimeterService,
+      // Vectorizar exige un proveedor externo y tiene su propia suite: aquí se dobla porque
+      // estos tests van de deduplicación y versionado. Lo que SÍ se comprueba abajo es que la
+      // ingesta lo LLAMA — sin eso, nada de lo que entra es preguntable.
+      chunkAndEmbed as unknown as ChunkAndEmbedUseCase,
     );
   });
 
@@ -175,6 +191,7 @@ describe('IngestFromSourceUseCase', () => {
         itemsUpdated: 0,
         itemsSkippedDuplicate: 0,
         itemsFailed: 0,
+        itemsNotRetrievable: 0,
       },
       knowledgeItemIds: ['item-1'],
     });
@@ -192,6 +209,15 @@ describe('IngestFromSourceUseCase', () => {
       }),
     );
     expect(tx.knowledgeItemLineageEdge.create).not.toHaveBeenCalled();
+
+    // CRÍTICO: lo que entra queda PREGUNTABLE. Este caso de uso existía y no lo invocaba
+    // nadie, así que ningún documento subido por una persona real llegaba a ser recuperable —
+    // la recuperación es vectorial, y sin fragmentos no hay nada que encontrar. Los tests del
+    // chat no lo detectaban porque sembraban los fragmentos a mano.
+    expect(chunkAndEmbed.execute).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      knowledgeItemId: 'item-1',
+    });
 
     expect(prisma.ingestionJob.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -230,6 +256,7 @@ describe('IngestFromSourceUseCase', () => {
       itemsUpdated: 0,
       itemsSkippedDuplicate: 1,
       itemsFailed: 0,
+      itemsNotRetrievable: 0,
     });
     expect(result.knowledgeItemIds).toEqual(['existing-item']);
     expect(tx.knowledgeItem.create).not.toHaveBeenCalled();
@@ -316,6 +343,7 @@ describe('IngestFromSourceUseCase', () => {
       itemsUpdated: 1,
       itemsSkippedDuplicate: 0,
       itemsFailed: 0,
+      itemsNotRetrievable: 0,
     });
     expect(result.knowledgeItemIds).toEqual(['new-version-item']);
 
@@ -406,6 +434,7 @@ describe('IngestFromSourceUseCase', () => {
       itemsUpdated: 0,
       itemsSkippedDuplicate: 0,
       itemsFailed: 1,
+      itemsNotRetrievable: 0,
     });
     expect(result.knowledgeItemIds).toEqual([]);
     expect(tx.knowledgeItem.create).not.toHaveBeenCalled();
@@ -446,5 +475,63 @@ describe('IngestFromSourceUseCase', () => {
         }),
       }),
     );
+  });
+
+  describe('un documento que no se puede vectorizar NO se pierde', () => {
+    it('entra, se cuenta como no recuperable y la ingesta termina BIEN', async () => {
+      // Vectorizar exige un proveedor externo: una organización sin perfil de IA, una clave
+      // caducada o un corte no pueden costarle a la empresa el documento. El contenido es
+      // válido, está clasificado y visible; lo único que falta es que aparezca al preguntar.
+      extractedOf([
+        {
+          title: 'politica-vacaciones.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 42,
+          rawContent: Buffer.from('22 días de vacaciones al año.'),
+        },
+      ]);
+      tx.knowledgeItem.create.mockResolvedValue({ id: 'item-1' });
+      chunkAndEmbed.execute.mockRejectedValue(
+        new Error('sin perfil de IA configurado'),
+      );
+
+      const result = await useCase.execute({
+        organizationId: 'org-1',
+        knowledgeSourceId: 'source-1',
+        connectorInput: { file: {} },
+      });
+
+      expect(result.status).toBe('SUCCESS');
+      expect(result.stats.itemsCreated).toBe(1);
+      // Y se DICE: un documento que entra y no se puede preguntar es justo el caso en el que
+      // la persona cree que el sistema no funciona.
+      expect(result.stats.itemsNotRetrievable).toBe(1);
+    });
+
+    it('cero fragmentos también cuenta como no recuperable', async () => {
+      extractedOf([
+        {
+          title: 'vacio.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 1,
+          rawContent: Buffer.from('Contenido con algo de texto dentro.'),
+        },
+      ]);
+      tx.knowledgeItem.create.mockResolvedValue({ id: 'item-1' });
+      chunkAndEmbed.execute.mockResolvedValue({
+        knowledgeItemId: 'item-1',
+        chunksCreated: 0,
+        embeddingsReused: 0,
+        embeddingsComputed: 0,
+      });
+
+      const result = await useCase.execute({
+        organizationId: 'org-1',
+        knowledgeSourceId: 'source-1',
+        connectorInput: { file: {} },
+      });
+
+      expect(result.stats.itemsNotRetrievable).toBe(1);
+    });
   });
 });

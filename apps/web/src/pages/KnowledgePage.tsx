@@ -668,6 +668,14 @@ function SourceRow({
             `, ${source.lastSync.stats.itemsFailed} con error`}
         </span>
       )}
+      {(source.lastSync?.stats?.itemsNotRetrievable ?? 0) > 0 && (
+        // El documento está aquí y se ve en la lista, pero NO aparece al preguntar. Callarlo
+        // dejaría a la persona creyendo que el sistema ignoró su documento.
+        <span className="text-xs text-amber-700">
+          {source.lastSync?.stats?.itemsNotRetrievable} sin indexar para búsqueda:
+          vuelve a sincronizar
+        </span>
+      )}
       {source.lastError && (
         <span className="text-xs text-red-700">{source.lastError}</span>
       )}

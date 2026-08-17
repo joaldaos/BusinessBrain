@@ -1,6 +1,13 @@
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Automation, Insight, KnowledgeItem, Report } from '../api/types';
+import type {
+  Automation,
+  Conversation,
+  Insight,
+  KnowledgeItem,
+  KnowledgeSource,
+  Report,
+} from '../api/types';
 import { Badge, Card, Empty, ErrorNote, formatDate, useResource } from '../components/ui';
 
 /**
@@ -16,6 +23,8 @@ export function DashboardPage() {
   const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'));
   const automations = useResource(() => api<Automation[]>('/automations'));
   const reports = useResource(() => api<Report[]>('/reports'));
+  const sources = useResource(() => api<KnowledgeSource[]>('/knowledge-sources'));
+  const conversations = useResource(() => api<Conversation[]>('/conversations'));
 
   const disputed =
     insights.data?.filter((insight) => insight.curation?.disputed) ?? [];
@@ -24,6 +33,14 @@ export function DashboardPage() {
 
   return (
     <>
+      <FirstSteps
+        connected={(sources.data?.length ?? 0) > 0}
+        learned={(items.data?.length ?? 0) > 0}
+        asked={(conversations.data?.length ?? 0) > 0}
+        understood={(insights.data?.length ?? 0) > 0}
+        loading={sources.loading || items.loading}
+      />
+
       <div className="grid gap-3 sm:grid-cols-4">
         <Metric label="Documentos" value={items.data?.length} to="/conocimiento" />
         <Metric label="Conclusiones" value={insights.data?.length} to="/insights" />
@@ -93,6 +110,88 @@ export function DashboardPage() {
         </ul>
       </Card>
     </>
+  );
+}
+
+/**
+ * Los primeros pasos, con el estado REAL de la cuenta.
+ *
+ * Una PYME que entra por primera vez ve un panel vacío y no sabe si el producto no funciona o
+ * si es que aún no le ha dado nada. Esto responde a eso, y desaparece en cuanto sobra: no es un
+ * tutorial que haya que cerrar, es la lista de lo que falta para que el sistema sirva.
+ *
+ * Cada paso se decide con los mismos endpoints que su pantalla, nunca con un contador aparte:
+ * un tutorial que se marca solo como completado es peor que no tenerlo.
+ */
+function FirstSteps({
+  connected,
+  learned,
+  asked,
+  understood,
+  loading,
+}: {
+  connected: boolean;
+  learned: boolean;
+  asked: boolean;
+  understood: boolean;
+  loading: boolean;
+}) {
+  const steps = [
+    {
+      done: connected,
+      to: '/conocimiento',
+      action: 'Conecta una fuente',
+      why: 'Sube documentos, una página web, tu Google Drive o una etiqueta de Gmail.',
+    },
+    {
+      done: learned,
+      to: '/conocimiento',
+      action: 'Sincroniza para que aprenda',
+      why: 'Hasta que no entre nada, BusinessBrain no sabe nada de tu empresa.',
+    },
+    {
+      done: asked,
+      to: '/preguntar',
+      action: 'Hazle una pregunta',
+      why: 'Responderá con lo que sabe y te dirá de qué documentos lo ha sacado.',
+    },
+    {
+      done: understood,
+      to: '/analisis',
+      action: 'Lanza un análisis',
+      why: 'Busca por su cuenta riesgos, anomalías y oportunidades en lo que ya sabe.',
+    },
+  ];
+
+  // Todo hecho: la tarjeta se retira sola. Y mientras carga tampoco se enseña, para no decirle
+  // a alguien que le falta un paso que ya había dado.
+  if (loading || steps.every((step) => step.done)) return null;
+
+  return (
+    <Card title="Primeros pasos">
+      <p className="mb-3 text-xs text-gray-500">
+        {steps.filter((step) => step.done).length} de {steps.length} completados.
+      </p>
+      <ol className="space-y-2 text-sm">
+        {steps.map((step) => (
+          <li key={step.action} className="flex flex-wrap items-baseline gap-2">
+            <span aria-hidden className={step.done ? 'text-green-600' : 'text-gray-300'}>
+              ●
+            </span>
+            {step.done ? (
+              <span className="text-gray-400 line-through">{step.action}</span>
+            ) : (
+              <Link className="font-medium text-blue-700 underline" to={step.to}>
+                {step.action}
+              </Link>
+            )}
+            {!step.done && (
+              <span className="text-xs text-gray-500">{step.why}</span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </Card>
   );
 }
 

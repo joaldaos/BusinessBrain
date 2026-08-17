@@ -284,7 +284,10 @@ export class IntegrationsController {
     // ventana en la que un estado robado sigue sirviendo.
     params.response.clearCookie(
       OAUTH_NONCE_COOKIE,
-      oauthFlowCookieOptions({ isProduction: this.isProduction(), maxAgeMs: 0 }),
+      oauthFlowCookieOptions({
+        isProduction: this.isProduction(),
+        maxAgeMs: 0,
+      }),
     );
 
     if (params.error) {

@@ -19,11 +19,26 @@ export default defineConfig({
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
   },
+  /**
+   * Se sirve el BUILD, no el servidor de desarrollo.
+   *
+   * Dos motivos, y el segundo es el que obligó a cambiarlo. El primero: estas pruebas dicen que
+   * una persona puede usar el producto, y lo que se despliega es el bundle de producción — con
+   * `vite dev` se estaba verificando otro artefacto.
+   *
+   * El segundo: `vite dev` vigila ficheros y en Windows se caía al cerrarse (0xC0000409), de modo
+   * que la ejecución siguiente arrancaba sobre un puerto que aún no estaba libre y la suite
+   * fallaba una vez de cada dos. Una suite intermitente no es una señal: es ruido que acaba
+   * ignorándose. `preview` sirve estáticos, arranca y para limpiamente.
+   *
+   * `reuseExistingServer: false` a propósito: reutilizar un servidor que quizá esté muriendo es
+   * exactamente cómo se reintrodujo esa intermitencia.
+   */
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run build && npm run preview',
     url: 'http://localhost:5173',
-    reuseExistingServer: true,
-    timeout: 60_000,
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 });

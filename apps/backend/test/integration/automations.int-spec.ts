@@ -25,6 +25,7 @@ import type { ClassifyContentUseCase } from '../../src/knowledge-engine/applicat
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  chunkAndEmbed,
   connectorRegistry,
   restrictedPerimeter,
   createKnowledgeItem,
@@ -104,6 +105,7 @@ describe('Automatizaciones (integración)', () => {
         encryptionService(),
         auditService(db),
         restrictedPerimeter(db, connectors),
+        chunkAndEmbed(db),
       ),
     );
     clock = new AutomationSchedulerService(db, runner, scheduler);

@@ -20,6 +20,7 @@ import {
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import { RestrictedPerimeterService } from './restricted-perimeter.service';
 import { ClassifyContentUseCase } from './classify-content.use-case';
+import { ChunkAndEmbedUseCase } from './chunk-and-embed.use-case';
 import { computeInitialConfidence } from '../domain/confidence';
 import {
   normalizeContent,
@@ -43,6 +44,15 @@ export interface IngestionStats {
   itemsUpdated: number;
   itemsSkippedDuplicate: number;
   itemsFailed: number;
+  /**
+   * Ítems que entraron pero NO se pudieron vectorizar.
+   *
+   * Se cuenta aparte de `itemsFailed` porque no es lo mismo: el documento está aquí, entero,
+   * clasificado y consultable en la lista. Lo que no está es su representación vectorial, y sin
+   * ella **no aparece cuando alguien pregunta**. Un contador propio es lo que permite que la
+   * pantalla lo diga en vez de dejar a la persona creyendo que el documento se ignoró.
+   */
+  itemsNotRetrievable: number;
 }
 
 export interface IngestFromSourceParams {
@@ -95,6 +105,7 @@ export class IngestFromSourceUseCase {
     private readonly encryption: EncryptionService,
     private readonly audit: AuditService,
     private readonly perimeter: RestrictedPerimeterService,
+    private readonly chunkAndEmbed: ChunkAndEmbedUseCase,
   ) {}
 
   async execute(
@@ -183,6 +194,7 @@ export class IngestFromSourceUseCase {
         itemsUpdated: 0,
         itemsSkippedDuplicate: 0,
         itemsFailed: 0,
+        itemsNotRetrievable: 0,
       };
       const knowledgeItemIds: string[] = [];
       const itemErrors: string[] = [];
@@ -222,6 +234,14 @@ export class IngestFromSourceUseCase {
               contentText: normalized.text,
               sourceType: knowledgeSource.type,
             });
+
+            // Y se hace RECUPERABLE. Sin esto el documento existe, se lista y se clasifica,
+            // pero no aparece cuando alguien pregunta: la recuperación es vectorial, sobre
+            // `KnowledgeChunk`. Es el paso que convierte "lo tengo guardado" en "puedo
+            // preguntarlo", y por tanto lo que hace útil todo lo anterior.
+            if (!(await this.makeRetrievable(params.organizationId, outcome))) {
+              stats.itemsNotRetrievable += 1;
+            }
           }
 
           knowledgeItemIds.push(outcome.knowledgeItemId);
@@ -479,6 +499,46 @@ export class IngestFromSourceUseCase {
         }
       }
       throw error;
+    }
+  }
+
+  /**
+   * Trocea y vectoriza el ítem para que sea RECUPERABLE.
+   *
+   * ## Por qué no tumba la ingesta
+   *
+   * Vectorizar exige un proveedor externo, y ese proveedor puede faltar —una organización sin
+   * perfil de IA configurado, una clave caducada, un corte— o rechazar la petición. Perder el
+   * documento por eso sería desproporcionado: el contenido es válido, ya está normalizado,
+   * clasificado, versionado y visible en su colección. Lo único que le falta es aparecer en una
+   * búsqueda, y eso se puede recuperar volviendo a sincronizar cuando el proveedor esté.
+   *
+   * Se trata igual que un fallo de clasificación, con una diferencia importante: **se cuenta**.
+   * Un documento que entra y no se puede preguntar es exactamente el caso en el que la persona
+   * cree que el sistema no funciona, así que el recuento sube a las estadísticas del trabajo de
+   * ingesta y de ahí a la pantalla.
+   *
+   * @returns `true` si quedó recuperable.
+   */
+  private async makeRetrievable(
+    organizationId: string,
+    outcome: IngestOutcome,
+  ): Promise<boolean> {
+    try {
+      const result = await this.chunkAndEmbed.execute({
+        organizationId,
+        knowledgeItemId: outcome.knowledgeItemId,
+      });
+      // Cero fragmentos con contenido presente significaría que no hay nada que buscar: no es
+      // un fallo, pero tampoco es recuperable.
+      return result.chunksCreated > 0;
+    } catch (error) {
+      this.logger.warn(
+        `El KnowledgeItem ${outcome.knowledgeItemId} entró pero NO es recuperable: ` +
+          `${(error as Error).message}. El contenido está guardado y visible; no aparecerá ` +
+          `al preguntar hasta que se vuelva a sincronizar con un proveedor disponible`,
+      );
+      return false;
     }
   }
 

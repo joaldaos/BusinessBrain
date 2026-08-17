@@ -25,7 +25,10 @@ describe('oauthFlowCookieOptions', () => {
 
   it('NO relaja la cookie de sesión, que sigue siendo Strict', () => {
     // Viven en funciones separadas precisamente para que esto no pueda pasar por descuido.
-    const session = sessionCookieOptions({ isProduction: true, maxAgeMs: 1000 });
+    const session = sessionCookieOptions({
+      isProduction: true,
+      maxAgeMs: 1000,
+    });
     expect(session.refresh.sameSite).toBe('strict');
     expect(session.csrf.sameSite).toBe('strict');
   });

@@ -1,36 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { GoogleTokens } from '../domain/ports/google-drive.port';
 import type { GoogleOAuthPort } from '../domain/ports/google-oauth.port';
+import { externalEndpoint } from '../../common/utils/external-endpoint';
 
 const OAUTH_BASE = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
-
-/**
- * Redirige las llamadas a Google a otro sitio. **Nunca en producción.**
- *
- * Existe para poder recorrer el flujo completo con un navegador de verdad —consentimiento,
- * vuelta, canje del código, sincronización— sin una cuenta real ni red, igual que
- * `ALLOW_LOOPBACK_FETCH` permite leer una página servida en local. La guarda de `production` no
- * es cosmética: sin ella, una variable de entorno mal puesta en un despliegue mandaría los
- * tokens de los clientes a un servidor cualquiera.
- *
- * En producción se ignora y se registra, para que un despliegue mal configurado se note en vez
- * de funcionar de otra manera en silencio.
- */
-export function googleEndpoint(fallback: string, envVar: string): string {
-  const override = process.env[envVar];
-  if (!override) return fallback;
-
-  if (process.env.NODE_ENV === 'production') {
-    new Logger('GoogleOAuthClient').error(
-      `Se ignora ${envVar}: redirigir las llamadas a Google está prohibido en producción`,
-    );
-    return fallback;
-  }
-
-  return override;
-}
 
 /**
  * Lo que Drive y Gmail comparten de Google: pedir tokens, refrescarlos y revocarlos.
@@ -71,7 +46,7 @@ export class GoogleOAuthClient implements GoogleOAuthPort {
       include_granted_scopes: 'true',
     });
 
-    return `${googleEndpoint(OAUTH_BASE, 'GOOGLE_OAUTH_BASE_URL')}?${query.toString()}`;
+    return `${externalEndpoint(OAUTH_BASE, 'GOOGLE_OAUTH_BASE_URL')}?${query.toString()}`;
   }
 
   async exchangeCode(params: {
@@ -97,11 +72,14 @@ export class GoogleOAuthClient implements GoogleOAuthPort {
   }
 
   async revoke(token: string): Promise<void> {
-    const response = await fetch(googleEndpoint(REVOKE_URL, 'GOOGLE_REVOKE_URL'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token }),
-    });
+    const response = await fetch(
+      externalEndpoint(REVOKE_URL, 'GOOGLE_REVOKE_URL'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }),
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`Google devolvió ${response.status} al revocar`);
@@ -111,11 +89,14 @@ export class GoogleOAuthClient implements GoogleOAuthPort {
   private async requestTokens(
     body: Record<string, string>,
   ): Promise<GoogleTokens> {
-    const response = await fetch(googleEndpoint(TOKEN_URL, 'GOOGLE_TOKEN_URL'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body),
-    });
+    const response = await fetch(
+      externalEndpoint(TOKEN_URL, 'GOOGLE_TOKEN_URL'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body),
+      },
+    );
 
     if (!response.ok) {
       // El cuerpo de Google no lleva credenciales, solo el motivo (`invalid_grant`, etc.), y

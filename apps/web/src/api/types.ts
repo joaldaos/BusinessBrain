@@ -61,6 +61,8 @@ export interface KnowledgeSource {
       itemsUpdated?: number;
       itemsSkippedDuplicate?: number;
       itemsFailed?: number;
+      /** Entraron pero NO son preguntables: falta su representación vectorial. */
+      itemsNotRetrievable?: number;
     } | null;
     error: string | null;
   } | null;
@@ -240,4 +242,59 @@ export interface GmailLabel {
 export interface KnowledgeCollection {
   id: string;
   name: string;
+}
+
+/**
+ * Una conversación con la empresa.
+ *
+ * `agentId` es opcional a propósito: sin agente, el turno se prepara con el alcance de la
+ * PERSONA —las colecciones que tiene concedidas— y sin memoria ni herramientas. Es el camino
+ * que usa la pantalla de preguntar, y el más estrecho de los dos.
+ */
+export interface Conversation {
+  id: string;
+  title: string | null;
+  agentId: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  messages?: ConversationMessage[];
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: 'USER' | 'ASSISTANT' | 'SYSTEM';
+  content: string;
+  /** De dónde salió la respuesta. Una respuesta sin citas no se sostiene en nada. */
+  citations: MessageCitation[] | null;
+  createdAt: string;
+}
+
+export interface MessageCitation {
+  ordinal: number;
+  knowledgeItemId: string;
+  chunkId: string;
+  label: string;
+}
+
+/** Lo que devuelve enviar un mensaje. Trae ya la respuesta, sus citas y qué comprensión usó. */
+export interface SentMessage {
+  userMessageId: string;
+  assistantMessageId: string;
+  content: string;
+  citations: MessageCitation[];
+  insightsUsed: {
+    id: string;
+    summary: string;
+    confidence: number;
+    freshness: string;
+  }[];
+}
+
+/** Invitación a la organización. El token es el enlace: no hay envío de correo todavía. */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: MembershipRole;
+  token: string;
+  expiresAt: string;
 }

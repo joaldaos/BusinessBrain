@@ -12,6 +12,7 @@ import type {
 } from '../../domain/ports/llm-provider.port';
 import type { EmbeddingProviderPort } from '../../domain/ports/embedding-provider.port';
 import type { AppConfig } from '../../../config/configuration';
+import { externalEndpoint } from '../../../common/utils/external-endpoint';
 
 interface OpenAiChatCompletionResponse {
   model: string;
@@ -27,8 +28,22 @@ interface OpenAiEmbeddingResponse {
   data: Array<{ embedding: number[] }>;
 }
 
-const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_EMBEDDINGS_URL = 'https://api.openai.com/v1/embeddings';
+/**
+ * Redirigibles fuera de produccion. Es lo que permite verificar en un navegador de verdad que
+ * una respuesta con citas llega a la pantalla, sin exigir una clave real de OpenAI: sin ello,
+ * el chat solo se podria comprobar con dobles inyectados, que sustituyen justamente la parte
+ * que se quiere ver funcionando de punta a punta. Ver `externalEndpoint`.
+ */
+const chatUrl = () =>
+  externalEndpoint(
+    'https://api.openai.com/v1/chat/completions',
+    'OPENAI_CHAT_URL',
+  );
+const embeddingsUrl = () =>
+  externalEndpoint(
+    'https://api.openai.com/v1/embeddings',
+    'OPENAI_EMBEDDINGS_URL',
+  );
 
 /**
  * Implementa AMBOS puertos (LlmProviderPort + EmbeddingProviderPort): a diferencia
@@ -55,7 +70,7 @@ export class OpenAiProvider implements LlmProviderPort, EmbeddingProviderPort {
       : request.messages;
 
     const response = await this.http.postJson<OpenAiChatCompletionResponse>(
-      OPENAI_CHAT_URL,
+      chatUrl(),
       {
         model: modelName,
         messages,
@@ -94,7 +109,7 @@ export class OpenAiProvider implements LlmProviderPort, EmbeddingProviderPort {
       : request.messages;
 
     const events = this.http.postSse(
-      OPENAI_CHAT_URL,
+      chatUrl(),
       {
         model: modelName,
         messages,
@@ -122,7 +137,7 @@ export class OpenAiProvider implements LlmProviderPort, EmbeddingProviderPort {
     const key = this.resolveApiKey(apiKey);
 
     const response = await this.http.postJson<OpenAiEmbeddingResponse>(
-      OPENAI_EMBEDDINGS_URL,
+      embeddingsUrl(),
       { model: modelName, input: texts },
       { Authorization: `Bearer ${key}` },
     );

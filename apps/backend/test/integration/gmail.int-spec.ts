@@ -25,6 +25,7 @@ import { FakeGoogleDrive } from '../fake-google-drive';
 import { FakeGmail } from '../fake-gmail';
 import {
   auditService,
+  chunkAndEmbed,
   connectorRegistry,
   createInsight,
   createMember,
@@ -91,6 +92,7 @@ describe('Gmail (integración)', () => {
       encryptionService(),
       auditService(db),
       restrictedPerimeter(db, connectors),
+      chunkAndEmbed(db),
     );
     sources = new KnowledgeSourcesService(
       db,

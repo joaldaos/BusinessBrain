@@ -5,6 +5,7 @@ import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/con
 import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
 import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
 import { RestrictedPerimeterService } from '../../src/knowledge-engine/application/restricted-perimeter.service';
+import { ChunkAndEmbedUseCase } from '../../src/knowledge-engine/application/chunk-and-embed.use-case';
 import { EncryptionService } from '../../src/common/utils/encryption.util';
 import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
@@ -146,6 +147,45 @@ export function restrictedPerimeter(
     db as ConstructorParameters<typeof RestrictedPerimeterService>[0],
     registry,
   );
+}
+
+/**
+ * `ChunkAndEmbedUseCase` real, con un proveedor de embeddings determinista.
+ *
+ * Se construye de verdad porque es el paso que convierte un documento guardado en un documento
+ * PREGUNTABLE, y estuvo sin invocar desde ninguna parte: doblarlo dejaría sin verificar
+ * justamente que la ingesta lo llama y que los fragmentos acaban escritos.
+ *
+ * El vector se deriva del texto, así que dos textos iguales dan el mismo vector y dos distintos
+ * dan vectores distintos. No es semántico —no lo necesita— pero sí determinista, que es lo que
+ * permite afirmar algo sobre el resultado.
+ */
+export function chunkAndEmbed(db: unknown): ChunkAndEmbedUseCase {
+  const provider = {
+    embed: (texts: string[]) =>
+      Promise.resolve(texts.map((text) => deterministicVector(text))),
+  };
+
+  return new ChunkAndEmbedUseCase(
+    db as ConstructorParameters<typeof ChunkAndEmbedUseCase>[0],
+    {
+      getEmbeddingProvider: () => provider,
+    } as unknown as ConstructorParameters<typeof ChunkAndEmbedUseCase>[1],
+  );
+}
+
+/** Vector unitario de 1536 dimensiones derivado del texto. La dimensión la fija el esquema. */
+function deterministicVector(text: string): number[] {
+  let seed = 0;
+  for (const char of text) seed = (seed * 31 + char.charCodeAt(0)) % 2147483647;
+
+  const values = Array.from({ length: 1536 }, (_, index) => {
+    seed = (seed * 1103515245 + 12345) % 2147483647;
+    return (seed / 2147483647) * 2 - 1 + index * 0;
+  });
+  const norm = Math.sqrt(values.reduce((sum, v) => sum + v * v, 0)) || 1;
+
+  return values.map((v) => v / norm);
 }
 
 export interface TestOrg {

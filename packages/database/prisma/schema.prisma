@@ -226,6 +226,7 @@ enum IntegrationProvider {
   HUBSPOT
   SALESFORCE
   GOOGLE_DRIVE
+  GMAIL
   SLACK
   SAP
   ZENDESK
@@ -522,6 +523,16 @@ model KnowledgeItem {
   sizeBytes   Int?
   contentText String // contenido normalizado — KNOWLEDGE_ENGINE_DESIGN.md §4 "Normalización"
   contentHash String // hash del contenido normalizado; base de la deduplicación (§7)
+  // Lo que la fuente nos dijo y NO es conocimiento.
+  //
+  // Existe para poder separar las dos cosas de forma tajante: `contentText` es lo que se
+  // indexa, se trocea, se vectoriza y se recupera; esto es metadata OPERATIVA que sirve para
+  // sincronizar, agrupar o trazar y que nunca debe acabar en un embedding ni en un informe.
+  //
+  // Es un contenedor generico, no de un conector concreto: hoy guarda el hilo de un correo y
+  // la direccion de su remitente —dato personal que por decision de producto no entra en el
+  // conocimiento recuperable—, y manana lo que necesite otra fuente.
+  sourceMetadata Json?
 
   status    KnowledgeItemStatus @default(PENDING)
   // El documento ya no esta en la fuente sincronizada que lo trajo.
@@ -992,6 +1003,10 @@ model Integration {
   refreshTokenEnc String?
   scope           String?
   expiresAt       DateTime?
+  // Cuenta externa a la que quedó conectada, en texto legible. Es identidad de la CONEXIÓN,
+  // para que un administrador sepa qué buzón alimenta al sistema y pueda auditarlo: no se
+  // indexa ni se recupera, al contrario que el contenido que trae.
+  accountLabel    String?
   connectedById   String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt

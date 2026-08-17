@@ -47,7 +47,7 @@ const CSRF_TOKEN_BYTES = 32;
 export interface CookieOptions {
   httpOnly: boolean;
   secure: boolean;
-  sameSite: 'strict';
+  sameSite: 'strict' | 'lax';
   path: string;
   maxAge: number;
 }
@@ -80,6 +80,36 @@ export function sessionCookieOptions(params: {
     // en no ser adivinable ni legible DESDE OTRO ORIGEN, que es cosa de la política de mismo
     // origen del navegador, no de `HttpOnly`.
     csrf: { ...base, httpOnly: false },
+  };
+}
+
+/**
+ * Opciones de la cookie del flujo OAuth. `SameSite=Lax`, y tiene que serlo.
+ *
+ * El flujo de OAuth vuelve desde OTRO sitio: Google redirige el navegador a nuestro callback
+ * con una navegación de nivel superior. Con `SameSite=Strict` el navegador **no adjunta la
+ * cookie en esa vuelta**, la verificación del nonce falla siempre y conectar cualquier
+ * integración de Google es imposible en un navegador real — aunque los tests HTTP pasen, porque
+ * ahí la cookie se pone a mano.
+ *
+ * `Lax` no debilita la defensa que importa: sigue sin enviarse en peticiones cruzadas que no
+ * sean una navegación (`POST`, `fetch`, imágenes), y quien protege este flujo no es `SameSite`
+ * sino el par estado-firmado + nonce, que un tercero no puede fabricar. Lo que `Lax` hace es
+ * permitir precisamente el único caso legítimo: volver de la pantalla de consentimiento.
+ *
+ * Vive aparte de `sessionCookieOptions` para que nadie relaje por descuido la del token de
+ * refresco, que sí debe seguir siendo `Strict`.
+ */
+export function oauthFlowCookieOptions(params: {
+  isProduction: boolean;
+  maxAgeMs: number;
+}): CookieOptions {
+  return {
+    httpOnly: true,
+    secure: params.isProduction,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: params.maxAgeMs,
   };
 }
 

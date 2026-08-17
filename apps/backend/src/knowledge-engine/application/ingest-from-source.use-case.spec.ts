@@ -7,6 +7,7 @@ import type { EncryptionService } from '../../common/utils/encryption.util';
 import type { AuditService } from '../../audit/audit.service';
 import type { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { ExtractedContent } from '../domain/ports/connector.port';
+import type { RestrictedPerimeterService } from './restricted-perimeter.service';
 
 describe('IngestFromSourceUseCase', () => {
   let tx: {
@@ -118,6 +119,12 @@ describe('IngestFromSourceUseCase', () => {
       {
         record: jest.fn().mockResolvedValue(undefined),
       } as unknown as AuditService,
+      // El perímetro se verifica contra Postgres real (cuenta concesiones y miembros); aquí
+      // se dobla porque estos tests van de deduplicación y versionado.
+      {
+        assertPerimeterFor: jest.fn().mockResolvedValue(undefined),
+        collectionIdsOf: jest.fn().mockResolvedValue([]),
+      } as unknown as RestrictedPerimeterService,
     );
   });
 

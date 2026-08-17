@@ -1,5 +1,6 @@
 import { MembershipRole } from '@businessbrain/database';
 import { GOOGLE_DRIVE_PORT } from '../../src/integrations/domain/ports/google-drive.port';
+import { GOOGLE_OAUTH_PORT } from '../../src/integrations/domain/ports/google-oauth.port';
 import { FakeGoogleDrive } from '../fake-google-drive';
 import {
   addMember,
@@ -36,7 +37,13 @@ describe('Google Drive (E2E)', () => {
     'trimestre los umbrales aplicables por segmento de cliente.';
 
   beforeAll(async () => {
-    await startTestApp([{ token: GOOGLE_DRIVE_PORT, value: drive }]);
+    await startTestApp([
+      { token: GOOGLE_DRIVE_PORT, value: drive },
+      // El refresco y la revocación de token son comunes a Google y viven en su propio
+      // puerto. Sin sustituirlo también, "desconectar" llamaría al Google real y la
+      // revocación se daría por intentada sin haber salido nunca de aquí.
+      { token: GOOGLE_OAUTH_PORT, value: drive },
+    ]);
   });
 
   afterAll(async () => {

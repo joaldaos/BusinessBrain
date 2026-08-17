@@ -1,8 +1,40 @@
 import {
   csrfTokenMatches,
   generateCsrfToken,
+  oauthFlowCookieOptions,
   sessionCookieOptions,
 } from './session-cookies';
+
+describe('oauthFlowCookieOptions', () => {
+  const options = (isProduction = true) =>
+    oauthFlowCookieOptions({ isProduction, maxAgeMs: 1000 });
+
+  it('CRÍTICO: es SameSite=Lax, porque la vuelta de Google es cruzada', () => {
+    // Con `Strict` el navegador NO adjunta la cookie al volver de la pantalla de
+    // consentimiento, la verificación del nonce falla siempre y conectar cualquier integración
+    // de Google es imposible en un navegador real — aunque los tests HTTP pasen, porque ahí la
+    // cookie se pone a mano.
+    expect(options().sameSite).toBe('lax');
+  });
+
+  it('sigue siendo ilegible por cualquier script', () => {
+    // Lax permite el único caso legítimo (una navegación de vuelta) y nada más: el nonce en
+    // claro no puede leerse desde la página.
+    expect(options().httpOnly).toBe(true);
+  });
+
+  it('NO relaja la cookie de sesión, que sigue siendo Strict', () => {
+    // Viven en funciones separadas precisamente para que esto no pueda pasar por descuido.
+    const session = sessionCookieOptions({ isProduction: true, maxAgeMs: 1000 });
+    expect(session.refresh.sameSite).toBe('strict');
+    expect(session.csrf.sameSite).toBe('strict');
+  });
+
+  it('secure solo fuera de desarrollo, como las de sesión', () => {
+    expect(options(true).secure).toBe(true);
+    expect(options(false).secure).toBe(false);
+  });
+});
 
 describe('sessionCookieOptions', () => {
   const options = (isProduction: boolean) =>

@@ -6,14 +6,12 @@ import { AutomationsService } from '../../src/automations/application/automation
 import { CronSchedulerAdapter } from '../../src/automations/infrastructure/cron-scheduler.adapter';
 import { IngestFromSourceUseCase } from '../../src/knowledge-engine/application/ingest-from-source.use-case';
 import { KnowledgeSourcesService } from '../../src/knowledge-engine/application/knowledge-sources.service';
-import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
-import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
-import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
-import { driveConnector } from './fixtures';
 import type { ClassifyContentUseCase } from '../../src/knowledge-engine/application/classify-content.use-case';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  connectorRegistry,
+  restrictedPerimeter,
   createTestOrg,
   destroyTestOrg,
   encryptionService,
@@ -41,11 +39,7 @@ describe('Conector de página web (integración)', () => {
     body?: string;
   };
 
-  const connectors = new ConnectorRegistry(
-    new FileUploadConnector(),
-    new WebPageConnector(),
-    driveConnector(),
-  );
+  const connectors = connectorRegistry();
   const classify = {
     execute: () =>
       Promise.resolve({ businessArea: null, tags: [], certainty: 0 }),
@@ -57,8 +51,13 @@ describe('Conector de página web (integración)', () => {
     classify,
     encryptionService(),
     auditService(db),
+    restrictedPerimeter(db, connectors),
   );
-  const sources = new KnowledgeSourcesService(db, encryptionService());
+  const sources = new KnowledgeSourcesService(
+    db,
+    encryptionService(),
+    restrictedPerimeter(db, connectors),
+  );
 
   /**
    * Página de prueba, deliberadamente larga.

@@ -6,10 +6,9 @@ import type {
   GoogleDrivePort,
   GoogleTokens,
 } from '../domain/ports/google-drive.port';
+import { DRIVE_SCOPES } from '../domain/oauth-state';
+import { GoogleOAuthClient } from './google-oauth.client';
 
-const OAUTH_BASE = 'https://accounts.google.com/o/oauth2/v2/auth';
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 
 /** Formatos de Google que hay que EXPORTAR para obtener texto; no se descargan tal cual. */
@@ -34,59 +33,33 @@ const EXPORTABLE: Record<string, string> = {
 export class GoogleDriveAdapter implements GoogleDrivePort {
   private readonly logger = new Logger(GoogleDriveAdapter.name);
 
+  // Token y revocación son comunes a todos los proveedores de Google: los aporta el cliente
+  // compartido en vez de repetirse aquí. Ver `GoogleOAuthClient`.
+  constructor(private readonly oauth: GoogleOAuthClient) {}
+
   buildAuthorizationUrl(params: {
     state: string;
     redirectUri: string;
   }): string {
-    const query = new URLSearchParams({
-      client_id: this.clientId(),
-      redirect_uri: params.redirectUri,
-      response_type: 'code',
-      scope: 'https://www.googleapis.com/auth/drive.readonly',
-      // Sin `offline` Google no entrega token de refresco y la conexión moriría en una hora.
-      access_type: 'offline',
-      // Fuerza la pantalla de consentimiento: es la única forma de recuperar el token de
-      // refresco si el usuario ya había autorizado antes y nosotros lo perdimos.
-      prompt: 'consent',
-      state: params.state,
-      include_granted_scopes: 'true',
+    return this.oauth.buildAuthorizationUrl({
+      ...params,
+      scopes: DRIVE_SCOPES,
     });
-
-    return `${OAUTH_BASE}?${query.toString()}`;
   }
 
   async exchangeCode(params: {
     code: string;
     redirectUri: string;
   }): Promise<GoogleTokens> {
-    return this.requestTokens({
-      code: params.code,
-      client_id: this.clientId(),
-      client_secret: this.clientSecret(),
-      redirect_uri: params.redirectUri,
-      grant_type: 'authorization_code',
-    });
+    return this.oauth.exchangeCode(params);
   }
 
   async refreshTokens(refreshToken: string): Promise<GoogleTokens> {
-    return this.requestTokens({
-      refresh_token: refreshToken,
-      client_id: this.clientId(),
-      client_secret: this.clientSecret(),
-      grant_type: 'refresh_token',
-    });
+    return this.oauth.refreshTokens(refreshToken);
   }
 
   async revoke(token: string): Promise<void> {
-    const response = await fetch(REVOKE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Google devolvió ${response.status} al revocar`);
-    }
+    return this.oauth.revoke(token);
   }
 
   async listFolders(params: { accessToken: string }): Promise<DriveFolder[]> {
@@ -204,36 +177,6 @@ export class GoogleDriveAdapter implements GoogleDrivePort {
     return response.text();
   }
 
-  private async requestTokens(
-    body: Record<string, string>,
-  ): Promise<GoogleTokens> {
-    const response = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Google devolvió ${response.status} al pedir tokens: ${await response.text()}`,
-      );
-    }
-
-    const payload = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in: number;
-      scope: string;
-    };
-
-    return {
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token,
-      expiresAt: new Date(Date.now() + payload.expires_in * 1000),
-      scope: payload.scope,
-    };
-  }
-
   private async get<T>(url: string, accessToken: string): Promise<T> {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -246,24 +189,5 @@ export class GoogleDriveAdapter implements GoogleDrivePort {
     }
 
     return (await response.json()) as T;
-  }
-
-  private clientId(): string {
-    return this.required('GOOGLE_CLIENT_ID');
-  }
-
-  private clientSecret(): string {
-    return this.required('GOOGLE_CLIENT_SECRET');
-  }
-
-  private required(name: string): string {
-    const value = process.env[name];
-    if (!value) {
-      throw new Error(
-        `Falta ${name}: la integración con Google Drive no está configurada en este ` +
-          `despliegue`,
-      );
-    }
-    return value;
   }
 }

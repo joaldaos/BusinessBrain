@@ -18,6 +18,7 @@ import {
   AUDIT_TARGET_TYPES,
 } from '../../audit/domain/audit-actions';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
+import { RestrictedPerimeterService } from './restricted-perimeter.service';
 import { ClassifyContentUseCase } from './classify-content.use-case';
 import { computeInitialConfidence } from '../domain/confidence';
 import {
@@ -93,6 +94,7 @@ export class IngestFromSourceUseCase {
     private readonly classifyContent: ClassifyContentUseCase,
     private readonly encryption: EncryptionService,
     private readonly audit: AuditService,
+    private readonly perimeter: RestrictedPerimeterService,
   ) {}
 
   async execute(
@@ -107,6 +109,19 @@ export class IngestFromSourceUseCase {
     if (!knowledgeSource) {
       throw new NotFoundException('KnowledgeSource no encontrada');
     }
+
+    // El perímetro se vuelve a exigir AQUÍ, y no solo al crear la fuente: las concesiones
+    // cambian después, y basta con que alguien abra esa colección a toda la organización para
+    // que el perímetro desaparezca sin que nadie haya tocado la fuente. Antes de traer nada:
+    // si el perímetro ya no existe, no se lee ni un mensaje.
+    await this.perimeter.assertPerimeterFor({
+      organizationId: params.organizationId,
+      connectorKey: knowledgeSource.connectorKey,
+      collectionIds: await this.perimeter.collectionIdsOf({
+        organizationId: params.organizationId,
+        knowledgeSourceId: knowledgeSource.id,
+      }),
+    });
 
     const organization = await this.prisma.organization.findUniqueOrThrow({
       where: { id: params.organizationId },
@@ -328,6 +343,10 @@ export class IngestFromSourceUseCase {
       contentText: normalized.text,
       contentHash: normalized.contentHash,
       status: KnowledgeItemStatus.PROCESSING,
+      // Metadata OPERATIVA, fuera del contenido indexado. Ver `ExtractedContent`.
+      ...(candidate.sourceMetadata
+        ? { sourceMetadata: candidate.sourceMetadata as Prisma.InputJsonValue }
+        : {}),
     };
 
     try {

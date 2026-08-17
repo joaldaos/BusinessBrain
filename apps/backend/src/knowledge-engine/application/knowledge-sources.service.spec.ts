@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { KnowledgeSourcesService } from './knowledge-sources.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { EncryptionService } from '../../common/utils/encryption.util';
+import type { RestrictedPerimeterService } from './restricted-perimeter.service';
 
 describe('KnowledgeSourcesService', () => {
   let prisma: {
@@ -38,6 +39,11 @@ describe('KnowledgeSourcesService', () => {
     service = new KnowledgeSourcesService(
       prisma as unknown as PrismaService,
       encryption as unknown as EncryptionService,
+      // El perímetro tiene su propia suite (`restricted-collection.spec.ts` y la de
+      // integración): aquí se dobla porque estos tests verifican el cifrado de la config.
+      {
+        assertPerimeterFor: jest.fn().mockResolvedValue(undefined),
+      } as unknown as RestrictedPerimeterService,
     );
   });
 

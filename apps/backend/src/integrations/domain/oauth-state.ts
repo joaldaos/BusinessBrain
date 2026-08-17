@@ -33,13 +33,26 @@ export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 export interface OAuthStatePayload {
   organizationId: string;
   userId: string;
+  /**
+   * A qué proveedor pertenece este flujo.
+   *
+   * Va firmado y se exige en el callback porque, con más de una integración de Google, un estado
+   * legítimo de un flujo de Drive serviría para completar una conexión de **Gmail**: mismo
+   * secreto de firma, misma cookie de nonce, distinto buzón. Atarlo al proveedor cierra ese
+   * cruce sin depender de que cada ruta se acuerde de comprobarlo.
+   */
+  provider: GoogleProvider;
   /** Hash del nonce que va en la cookie. El nonce en claro NUNCA viaja por la URL. */
   nonceHash: string;
   issuedAt: number;
 }
 
 export type OAuthStateRejection =
-  'MALFORMED' | 'EXPIRED' | 'NONCE_MISMATCH' | 'MISSING_NONCE';
+  | 'MALFORMED'
+  | 'EXPIRED'
+  | 'NONCE_MISMATCH'
+  | 'MISSING_NONCE'
+  | 'PROVIDER_MISMATCH';
 
 export function generateNonce(): string {
   return randomBytes(32).toString('hex');
@@ -52,12 +65,14 @@ export function hashNonce(nonce: string): string {
 export function buildStatePayload(params: {
   organizationId: string;
   userId: string;
+  provider: GoogleProvider;
   nonce: string;
   now?: number;
 }): OAuthStatePayload {
   return {
     organizationId: params.organizationId,
     userId: params.userId,
+    provider: params.provider,
     nonceHash: hashNonce(params.nonce),
     issuedAt: params.now ?? Date.now(),
   };
@@ -73,6 +88,8 @@ export function buildStatePayload(params: {
 export function verifyStatePayload(params: {
   payload: unknown;
   nonceFromCookie: unknown;
+  /** El proveedor de la RUTA por la que ha entrado el callback. */
+  expectedProvider: GoogleProvider;
   now?: number;
 }):
   | { valid: true; organizationId: string; userId: string }
@@ -83,7 +100,7 @@ export function verifyStatePayload(params: {
     return { valid: false, reason: 'MALFORMED' };
   }
 
-  const { organizationId, userId, nonceHash, issuedAt } =
+  const { organizationId, userId, provider, nonceHash, issuedAt } =
     payload as Partial<OAuthStatePayload>;
 
   if (
@@ -95,6 +112,12 @@ export function verifyStatePayload(params: {
     userId.length === 0
   ) {
     return { valid: false, reason: 'MALFORMED' };
+  }
+
+  if (provider !== params.expectedProvider) {
+    // Un estado válido de otro flujo no vale aquí: completaría una conexión al proveedor
+    // equivocado con una firma y una cookie legítimas.
+    return { valid: false, reason: 'PROVIDER_MISMATCH' };
   }
 
   const now = params.now ?? Date.now();
@@ -130,17 +153,52 @@ export const DRIVE_SCOPES = [
 ] as const;
 
 /**
- * ¿Concedió Google lo que hacía falta?
+ * Los permisos de Gmail. Solo LECTURA, y **uno solo**.
+ *
+ * `gmail.readonly` es el mínimo que existe para esta V1: `gmail.metadata` no entrega el cuerpo
+ * del mensaje —sin cuerpo no hay conocimiento— y Google no ofrece ningún permiso acotado a una
+ * etiqueta. Esa asimetría es justo el motivo de que la frontera de etiqueta se aplique de este
+ * lado y por duplicado (`GmailConnector`): el permiso alcanza al buzón entero, así que la única
+ * garantía real del perímetro es nuestra, no la de Google.
+ *
+ * Nada de envío, nada de modificación, nada de ajustes: BusinessBrain no escribe en el correo.
+ */
+export const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+] as const;
+
+/** Proveedores de Google que conectamos por OAuth. Coincide con `IntegrationProvider`. */
+export type GoogleProvider = 'GOOGLE_DRIVE' | 'GMAIL';
+
+export function scopesFor(provider: GoogleProvider): readonly string[] {
+  return provider === 'GMAIL' ? GMAIL_SCOPES : DRIVE_SCOPES;
+}
+
+/**
+ * ¿Concedió Google lo que hacía falta PARA ESE proveedor?
  *
  * La pantalla de consentimiento permite conceder menos de lo pedido. Dar la conexión por buena
  * dejaría una fuente que falla en cada sincronización sin que nadie entienda por qué.
+ *
+ * Se comprueba por proveedor y no contra la unión de todos: si valiera cualquier permiso
+ * suficiente, conectar Gmail se daría por bueno con un consentimiento de solo Drive, y la
+ * primera sincronización fallaría contra una API a la que ese token no llega.
  */
-export function grantedScopesAreSufficient(granted: string): boolean {
+export function grantedScopesAreSufficient(
+  provider: GoogleProvider,
+  granted: string,
+): boolean {
   const scopes = new Set(granted.split(/\s+/).filter(Boolean));
-  return DRIVE_SCOPES.every(
+
+  // Los permisos amplios INCLUYEN al de lectura. Se aceptan si la persona ya los tenía
+  // concedidos de antes, aunque nosotros no los pidamos nunca.
+  const broaderThanReadonly: Record<GoogleProvider, string> = {
+    GOOGLE_DRIVE: 'https://www.googleapis.com/auth/drive',
+    GMAIL: 'https://mail.google.com/',
+  };
+
+  return scopesFor(provider).every(
     (required) =>
-      scopes.has(required) ||
-      // `drive` completo incluye la lectura; se acepta aunque nunca se pida.
-      scopes.has('https://www.googleapis.com/auth/drive'),
+      scopes.has(required) || scopes.has(broaderThanReadonly[provider]),
   );
 }

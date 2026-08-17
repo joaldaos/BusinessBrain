@@ -22,7 +22,15 @@ import {
   type GoogleDrivePort,
   type GoogleTokens,
 } from '../domain/ports/google-drive.port';
-import { grantedScopesAreSufficient } from '../domain/oauth-state';
+import { GMAIL_PORT, type GmailPort } from '../domain/ports/gmail.port';
+import {
+  GOOGLE_OAUTH_PORT,
+  type GoogleOAuthPort,
+} from '../domain/ports/google-oauth.port';
+import {
+  grantedScopesAreSufficient,
+  type GoogleProvider,
+} from '../domain/oauth-state';
 
 /** Margen antes de dar un token por caducado: no vale renovarlo justo al filo. */
 const EXPIRY_MARGIN_MS = 60_000;
@@ -52,7 +60,11 @@ export class IntegrationsService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly audit: AuditService,
+    // Refresco y revocación son comunes a todos los proveedores de Google: este servicio
+    // custodia los tokens de cualquiera de ellos y no debe depender del puerto de uno concreto.
+    @Inject(GOOGLE_OAUTH_PORT) private readonly oauth: GoogleOAuthPort,
     @Inject(GOOGLE_DRIVE_PORT) private readonly drive: GoogleDrivePort,
+    @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
   ) {}
 
   /** Lo que la interfaz puede ver de una conexión. Jamás incluye tokens. */
@@ -62,6 +74,10 @@ export class IntegrationsService {
     status: true,
     scope: true,
     expiresAt: true,
+    // Qué cuenta externa alimenta al sistema. Es identidad de la conexión, no contenido: sin
+    // esto, la pantalla solo puede decir "Gmail conectado", y en una empresa con varias
+    // cuentas eso no permite auditar nada ni decidir si conviene desconectar.
+    accountLabel: true,
     connectedById: true,
     createdAt: true,
     _count: { select: { knowledgeSources: true } },
@@ -85,13 +101,23 @@ export class IntegrationsService {
   async completeConnection(params: {
     organizationId: string;
     userId: string;
-    provider: IntegrationProvider;
+    /**
+     * Solo proveedores de Google. Acotarlo aquí, y no aceptar el enum entero, impide que un
+     * flujo futuro de otro proveedor entre por esta puerta y se le compruebe el permiso
+     * equivocado.
+     */
+    provider: GoogleProvider;
     tokens: GoogleTokens;
   }): Promise<Integration> {
-    if (!grantedScopesAreSufficient(params.tokens.scope)) {
+    // Por proveedor, no contra la unión: un consentimiento de solo Drive no debe dar por buena
+    // una conexión de Gmail que fallaría en su primera sincronización.
+    if (!grantedScopesAreSufficient(params.provider, params.tokens.scope)) {
       throw new BadRequestException(
-        'Google no concedió permiso para leer tu Drive. Vuelve a conectar y acepta el ' +
-          'acceso de solo lectura',
+        params.provider === IntegrationProvider.GMAIL
+          ? 'Google no concedió permiso para leer tu correo. Vuelve a conectar y acepta el ' +
+              'acceso de solo lectura'
+          : 'Google no concedió permiso para leer tu Drive. Vuelve a conectar y acepta el ' +
+              'acceso de solo lectura',
       );
     }
 
@@ -131,9 +157,11 @@ export class IntegrationsService {
     const integration = existing
       ? await this.prisma.integration.update({
           where: { id: existing.id },
-          data,
+          data: { ...data, accountLabel: await this.describeAccount(params) },
         })
-      : await this.prisma.integration.create({ data });
+      : await this.prisma.integration.create({
+          data: { ...data, accountLabel: await this.describeAccount(params) },
+        });
 
     await this.audit.record({
       organizationId: params.organizationId,
@@ -203,7 +231,7 @@ export class IntegrationsService {
     }
 
     try {
-      const renewed = await this.drive.refreshTokens(
+      const renewed = await this.oauth.refreshTokens(
         this.encryption.decrypt(integration.refreshTokenEnc),
       );
 
@@ -248,7 +276,7 @@ export class IntegrationsService {
 
     if (integration.refreshTokenEnc) {
       try {
-        await this.drive.revoke(
+        await this.oauth.revoke(
           this.encryption.decrypt(integration.refreshTokenEnc),
         );
       } catch (error) {
@@ -304,6 +332,50 @@ export class IntegrationsService {
   async listFolders(params: { organizationId: string; integrationId: string }) {
     const accessToken = await this.accessTokenFor(params);
     return this.drive.listFolders({ accessToken });
+  }
+
+  /**
+   * Etiquetas del buzón conectado, para que la persona elija la frontera de sincronización.
+   *
+   * Exige que la conexión SEA de Gmail: sin esa comprobación, pasar el identificador de la
+   * conexión de Drive gastaría su token contra la API de Gmail y devolvería un error opaco.
+   */
+  async listGmailLabels(params: {
+    organizationId: string;
+    integrationId: string;
+  }) {
+    const integration = await this.findOne(params);
+    if (integration.provider !== IntegrationProvider.GMAIL) {
+      throw new BadRequestException('Esa conexión no es de Gmail');
+    }
+
+    const accessToken = await this.accessTokenFor(params);
+    return this.gmail.listLabels({ accessToken });
+  }
+
+  /**
+   * A qué cuenta externa quedó conectado, para poder decirlo en la interfaz.
+   *
+   * Un fallo aquí NO impide conectar: es una etiqueta informativa, y perder la conexión entera
+   * porque Google no contesta a una consulta de perfil sería desproporcionado. Se queda nula y
+   * la interfaz lo dice.
+   */
+  private async describeAccount(params: {
+    provider: GoogleProvider;
+    tokens: GoogleTokens;
+  }): Promise<string | null> {
+    if (params.provider !== IntegrationProvider.GMAIL) return null;
+
+    try {
+      return await this.gmail.accountEmail({
+        accessToken: params.tokens.accessToken,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer la cuenta de Gmail conectada: ${(error as Error).message}`,
+      );
+      return null;
+    }
   }
 
   private async markError(

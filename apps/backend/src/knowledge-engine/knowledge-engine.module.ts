@@ -4,6 +4,7 @@ import { KnowledgeItemsController } from './api/knowledge-items.controller';
 import { KnowledgeSourcesService } from './application/knowledge-sources.service';
 import { KnowledgeItemsService } from './application/knowledge-items.service';
 import { IngestFromSourceUseCase } from './application/ingest-from-source.use-case';
+import { RestrictedPerimeterService } from './application/restricted-perimeter.service';
 import { FileUploadConnector } from './infrastructure/connectors/file-upload.connector';
 import { ConnectorRegistry } from './infrastructure/connectors/connector-registry.service';
 import { WebPageConnector } from './infrastructure/connectors/web-page.connector';
@@ -32,6 +33,7 @@ import { LlmModule } from '../llm/llm.module';
     KnowledgeSourcesService,
     KnowledgeItemsService,
     IngestFromSourceUseCase,
+    RestrictedPerimeterService,
     TaxonomyService,
     ClassifyContentUseCase,
     ScoreConfidenceUseCase,

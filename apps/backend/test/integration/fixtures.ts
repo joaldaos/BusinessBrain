@@ -1,5 +1,10 @@
 import { AuditService } from '../../src/audit/audit.service';
 import type { GoogleDriveConnector } from '../../src/integrations/infrastructure/google-drive.connector';
+import type { GmailConnector } from '../../src/integrations/infrastructure/gmail.connector';
+import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
+import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
+import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
+import { RestrictedPerimeterService } from '../../src/knowledge-engine/application/restricted-perimeter.service';
 import { EncryptionService } from '../../src/common/utils/encryption.util';
 import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
@@ -89,6 +94,58 @@ export function driveConnector(): GoogleDriveConnector {
     key: 'google_drive_v1',
     acquisition: 'PULL',
   } as unknown as GoogleDriveConnector;
+}
+
+/**
+ * Conector de Gmail para suites que no lo ejercitan. Mismo criterio que `driveConnector`.
+ *
+ * Declara `requiresRestrictedCollection` porque no es un detalle: es lo que el perímetro consulta
+ * para decidir si exigirlo, y un doble que lo omitiera dejaría esa exigencia sin verificar.
+ */
+export function gmailConnector(): GmailConnector {
+  return {
+    key: 'gmail_v1',
+    acquisition: 'PULL',
+    requiresRestrictedCollection: true,
+  } as unknown as GmailConnector;
+}
+
+/**
+ * Registro de conectores completo.
+ *
+ * Se construye el REAL —no un doble— porque es el único punto que sabe qué conectores existen, y
+ * quien no lo use olvidará añadir el siguiente. Cada suite sustituye solo el conector que
+ * ejercita.
+ */
+export function connectorRegistry(
+  overrides: {
+    drive?: GoogleDriveConnector;
+    gmail?: GmailConnector;
+  } = {},
+): ConnectorRegistry {
+  return new ConnectorRegistry(
+    new FileUploadConnector(),
+    new WebPageConnector(),
+    overrides.drive ?? driveConnector(),
+    overrides.gmail ?? gmailConnector(),
+  );
+}
+
+/**
+ * `RestrictedPerimeterService` real sobre el Postgres de pruebas.
+ *
+ * Se construye de verdad: cuenta concesiones y miembros contra la base de datos, y doblarlo
+ * dejaría sin verificar justo la garantía de que un buzón no puede sincronizar hacia una
+ * colección abierta a toda la organización.
+ */
+export function restrictedPerimeter(
+  db: unknown,
+  registry: ConnectorRegistry,
+): RestrictedPerimeterService {
+  return new RestrictedPerimeterService(
+    db as ConstructorParameters<typeof RestrictedPerimeterService>[0],
+    registry,
+  );
 }
 
 export interface TestOrg {

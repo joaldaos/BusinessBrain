@@ -13,8 +13,6 @@ import { GoogleDriveConnector } from '../../src/integrations/infrastructure/goog
 import { IngestFromSourceUseCase } from '../../src/knowledge-engine/application/ingest-from-source.use-case';
 import { KnowledgeSourcesService } from '../../src/knowledge-engine/application/knowledge-sources.service';
 import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
-import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/connectors/file-upload.connector';
-import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
 import { BusinessObjectiveService } from '../../src/understanding-engine/application/business-objective.service';
 import { TriggerAnalysisRunUseCase } from '../../src/understanding-engine/application/trigger-analysis-run.use-case';
 import { PrismaKnowledgeSignalsAdapter } from '../../src/understanding-engine/infrastructure/prisma-knowledge-signals.adapter';
@@ -27,8 +25,11 @@ import { CollectionAccessService } from '../../src/knowledge-engine/application/
 import { RetrieveInsightsUseCase } from '../../src/understanding-engine/application/retrieve-insights.use-case';
 import { collectionsScope } from '../../src/knowledge-engine/domain/knowledge-scope';
 import { FakeGoogleDrive } from '../fake-google-drive';
+import { FakeGmail } from '../fake-gmail';
 import {
   auditService,
+  connectorRegistry,
+  restrictedPerimeter,
   createInsight,
   createTestOrg,
   destroyTestOrg,
@@ -72,21 +73,27 @@ describe('Google Drive (integración)', () => {
       db,
       encryptionService(),
       auditService(db),
+      // El refresco y la revocación son comunes a Google: el doble de Drive los sirve igual.
       drive,
+      drive,
+      new FakeGmail(),
     );
-    connectors = new ConnectorRegistry(
-      new FileUploadConnector(),
-      new WebPageConnector(),
-      new GoogleDriveConnector(drive, integrations),
-    );
+    connectors = connectorRegistry({
+      drive: new GoogleDriveConnector(drive, integrations),
+    });
     ingest = new IngestFromSourceUseCase(
       db,
       connectors,
       classify,
       encryptionService(),
       auditService(db),
+      restrictedPerimeter(db, connectors),
     );
-    sources = new KnowledgeSourcesService(db, encryptionService());
+    sources = new KnowledgeSourcesService(
+      db,
+      encryptionService(),
+      restrictedPerimeter(db, connectors),
+    );
 
     drive.putFile({
       id: 'doc-1',

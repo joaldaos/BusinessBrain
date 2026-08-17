@@ -46,7 +46,24 @@ export interface KnowledgeSource {
   type: string;
   connectorKey: string;
   status: string;
-  lastSyncAt: string | null;
+  /** Nombre del campo tal como lo devuelve la API. */
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  /** Frontera sincronizada en texto: la etiqueta, la carpeta o la dirección. */
+  syncScope: string | null;
+  /** Qué trajo la última ejecución. Sin esto, "sincronizado" no dice nada. */
+  lastSync: {
+    status: string;
+    finishedAt: string | null;
+    stats: {
+      itemsFound?: number;
+      itemsCreated?: number;
+      itemsUpdated?: number;
+      itemsSkippedDuplicate?: number;
+      itemsFailed?: number;
+    } | null;
+    error: string | null;
+  } | null;
   createdAt: string;
 }
 
@@ -203,11 +220,19 @@ export interface Integration {
   status: string;
   scope: string | null;
   expiresAt: string | null;
+  /** Cuenta externa conectada. Identidad de la conexión, nunca contenido indexado. */
+  accountLabel: string | null;
   createdAt: string;
   _count?: { knowledgeSources: number };
 }
 
 export interface DriveFolder {
+  id: string;
+  name: string;
+}
+
+/** Etiqueta de Gmail. Actúa de FRONTERA: nada de fuera de ella entra en BusinessBrain. */
+export interface GmailLabel {
   id: string;
   name: string;
 }

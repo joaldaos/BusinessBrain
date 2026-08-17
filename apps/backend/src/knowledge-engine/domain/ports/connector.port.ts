@@ -5,6 +5,16 @@ export interface ExtractedContent {
   sizeBytes: number;
   sourceUrl?: string;
   rawContent: Buffer;
+  /**
+   * Lo que la fuente dijo y NO es conocimiento.
+   *
+   * Se guarda aparte del contenido a propósito: `rawContent` se normaliza, se trocea, se
+   * vectoriza y se recupera; esto sirve para sincronizar, agrupar o trazar y no debe acabar
+   * en un embedding ni en un informe. Hoy lo usa Gmail para el hilo y la dirección del
+   * remitente — dato personal que por decisión de producto queda fuera del conocimiento
+   * recuperable.
+   */
+  sourceMetadata?: Record<string, unknown>;
 }
 
 /**
@@ -29,5 +39,17 @@ export interface ConnectorPort {
    * decidiera por clave de conector, cada conector nuevo obligaría a tocarlo.
    */
   readonly acquisition: 'PUSH' | 'PULL';
+  /**
+   * La fuente exige un perímetro de acceso RESTRINGIDO.
+   *
+   * Un buzón de correo no es una carpeta compartida: si su contenido aterrizara en una
+   * colección accesible para toda la organización, conectarlo convertiría el correo de una
+   * persona en conocimiento de empresa sin que nadie lo hubiera decidido.
+   *
+   * Se declara en el conector y no se comprueba por clave para que la exigencia sea
+   * estructural: quien añada otra fuente sensible solo tiene que declararlo, y la
+   * comprobación —al crear la fuente Y en cada sincronización— ya existe.
+   */
+  readonly requiresRestrictedCollection?: boolean;
   extract(input: unknown): Promise<ExtractedContent[]>;
 }

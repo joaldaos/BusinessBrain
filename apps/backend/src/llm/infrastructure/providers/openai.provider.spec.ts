@@ -89,7 +89,9 @@ describe('OpenAiProvider', () => {
     );
   });
 
-  it('lanza un error claro si no hay API key disponible', async () => {
+  it('sin clave, el mensaje lo entiende una PYME y no nombra nada técnico', async () => {
+    // Lo lee alguien cuando falla una sincronización o una pregunta: tiene que decir qué
+    // hacer y dónde, no el nombre de una columna ni de una variable de entorno.
     const configWithoutKey = {
       get: jest.fn().mockReturnValue(undefined),
     } as unknown as TypedConfigService;
@@ -97,7 +99,10 @@ describe('OpenAiProvider', () => {
 
     await expect(
       providerWithoutKey.complete({ messages: [] }, 'gpt-4.1'),
-    ).rejects.toThrow(/API key/);
+    ).rejects.toThrow(/no está configurada/i);
+    await expect(
+      providerWithoutKey.complete({ messages: [] }, 'gpt-4.1'),
+    ).rejects.not.toThrow(/LlmProfile|apiKeyEnc|OPENAI_API_KEY/);
   });
 
   /** Consume un flujo entero cuando lo que se verifica es la llamada, no lo emitido. */

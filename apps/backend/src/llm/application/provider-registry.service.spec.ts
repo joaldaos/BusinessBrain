@@ -2,6 +2,7 @@ import { ProviderRegistry } from './provider-registry.service';
 import { AnthropicProvider } from '../infrastructure/providers/anthropic.provider';
 import { OpenAiProvider } from '../infrastructure/providers/openai.provider';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { EncryptionService } from '../../common/utils/encryption.util';
 
 describe('ProviderRegistry', () => {
   const anthropicProvider = {
@@ -9,12 +10,18 @@ describe('ProviderRegistry', () => {
   } as unknown as AnthropicProvider;
   const openAiProvider = { name: 'OPENAI' } as unknown as OpenAiProvider;
   let prisma: { llmProfile: { findFirst: jest.Mock } };
+  const encryption = new EncryptionService({
+    get: () => Buffer.alloc(32, 7).toString('base64'),
+  } as unknown as ConstructorParameters<typeof EncryptionService>[0]);
   let registry: ProviderRegistry;
 
   beforeEach(() => {
     prisma = { llmProfile: { findFirst: jest.fn() } };
+    // Cifrado REAL, no un doble: el registro es el unico punto que descifra una clave de IA,
+    // y doblarlo dejaria sin verificar justamente ese ida y vuelta.
     registry = new ProviderRegistry(
       prisma as unknown as PrismaService,
+      encryption,
       anthropicProvider,
       openAiProvider,
     );
@@ -91,11 +98,88 @@ describe('ProviderRegistry', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
       await expect(registry.resolveForOrganization('org-1')).rejects.toThrow(
-        /ningún perfil de IA configurado/,
+        /no está configurada/,
       );
       await expect(
         registry.resolveForOrganization('org-1'),
       ).rejects.toMatchObject({ status: 503 });
+    });
+
+    it('CRÍTICO: entrega la clave DESCIFRADA, no el texto cifrado', async () => {
+      // Seis consumidores pasaban `profile.apiKeyEnc` como si fuera la clave, y nadie la
+      // desciframos en ningún punto. No se notaba porque no había forma de crear un perfil:
+      // la columna siempre estaba vacía y todo caía a la clave de plataforma. En cuanto una
+      // empresa guarda la suya, esas rutas mandarían el cifrado al proveedor.
+      const cifrada = encryption.encrypt('sk-la-clave-de-la-empresa');
+      expect(cifrada).not.toContain('sk-la-clave-de-la-empresa');
+      prisma.llmProfile.findFirst.mockResolvedValueOnce({
+        id: 'perfil-1',
+        organizationId: 'org-1',
+        provider: 'OPENAI',
+        modelName: 'gpt-4.1',
+        apiKeyEnc: cifrada,
+        isDefault: true,
+      });
+
+      const resuelto = await registry.resolveForOrganization('org-1');
+
+      expect(resuelto.apiKey).toBe('sk-la-clave-de-la-empresa');
+      // Y el texto cifrado NO viaja con el perfil: quien consume no puede volver a
+      // equivocarse porque ya no lo tiene en la mano.
+      expect(resuelto.profile).not.toHaveProperty('apiKeyEnc');
+    });
+
+    it('sin clave propia devuelve undefined, que significa "usa la de plataforma"', async () => {
+      prisma.llmProfile.findFirst.mockResolvedValueOnce({
+        id: 'perfil-plataforma',
+        organizationId: null,
+        provider: 'OPENAI',
+        modelName: 'gpt-4.1',
+        apiKeyEnc: null,
+        isDefault: true,
+      });
+
+      // Nunca una cadena vacía: parecería una clave y fallaría lejos de aquí.
+      expect(
+        (await registry.resolveForOrganization('org-1')).apiKey,
+      ).toBeUndefined();
+    });
+  });
+
+  describe('resolveEmbeddingsForOrganization', () => {
+    it('CRÍTICO: NO manda la clave de un proveedor a otro', async () => {
+      // Vectorizar solo lo hace OpenAI. Antes se leía el perfil de la organización —fuera del
+      // proveedor que fuera— y se llamaba a OpenAI con esa clave: una empresa con Anthropic
+      // configurado habría mandado su clave de Anthropic a OpenAI.
+      prisma.llmProfile.findFirst.mockResolvedValueOnce({
+        id: 'perfil-anthropic',
+        organizationId: 'org-1',
+        provider: 'ANTHROPIC',
+        modelName: 'claude-sonnet-5',
+        apiKeyEnc: encryption.encrypt('sk-ant-de-la-empresa'),
+        isDefault: true,
+      });
+
+      const resuelto = await registry.resolveEmbeddingsForOrganization('org-1');
+
+      expect(resuelto.provider).toBe(openAiProvider);
+      // Se cae a la de plataforma en vez de usar una clave que no corresponde.
+      expect(resuelto.apiKey).toBeUndefined();
+    });
+
+    it('con OpenAI configurado sí usa la clave de la empresa', async () => {
+      prisma.llmProfile.findFirst.mockResolvedValueOnce({
+        id: 'perfil-openai',
+        organizationId: 'org-1',
+        provider: 'OPENAI',
+        modelName: 'gpt-4.1',
+        apiKeyEnc: encryption.encrypt('sk-de-la-empresa'),
+        isDefault: true,
+      });
+
+      expect(
+        (await registry.resolveEmbeddingsForOrganization('org-1')).apiKey,
+      ).toBe('sk-de-la-empresa');
     });
   });
 });

@@ -113,7 +113,10 @@ export class AnthropicProvider implements LlmProviderPort {
       this.configService.get('llmPlatformKeys.anthropic', { infer: true });
     if (!key) {
       throw new Error(
-        'No hay API key de Anthropic disponible (ni LlmProfile.apiKeyEnc de la organización ni ANTHROPIC_API_KEY de plataforma)',
+        // Lo lee una PYME cuando falla una sincronización o una pregunta: dice qué hacer y
+        // dónde, sin nombrar columnas, clases ni variables de entorno.
+        'La inteligencia artificial no está configurada. Ve a Configuración y añade la clave ' +
+          'de tu proveedor de IA.',
       );
     }
     return key;

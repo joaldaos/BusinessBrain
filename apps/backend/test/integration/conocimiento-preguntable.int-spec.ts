@@ -155,12 +155,21 @@ describe('El conocimiento ingerido es preguntable (integración)', () => {
     const retrieve = new RetrieveContextUseCase(
       db,
       {
-        getEmbeddingProvider: () => ({
-          // Se pregunta con el MISMO texto: el vector determinista coincide, así que si la
-          // recuperación no lo encuentra es porque no hay nada escrito, no porque no se parezca.
-          embed: (texts: string[]) =>
-            Promise.resolve(texts.map(() => vectorOf(POLITICA.slice(0, 400)))),
-        }),
+        // Mismo contrato que el registro real: resuelve proveedor Y clave ya descifrada.
+        resolveEmbeddingsForOrganization: () =>
+          Promise.resolve({
+            provider: {
+              // Se pregunta con el MISMO texto: el vector determinista coincide, así que si la
+              // recuperación no lo encuentra es porque no hay nada escrito, no porque no se
+              // parezca.
+              embed: (texts: string[]) =>
+                Promise.resolve(
+                  texts.map(() => vectorOf(POLITICA.slice(0, 400))),
+                ),
+            },
+            modelName: 'text-embedding-3-small',
+            apiKey: undefined,
+          }),
       } as unknown as ConstructorParameters<typeof RetrieveContextUseCase>[1],
       // Canonicalización REAL: solo necesita la base de datos, y doblarla dejaría sin
       // ejercitar la exclusión de ítems no canónicos, que forma parte de la recuperación.

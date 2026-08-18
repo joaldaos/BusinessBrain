@@ -1,11 +1,11 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { LlmProviderName, Prisma } from '@businessbrain/database';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  EMBEDDING_DIMENSIONS,
+  OFFICIAL_EMBEDDING_MODEL,
+  OFFICIAL_EMBEDDING_VERSION,
+} from '../../llm/domain/embedding-model';
 import { ProviderRegistry } from '../../llm/application/provider-registry.service';
 import {
   chunkContent,
@@ -23,15 +23,6 @@ import {
  * Regenerar los vectores NO altera el contenido del `KnowledgeItem` ni crea una versión
  * nueva: es una operación sobre la REPRESENTACIÓN, no sobre el conocimiento (§5).
  */
-
-/**
- * Modelo de embeddings oficial. La dimensionalidad (1536) está fijada en el esquema desde
- * la Fase 1: cambiar a un modelo de otra dimensión NO es una reindexación, es una migración
- * de esquema con su propio proceso (§12, hallazgo #12 de la auditoría).
- */
-export const OFFICIAL_EMBEDDING_MODEL = 'text-embedding-3-small';
-export const OFFICIAL_EMBEDDING_VERSION = 'v1';
-export const EMBEDDING_DIMENSIONS = 1536;
 
 /** Lotes por llamada al proveedor: se vectoriza por lotes, no un fragmento por petición (§12, "Costes"). */
 const EMBEDDING_BATCH_SIZE = 64;
@@ -159,8 +150,13 @@ export class ChunkAndEmbedUseCase {
 
     const missing = uniqueHashes.filter((h) => !byHash.has(h));
     if (missing.length > 0) {
-      const { profile, provider } =
-        await this.resolveEmbeddingProvider(organizationId);
+      // El registro es quien resuelve perfiles y descifra claves. Antes esto leía el perfil
+      // por su cuenta y llamaba SIEMPRE a OpenAI con la clave de ese perfil, fuera del
+      // proveedor que fuera.
+      const { provider, apiKey } =
+        await this.providerRegistry.resolveEmbeddingsForOrganization(
+          organizationId,
+        );
       const textByHash = new Map(chunks.map((c) => [c.contentHash, c.content]));
 
       for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
@@ -168,7 +164,7 @@ export class ChunkAndEmbedUseCase {
         const vectors = await provider.embed(
           batchHashes.map((h) => textByHash.get(h)!),
           OFFICIAL_EMBEDDING_MODEL,
-          profile.apiKeyEnc ?? undefined,
+          apiKey,
         );
 
         vectors.forEach((vector, index) => {
@@ -186,34 +182,6 @@ export class ChunkAndEmbedUseCase {
     }
 
     return { byHash, reused, computed: missing.length };
-  }
-
-  private async resolveEmbeddingProvider(organizationId: string) {
-    const orgProfile = await this.prisma.llmProfile.findFirst({
-      where: { organizationId, isDefault: true },
-    });
-    const profile =
-      orgProfile ??
-      (await this.prisma.llmProfile.findFirst({
-        where: { organizationId: null, isDefault: true },
-      }));
-    if (!profile) {
-      // Precondición operativa: hace falta que un administrador configure un perfil. No es
-      // un fallo del sistema ni una petición mal formada.
-      throw new ServiceUnavailableException(
-        'La organización no tiene ningún perfil de IA configurado y la plataforma tampoco ' +
-          'aporta uno por defecto. Configure un LlmProfile antes de ingerir o consultar.',
-      );
-    }
-
-    // El proveedor de embeddings puede no coincidir con el conversacional (§12): hoy solo
-    // OpenAI implementa el puerto de embeddings.
-    return {
-      profile,
-      provider: this.providerRegistry.getEmbeddingProvider(
-        LlmProviderName.OPENAI,
-      ),
-    };
   }
 }
 

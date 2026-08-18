@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api/client';
+import { AiConfigurationCard } from '../components/AiConfigurationCard';
 import { useAuth } from '../auth';
 import {
   hasRole,
@@ -53,6 +54,9 @@ export function SettingsPage() {
 
   return (
     <>
+      {/* Primero: sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
+      <AiConfigurationCard canAdmin={canAdmin} />
+
       <Card title="Organización">
         <ErrorNote error={organization.error} />
         {organization.data && (

@@ -44,6 +44,11 @@ export const AUDIT_ACTIONS = {
   INTEGRATION_CONNECTED: 'integration.connected',
   INTEGRATION_DISCONNECTED: 'integration.disconnected',
 
+  // ── IA: elegir con qué proveedor —y con qué clave— piensa la empresa ──────
+  /** Configurar la IA compromete gasto en la cuenta del cliente: queda traza. */
+  AI_CONFIGURED: 'ai.configured',
+  AI_KEY_REMOVED: 'ai.key_removed',
+
   /** Crear una colección define una frontera de acceso: queda traza. */
   KNOWLEDGE_COLLECTION_CREATED: 'knowledge_collection.created',
 
@@ -106,6 +111,7 @@ export const AUDIT_TARGET_TYPES = {
   AUTOMATION: 'Automation',
   REPORT: 'Report',
   INTEGRATION: 'Integration',
+  LLM_PROFILE: 'LlmProfile',
   KNOWLEDGE_SOURCE: 'KnowledgeSource',
   KNOWLEDGE_COLLECTION: 'KnowledgeCollection',
   BUSINESS_OBJECTIVE: 'BusinessObjective',

@@ -105,10 +105,11 @@ export class SendMessageUseCase {
 
     try {
       // Perfil del agente si la conversación lo tiene (§7.3); si no, el de la organización.
-      const { profile, provider } = await this.providerRegistry.resolveForAgent(
-        organizationId,
-        prepared.llmProfileId,
-      );
+      const { profile, provider, apiKey } =
+        await this.providerRegistry.resolveForAgent(
+          organizationId,
+          prepared.llmProfileId,
+        );
 
       // El MISMO bucle que usa el streaming. La vía síncrona envuelve `complete` en un
       // flujo de un solo trozo: así ambas superficies ejecutan exactamente las mismas
@@ -118,11 +119,7 @@ export class SendMessageUseCase {
         ask: (request) =>
           this.asSingleChunkStream(
             provider
-              .complete(
-                request,
-                profile.modelName,
-                profile.apiKeyEnc ?? undefined,
-              )
+              .complete(request, profile.modelName, apiKey)
               .then((result) => result.content),
           ),
       });

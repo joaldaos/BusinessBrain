@@ -1,9 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { LlmProviderName, Prisma } from '@businessbrain/database';
+import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   isEmptyScope,
@@ -15,7 +11,7 @@ import { CanonicalizeUseCase } from './canonicalize.use-case';
 import {
   OFFICIAL_EMBEDDING_MODEL,
   EMBEDDING_DIMENSIONS,
-} from './chunk-and-embed.use-case';
+} from '../../llm/domain/embedding-model';
 import {
   DEFAULT_MAX_CHUNKS_PER_ITEM,
   enforceDiversity,
@@ -148,30 +144,15 @@ export class RetrieveContextUseCase {
     organizationId: string,
     query: string,
   ): Promise<number[]> {
-    const orgProfile = await this.prisma.llmProfile.findFirst({
-      where: { organizationId, isDefault: true },
-    });
-    const profile =
-      orgProfile ??
-      (await this.prisma.llmProfile.findFirst({
-        where: { organizationId: null, isDefault: true },
-      }));
-    if (!profile) {
-      // Precondición operativa: hace falta que un administrador configure un perfil. No es
-      // un fallo del sistema ni una petición mal formada.
-      throw new ServiceUnavailableException(
-        'La organización no tiene ningún perfil de IA configurado y la plataforma tampoco ' +
-          'aporta uno por defecto. Configure un LlmProfile antes de ingerir o consultar.',
+    const { provider, apiKey } =
+      await this.providerRegistry.resolveEmbeddingsForOrganization(
+        organizationId,
       );
-    }
 
-    const provider = this.providerRegistry.getEmbeddingProvider(
-      LlmProviderName.OPENAI,
-    );
     const [vector] = await provider.embed(
       [query],
       OFFICIAL_EMBEDDING_MODEL,
-      profile.apiKeyEnc ?? undefined,
+      apiKey,
     );
 
     if (vector.length !== EMBEDDING_DIMENSIONS) {

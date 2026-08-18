@@ -86,22 +86,18 @@ export class StreamMessageUseCase {
 
     try {
       // Mismo perfil que en la via sincrona: el del agente si lo declara (§7.3).
-      const { profile, provider } = await this.providerRegistry.resolveForAgent(
-        params.organizationId,
-        prepared.llmProfileId,
-      );
+      const { profile, provider, apiKey } =
+        await this.providerRegistry.resolveForAgent(
+          params.organizationId,
+          prepared.llmProfileId,
+        );
 
       // EL MISMO bucle que la vía síncrona, con el mismo contador del servidor y el mismo
       // gate. Aquí solo cambia que los trozos se reenvían según llegan. El filtro de
       // directivas vive dentro del bucle: la persona nunca ve el protocolo.
       const loop = this.turn.streamAgentLoop({
         prepared,
-        ask: (request) =>
-          provider.stream(
-            request,
-            profile.modelName,
-            profile.apiKeyEnc ?? undefined,
-          ),
+        ask: (request) => provider.stream(request, profile.modelName, apiKey),
       });
 
       let step = await loop.next();

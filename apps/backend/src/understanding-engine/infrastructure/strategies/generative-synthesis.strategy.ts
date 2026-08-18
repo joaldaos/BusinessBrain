@@ -143,7 +143,7 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
     organizationId: string,
     chunks: RetrievedKnowledge[],
   ): Promise<GenerativeFinding[]> {
-    const { profile, provider } =
+    const { profile, provider, apiKey } =
       await this.providerRegistry.resolveForOrganization(organizationId);
 
     const corpus = chunks
@@ -185,7 +185,7 @@ export class GenerativeSynthesisStrategy implements ReasoningStrategyPort {
         maxTokens: 2000,
       },
       profile.modelName,
-      profile.apiKeyEnc ?? undefined,
+      apiKey,
     );
 
     return this.parseFindings(result.content);

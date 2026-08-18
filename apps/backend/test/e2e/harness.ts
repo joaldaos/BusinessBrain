@@ -132,14 +132,24 @@ function fakeProviderRegistry() {
     provider,
   };
 
+  const embeddings = {
+    embed: (texts: string[]) =>
+      Promise.resolve(texts.map(() => new Array(1536).fill(0))),
+  };
+
   return {
     resolveForOrganization: () => Promise.resolve(resolved),
     resolveForAgent: () => Promise.resolve(resolved),
     getLlmProvider: () => provider,
-    getEmbeddingProvider: () => ({
-      embed: (texts: string[]) =>
-        Promise.resolve(texts.map(() => new Array(1536).fill(0))),
-    }),
+    getEmbeddingProvider: () => embeddings,
+    // Mismo contrato que el registro real: resuelve proveedor de embeddings Y clave ya
+    // DESCIFRADA. El doble tiene que respetarlo, o el camino de recuperación no se ejercita.
+    resolveEmbeddingsForOrganization: () =>
+      Promise.resolve({
+        provider: embeddings,
+        modelName: 'text-embedding-3-small',
+        apiKey: undefined,
+      }),
   };
 }
 

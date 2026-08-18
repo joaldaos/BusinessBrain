@@ -298,3 +298,28 @@ export interface Invitation {
   token: string;
   expiresAt: string;
 }
+
+/**
+ * Estado de la IA de la organización.
+ *
+ * `origin` importa a una PYME más que "configurada": con `PROPIA` el consumo se factura en su
+ * cuenta del proveedor; con `PLATAFORMA`, en la nuestra. La clave NUNCA viaja: lo único que se
+ * sabe es si existe una propia.
+ */
+export interface AiConfiguration {
+  origin: 'PROPIA' | 'PLATAFORMA' | 'SIN_CONFIGURAR';
+  /** `true` cuando BusinessBrain puede leer documentos y responder preguntas. */
+  ready: boolean;
+  provider: string | null;
+  modelName: string | null;
+  hasOwnKey: boolean;
+  explanation: string;
+}
+
+export interface AiProviderOption {
+  provider: string;
+  label: string;
+  defaultModel: string;
+  helpUrl: string;
+  keyPrefixHint: string;
+}

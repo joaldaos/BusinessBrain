@@ -63,7 +63,7 @@ export class ClassifyContentUseCase {
     ].join('\n');
 
     try {
-      const { profile, provider } =
+      const { profile, provider, apiKey } =
         await this.providerRegistry.resolveForOrganization(organizationId);
 
       const result = await provider.complete(
@@ -79,7 +79,7 @@ export class ClassifyContentUseCase {
           maxTokens: 500,
         },
         profile.modelName,
-        profile.apiKeyEnc ?? undefined,
+        apiKey,
       );
 
       return this.parseAndResolve(organizationId, result.content, nodes);

@@ -169,6 +169,14 @@ export function chunkAndEmbed(db: unknown): ChunkAndEmbedUseCase {
   return new ChunkAndEmbedUseCase(
     db as ConstructorParameters<typeof ChunkAndEmbedUseCase>[0],
     {
+      // El registro es quien resuelve el proveedor de embeddings Y descifra la clave: doblarlo
+      // exige respetar ese contrato, o la ingesta creería que no puede vectorizar.
+      resolveEmbeddingsForOrganization: () =>
+        Promise.resolve({
+          provider,
+          modelName: 'text-embedding-3-small',
+          apiKey: undefined,
+        }),
       getEmbeddingProvider: () => provider,
     } as unknown as ConstructorParameters<typeof ChunkAndEmbedUseCase>[1],
   );

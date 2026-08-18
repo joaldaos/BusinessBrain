@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type {
+  AiConfiguration,
   Automation,
   Conversation,
   Insight,
@@ -24,6 +25,7 @@ export function DashboardPage() {
   const automations = useResource(() => api<Automation[]>('/automations'));
   const reports = useResource(() => api<Report[]>('/reports'));
   const sources = useResource(() => api<KnowledgeSource[]>('/knowledge-sources'));
+  const ai = useResource(() => api<AiConfiguration>('/ai-configuration'));
   const conversations = useResource(() => api<Conversation[]>('/conversations'));
 
   const disputed =
@@ -34,11 +36,12 @@ export function DashboardPage() {
   return (
     <>
       <FirstSteps
+        aiReady={ai.data?.ready ?? false}
         connected={(sources.data?.length ?? 0) > 0}
         learned={(items.data?.length ?? 0) > 0}
         asked={(conversations.data?.length ?? 0) > 0}
         understood={(insights.data?.length ?? 0) > 0}
-        loading={sources.loading || items.loading}
+        loading={sources.loading || items.loading || ai.loading}
       />
 
       <div className="grid gap-3 sm:grid-cols-4">
@@ -124,12 +127,14 @@ export function DashboardPage() {
  * un tutorial que se marca solo como completado es peor que no tenerlo.
  */
 function FirstSteps({
+  aiReady,
   connected,
   learned,
   asked,
   understood,
   loading,
 }: {
+  aiReady: boolean;
   connected: boolean;
   learned: boolean;
   asked: boolean;
@@ -137,6 +142,14 @@ function FirstSteps({
   loading: boolean;
 }) {
   const steps = [
+    {
+      // Primero de la lista porque bloquea a todos los demás: sin IA, lo que se suba no se
+      // puede preguntar y un análisis no encuentra nada.
+      done: aiReady,
+      to: '/configuracion',
+      action: 'Configura la inteligencia artificial',
+      why: 'Sin ella BusinessBrain no puede leer tus documentos ni responder preguntas.',
+    },
     {
       done: connected,
       to: '/conocimiento',

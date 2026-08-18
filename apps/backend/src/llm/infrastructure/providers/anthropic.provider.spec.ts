@@ -42,7 +42,9 @@ describe('AnthropicProvider', () => {
     });
   });
 
-  it('lanza un error claro si no hay API key disponible', async () => {
+  it('sin clave, el mensaje lo entiende una PYME y no nombra nada técnico', async () => {
+    // Lo lee alguien cuando falla una sincronización o una pregunta: tiene que decir qué
+    // hacer y dónde, no el nombre de una columna ni de una variable de entorno.
     const configWithoutKey = {
       get: jest.fn().mockReturnValue(undefined),
     } as unknown as TypedConfigService;
@@ -53,7 +55,10 @@ describe('AnthropicProvider', () => {
 
     await expect(
       providerWithoutKey.complete({ messages: [] }, 'claude-sonnet-5'),
-    ).rejects.toThrow(/API key/);
+    ).rejects.toThrow(/no está configurada/i);
+    await expect(
+      providerWithoutKey.complete({ messages: [] }, 'claude-sonnet-5'),
+    ).rejects.not.toThrow(/LlmProfile|apiKeyEnc|ANTHROPIC_API_KEY/);
   });
 
   it('envía el system prompt y los headers de autenticación esperados por la API de Anthropic', async () => {
@@ -153,7 +158,7 @@ describe('AnthropicProvider', () => {
 
       await expect(
         drain(sinKey.stream({ messages: [] }, 'claude-sonnet-5')),
-      ).rejects.toThrow(/API key/);
+      ).rejects.toThrow(/no está configurada/i);
     });
   });
 });

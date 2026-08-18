@@ -1,15 +1,40 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { LlmProviderName } from '@businessbrain/database';
+import { LlmProviderName, type LlmProfile } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EncryptionService } from '../../common/utils/encryption.util';
 import { AnthropicProvider } from '../infrastructure/providers/anthropic.provider';
 import { OpenAiProvider } from '../infrastructure/providers/openai.provider';
 import type { LlmProviderPort } from '../domain/ports/llm-provider.port';
 import type { EmbeddingProviderPort } from '../domain/ports/embedding-provider.port';
 
 /**
+ * Perfil resuelto y LISTO PARA USAR.
+ *
+ * `profile` viene sin `apiKeyEnc` a propósito, y la clave ya descifrada viaja aparte. No es
+ * cosmético: hasta ahora seis consumidores pasaban `profile.apiKeyEnc` —el texto CIFRADO— como
+ * si fuera la clave del proveedor, y nadie lo descifraba en ningún punto del sistema. No se
+ * notaba porque no existía forma de crear un `LlmProfile`, así que la columna siempre estaba
+ * vacía y todo caía a la clave de plataforma. En cuanto una empresa guarda la suya, esas seis
+ * rutas mandarían el cifrado a OpenAI y fallarían con un error de autenticación incomprensible.
+ *
+ * Entregar la clave ya utilizable, y NO entregar la cifrada, hace que ese error no pueda
+ * repetirse: quien consume no tiene el texto cifrado en la mano.
+ */
+export interface ResolvedLlmProfile {
+  profile: Omit<LlmProfile, 'apiKeyEnc'>;
+  provider: LlmProviderPort;
+  /** Clave de la organización ya descifrada, o `undefined` para usar la de plataforma. */
+  apiKey: string | undefined;
+}
+
+/**
  * Único punto del sistema que sabe qué proveedores concretos existen.
  * Todo consumidor (Conversations, Agents, Knowledge Engine...) pasa por aquí,
  * nunca instancia AnthropicProvider/OpenAiProvider directamente.
+ *
+ * Y único punto que descifra una clave de IA, por el mismo motivo por el que
+ * `IntegrationsService.accessTokenFor` es el único que descifra los tokens de Google: un
+ * secreto que se descifra en varios sitios acaba descifrándose mal en alguno.
  */
 @Injectable()
 export class ProviderRegistry {
@@ -22,6 +47,7 @@ export class ProviderRegistry {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
     anthropicProvider: AnthropicProvider,
     openAiProvider: OpenAiProvider,
   ) {
@@ -69,7 +95,9 @@ export class ProviderRegistry {
    * selección de proveedor depende ÚNICAMENTE de qué fila exista en LlmProfile —
    * cambiar de Anthropic a OpenAI para una organización es un UPDATE, no un deploy.
    */
-  async resolveForOrganization(organizationId: string) {
+  async resolveForOrganization(
+    organizationId: string,
+  ): Promise<ResolvedLlmProfile> {
     const orgProfile = await this.prisma.llmProfile.findFirst({
       where: { organizationId, isDefault: true },
     });
@@ -81,16 +109,19 @@ export class ProviderRegistry {
 
     if (!profile) {
       // PRECONDICIÓN OPERATIVA, no error de programación ni petición mal formada: quien
-      // llama no puede arreglarlo cambiando la petición, hace falta que un administrador
-      // configure un perfil. Un 500 lo presentaría como una avería nuestra y mandaría a la
-      // persona equivocada a investigar.
+      // llama no puede arreglarlo cambiando la petición, hace falta configurar la IA. Un 500
+      // lo presentaría como una avería nuestra y mandaría a investigar a quien no toca.
+      //
+      // El mensaje va dirigido a una PYME: dice qué hacer y dónde, sin nombrar columnas,
+      // clases ni variables de entorno.
       throw new ServiceUnavailableException(
-        'La organización no tiene ningún perfil de IA configurado y la plataforma tampoco ' +
-          'aporta uno por defecto. Configure un LlmProfile antes de usar esta función.',
+        'La inteligencia artificial todavía no está configurada. Ve a Configuración y añade ' +
+          'la clave de tu proveedor de IA para que BusinessBrain pueda leer tus documentos y ' +
+          'responder preguntas.',
       );
     }
 
-    return { profile, provider: this.getLlmProvider(profile.provider) };
+    return this.usable(profile);
   }
 
   /**
@@ -102,7 +133,10 @@ export class ProviderRegistry {
    * cambiar de manos. Sin esta comprobación, un `llmProfileId` heredado podría gastar —o
    * exponer— la clave BYO de otro cliente.
    */
-  async resolveForAgent(organizationId: string, llmProfileId: string | null) {
+  async resolveForAgent(
+    organizationId: string,
+    llmProfileId: string | null,
+  ): Promise<ResolvedLlmProfile> {
     if (!llmProfileId) return this.resolveForOrganization(organizationId);
 
     const profile = await this.prisma.llmProfile.findFirst({
@@ -116,6 +150,49 @@ export class ProviderRegistry {
     // conversación: el agente sigue pudiendo responder, solo que con el modelo por defecto.
     if (!profile) return this.resolveForOrganization(organizationId);
 
-    return { profile, provider: this.getLlmProvider(profile.provider) };
+    return this.usable(profile);
+  }
+
+  /**
+   * Proveedor de EMBEDDINGS utilizable por una organización.
+   *
+   * Vive aquí y no en quien vectoriza porque es donde se resuelven los perfiles, y porque
+   * arrastraba un fallo silencioso: se leía el perfil de la organización —de cualquier
+   * proveedor— y se llamaba SIEMPRE al de OpenAI con la clave de ese perfil. Una empresa con
+   * Anthropic configurado habría mandado su clave de Anthropic a OpenAI.
+   *
+   * Si el perfil de la organización no sabe vectorizar, se cae a la clave de PLATAFORMA en vez
+   * de usar una clave que no corresponde. Y si tampoco la hay, se dice con claridad: sin
+   * vectorizar, lo que entra no se puede preguntar.
+   */
+  async resolveEmbeddingsForOrganization(organizationId: string): Promise<{
+    provider: EmbeddingProviderPort;
+    modelName: string;
+    apiKey: string | undefined;
+  }> {
+    const resolved = await this.resolveForOrganization(organizationId);
+    const canEmbed = Boolean(
+      this.embeddingProviders[resolved.profile.provider],
+    );
+
+    return {
+      // Hoy solo OpenAI vectoriza. Si el perfil es de otro proveedor, su clave NO sirve aquí.
+      provider: this.getEmbeddingProvider(LlmProviderName.OPENAI),
+      modelName: resolved.profile.modelName,
+      apiKey: canEmbed ? resolved.apiKey : undefined,
+    };
+  }
+
+  /** Descifra la clave propia, si la hay, y aparta el texto cifrado del resultado. */
+  private usable(profile: LlmProfile): ResolvedLlmProfile {
+    const { apiKeyEnc, ...visible } = profile;
+
+    return {
+      profile: visible,
+      provider: this.getLlmProvider(profile.provider),
+      // Sin clave propia se devuelve `undefined`, que es lo que el proveedor interpreta como
+      // "usa la de plataforma". Nunca una cadena vacía: parecería una clave y fallaría lejos.
+      apiKey: apiKeyEnc ? this.encryption.decrypt(apiKeyEnc) : undefined,
+    };
   }
 }

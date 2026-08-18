@@ -109,9 +109,29 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
 
   // El panel dice qué falta, con el estado real de la cuenta.
   await expect(page.getByText('Primeros pasos')).toBeVisible();
-  await expect(page.getByRole('link', { name: /conecta una fuente/i })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /configura la inteligencia artificial/i }),
+  ).toBeVisible();
 
-  // ── 3. COLECCIÓN y FUENTE ─────────────────────────────────────────────────
+  // ── 3. CONFIGURAR LA IA desde la interfaz ─────────────────────────────────
+  //
+  // Es el paso que antes solo se podía dar escribiendo en la base de datos. Sin él, lo que la
+  // empresa suba no se puede preguntar.
+  await page.getByRole('link', { name: 'Configuración', exact: true }).click();
+  await expect(page.getByText('Inteligencia artificial')).toBeVisible();
+
+  await page
+    .getByLabel(/clave de openai/i)
+    .fill('sk-la-clave-de-la-empresa-de-prueba');
+  await page.getByRole('button', { name: /guardar y comprobar/i }).click();
+
+  // Queda claro QUÉ configuración está usando: con clave propia, el consumo es de la empresa.
+  await expect(page.getByText(/clave de tu empresa/i)).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText('lista', { exact: true })).toBeVisible();
+
+  // ── 4. COLECCIÓN y FUENTE ─────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Conocimiento', exact: true }).click();
   await page.getByLabel('Nueva colección').fill(COLECCION);
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
@@ -126,7 +146,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await page.getByRole('button', { name: /crear fuente/i }).click();
   await expect(page.getByText('Mis documentos')).toBeVisible();
 
-  // ── 4. SUBIR UN DOCUMENTO ─────────────────────────────────────────────────
+  // ── 5. SUBIR UN DOCUMENTO ─────────────────────────────────────────────────
   const subida = page.waitForResponse(
     (response) =>
       response.url().includes('/sync') && response.request().method() === 'POST',
@@ -146,7 +166,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   // guardado pero no sería preguntable.
   await expect(page.getByText(/sin indexar para búsqueda/i)).toHaveCount(0);
 
-  // ── 5. PREGUNTAR ──────────────────────────────────────────────────────────
+  // ── 6. PREGUNTAR ──────────────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Preguntar', exact: true }).click();
   await expect(
     page.getByText(/pregunta con tus palabras/i),
@@ -155,7 +175,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await page.getByLabel('Tu pregunta').fill('¿Cuál es nuestro descuento máximo?');
   await page.getByRole('button', { name: 'Preguntar' }).click();
 
-  // ── 6. LA RESPUESTA, CON SUS FUENTES ──────────────────────────────────────
+  // ── 7. LA RESPUESTA, CON SUS FUENTES ──────────────────────────────────────
   await expect(page.getByText(/quince por ciento/i)).toBeVisible({
     timeout: 60_000,
   });
@@ -170,7 +190,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     timeout: 30_000,
   });
 
-  // ── 7. Y EL PANEL YA NO PIDE LO QUE ESTÁ HECHO ────────────────────────────
+  // ── 8. Y EL PANEL YA NO PIDE LO QUE ESTÁ HECHO ────────────────────────────
   await page.getByRole('link', { name: 'Panel', exact: true }).click();
   await expect(page.getByText('Documentos')).toBeVisible();
   await expect(
@@ -178,6 +198,9 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   ).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: /hazle una pregunta/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: /configura la inteligencia artificial/i }),
   ).toHaveCount(0);
 });
 

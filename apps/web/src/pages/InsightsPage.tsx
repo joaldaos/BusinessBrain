@@ -1,3 +1,4 @@
+import { insightTypeLabel } from '../api/labels';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Insight } from '../api/types';
@@ -46,7 +47,7 @@ export function InsightsPage() {
             </Link>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-              <Badge>{insight.type}</Badge>
+              <Badge>{insightTypeLabel(insight.type)}</Badge>
               <span>confianza {insight.confidence.toFixed(2)}</span>
               <FreshnessBadge insight={insight} />
               <CurationBadge insight={insight} />

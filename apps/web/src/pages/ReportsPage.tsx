@@ -1,3 +1,4 @@
+import { runStatusLabel } from '../api/labels';
 import { useState } from 'react';
 import { api, download } from '../api/client';
 import { useAuth } from '../auth';
@@ -214,7 +215,7 @@ function ReportRow({ report }: { report: Report }) {
             {runs.data?.map((run) => (
               <li key={run.id} className="flex flex-wrap items-center gap-2">
                 <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
-                  {run.status}
+                  {runStatusLabel(run.status)}
                 </Badge>
                 <span className="text-gray-500">
                   {formatDate(run.generatedAt)}

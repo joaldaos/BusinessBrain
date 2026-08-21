@@ -309,7 +309,16 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await expect(page.getByText(/sale de esta conclusión/i)).toBeVisible();
 
   // ── 12. DECIDIR, y que la decisión quede registrada ───────────────────────
+  // Se espera la respuesta antes de abrir el historial: la lista se pide UNA vez al
+  // desplegarla, así que pedirla antes de que la decisión esté guardada devolvería una lista
+  // vacía que ya no se vuelve a consultar.
+  const decision = page.waitForResponse(
+    (response) =>
+      response.url().includes('/accept') &&
+      response.request().method() === 'POST',
+  );
   await propuesta.getByRole('button', { name: 'Aceptar', exact: true }).click();
+  expect((await decision).ok()).toBe(true);
 
   await page
     .getByRole('button', { name: /ver decisiones anteriores/i })

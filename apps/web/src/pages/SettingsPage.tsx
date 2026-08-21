@@ -1,3 +1,4 @@
+import { roleLabel } from '../api/labels';
 import { useState } from 'react';
 import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
@@ -72,7 +73,7 @@ export function SettingsPage() {
             <div>
               <dt className="text-xs text-gray-500">Tu rol</dt>
               <dd>
-                <Badge>{role}</Badge>
+                <Badge>{roleLabel(role ?? null)}</Badge>
               </dd>
             </div>
           </dl>
@@ -94,7 +95,7 @@ export function SettingsPage() {
                   {member.user?.email ?? '—'}
                 </td>
                 <td className="px-2 py-2">
-                  <Badge>{member.role}</Badge>
+                  <Badge>{roleLabel(member.role)}</Badge>
                 </td>
               </tr>
             ))}

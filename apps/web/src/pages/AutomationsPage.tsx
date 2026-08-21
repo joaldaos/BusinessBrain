@@ -1,3 +1,4 @@
+import { automationStatusLabel, runStatusLabel } from '../api/labels';
 import { useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../auth';
@@ -260,7 +261,7 @@ function AutomationRow({
     <li className="rounded border border-gray-200 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{automation.name}</span>
-        <Badge tone={tone}>{automation.status}</Badge>
+        <Badge tone={tone}>{automationStatusLabel(automation.status)}</Badge>
         <span className="text-xs text-gray-500">
           {automation.actions.map((a) => a.type).join(' → ')}
         </span>
@@ -335,7 +336,7 @@ function AutomationRow({
               <li key={run.id} className="text-xs">
                 <span className="flex flex-wrap items-center gap-2">
                   <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
-                    {run.status}
+                    {runStatusLabel(run.status)}
                   </Badge>
                   <span className="text-gray-500">
                     {formatDate(run.startedAt)}

@@ -1,3 +1,4 @@
+import { freshnessLabel, insightTypeLabel } from '../api/labels';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type {
@@ -77,7 +78,7 @@ export function DashboardPage() {
                 <Link className="text-blue-700 underline" to={`/insights/${insight.id}`}>
                   {insight.summary}
                 </Link>{' '}
-                <Badge tone="warn">{insight.freshness}</Badge>
+                <Badge tone="warn">{freshnessLabel(insight.freshness)}</Badge>
                 <p className="text-xs text-gray-500">
                   {insight.freshnessRationale}
                 </p>
@@ -104,7 +105,7 @@ export function DashboardPage() {
                 {insight.summary}
               </Link>
               <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <Badge>{insight.type}</Badge>
+                <Badge>{insightTypeLabel(insight.type)}</Badge>
                 <span>confianza {insight.confidence.toFixed(2)}</span>
                 <span>· {formatDate(insight.createdAt)}</span>
               </p>

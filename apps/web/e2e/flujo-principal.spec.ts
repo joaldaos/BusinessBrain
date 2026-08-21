@@ -227,7 +227,8 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   // Y se ejecuta: conocimiento, comprensión e informe, sin intervención.
   await page.getByRole('button', { name: /ejecutar ahora/i }).click();
   await page.getByRole('button', { name: 'Ejecuciones' }).click();
-  await expect(page.getByText('SUCCESS').first()).toBeVisible({
+  // En castellano: la pantalla ya no pinta la constante interna del backend.
+  await expect(page.getByText('correcto').first()).toBeVisible({
     timeout: 60_000,
   });
 

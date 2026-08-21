@@ -1,3 +1,4 @@
+import { knowledgeItemStatusLabel, connectionStatusLabel } from '../api/labels';
 import { useRef, useState } from 'react';
 import { api, session } from '../api/client';
 import { useAuth } from '../auth';
@@ -113,7 +114,7 @@ export function KnowledgePage() {
                 <td className="px-2 py-2">
                   <span className="flex flex-wrap items-center gap-1">
                     <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
-                      {item.status}
+                      {knowledgeItemStatusLabel(item.status)}
                     </Badge>
                     {item.sourceMissingSince && (
                       // No se ha borrado nada: el documento sigue aquí entero. Lo que ya no
@@ -297,16 +298,14 @@ function GmailCard({
     <Card title="Gmail">
       <ErrorNote error={error ?? action.error} />
 
-      {gmail ? (
+      {activa ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Badge tone={activa ? 'good' : 'warn'}>
-            {activa ? 'activa' : 'revocada'}
-          </Badge>
+          <Badge tone="good">activa</Badge>
           <span className="text-xs text-gray-600">
-            {gmail.accountLabel ?? 'cuenta no identificada'}
+            {gmail?.accountLabel ?? 'cuenta no identificada'}
           </span>
           <span className="text-xs text-gray-500">
-            {gmail._count?.knowledgeSources ?? 0} etiqueta(s) sincronizandose
+            {gmail?._count?.knowledgeSources ?? 0} etiqueta(s) sincronizandose
           </span>
           <Button
             variant="danger"
@@ -314,7 +313,9 @@ function GmailCard({
             disabled={action.busy}
             onClick={() =>
               void action
-                .run(() => api(`/integrations/${gmail.id}`, { method: 'DELETE' }))
+                .run(() =>
+                  api(`/integrations/${gmail!.id}`, { method: 'DELETE' }),
+                )
                 .then(onChanged)
             }
           >
@@ -323,6 +324,18 @@ function GmailCard({
         </div>
       ) : (
         <>
+          {/* Desconectar NO borra la conexion: queda registrada como revocada. Se dice —para
+              que nadie se pregunte por que dejo de entrar correo— pero la accion disponible
+              vuelve a ser conectar. Presentar solo "revocada" con un boton de desconectar
+              dejaba a la empresa sin ninguna forma de volver a conectar su buzon. */}
+          {gmail && (
+            <p className="mb-2 flex items-center gap-2 text-xs text-gray-600">
+              <Badge tone="warn">revocada</Badge>
+              El acceso a {gmail.accountLabel ?? 'esa cuenta'} se retiro. Lo que ya
+              se habia leido sigue disponible; para volver a recibir correo nuevo,
+              conectala otra vez.
+            </p>
+          )}
           <p className="mb-3 text-xs text-gray-500">
             BusinessBrain pedira permiso de SOLO LECTURA sobre tu correo. Nunca
             envia ni modifica nada. Solo entrara la etiqueta que elijas, y el
@@ -688,7 +701,7 @@ function SourceRow({
     <li className="flex flex-wrap items-center gap-2 rounded border border-gray-200 px-3 py-2">
       <span className="text-sm font-medium">{source.name}</span>
       <Badge tone={source.status === 'CONNECTED' ? 'good' : 'neutral'}>
-        {source.status}
+        {connectionStatusLabel(source.status)}
       </Badge>
       {source.syncScope && (
         // QUE se esta sincronizando: la etiqueta, la carpeta o la direccion. Sin esto, dos

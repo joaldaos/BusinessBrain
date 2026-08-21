@@ -1,3 +1,4 @@
+import { runStatusLabel } from '../api/labels';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -115,7 +116,7 @@ export function AnalysisPage() {
               >
                 <td className="px-2 py-2">
                   <Badge tone={run.status === 'SUCCESS' ? 'good' : 'warn'}>
-                    {run.status}
+                    {runStatusLabel(run.status)}
                   </Badge>
                 </td>
                 <td className="px-2 py-2 text-xs text-gray-600">

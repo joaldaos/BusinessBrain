@@ -1,3 +1,4 @@
+import { freshnessLabel } from '../api/labels';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -309,7 +310,7 @@ function Turn({
                 {insight.summary}
               </Link>{' '}
               <Badge tone={insight.freshness === 'FRESH' ? 'good' : 'warn'}>
-                {insight.freshness}
+                {freshnessLabel(insight.freshness)}
               </Badge>
             </li>
           ))}

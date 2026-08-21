@@ -270,9 +270,29 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
   await expect(page.getByText('Documentos (1)')).toBeVisible();
 
   // ── 8. DESCONECTAR detiene la sincronización ────────────────────────────────
+  //
+  // Se ESPERA la respuesta antes de recargar. Recargar justo después de pulsar es una carrera:
+  // el clic dispara la petición y la recarga puede llegar antes de que el servidor la haya
+  // procesado, con lo que la página vuelve a pintar la conexión todavía activa. Era la causa
+  // de que esta suite fallara una de cada tres ejecuciones.
+  const desconexion = page.waitForResponse(
+    (response) =>
+      response.url().includes('/integrations/') &&
+      response.request().method() === 'DELETE',
+  );
   await page.getByRole('button', { name: /desconectar/i }).last().click();
+  expect((await desconexion).ok()).toBe(true);
+
   await page.reload();
-  await expect(page.getByRole('button', { name: /conectar gmail/i })).toBeVisible();
+
+  // Se dice que se revocó —si no, nadie entendería por qué dejó de entrar correo— y a la vez
+  // se puede VOLVER A CONECTAR. Desconectar no borra la conexión, así que durante un tiempo la
+  // pantalla mostró "revocada" con un botón de desconectar y ninguna forma de reconectar: una
+  // empresa que se desconectaba se quedaba sin Gmail para siempre.
+  await expect(page.getByText('revocada')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /conectar gmail/i }),
+  ).toBeVisible();
 
   // El conocimiento ya ingerido SOBREVIVE: lo que se detiene es traer más.
   await expect(page.getByText('Documentos (1)')).toBeVisible();

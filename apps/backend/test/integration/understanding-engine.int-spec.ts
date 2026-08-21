@@ -20,6 +20,7 @@ import {
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  proposeFromInsights,
   createInsight,
   createKnowledgeItem,
   createTestOrg,
@@ -81,6 +82,7 @@ describe('Understanding Engine (integración)', () => {
       noGenerative,
       auditService(db),
       subjectIdentity(db),
+      proposeFromInsights(db),
     );
   });
 
@@ -281,6 +283,7 @@ describe('Understanding Engine (integración)', () => {
         independent,
         auditService(db),
         subjectIdentity(db),
+        proposeFromInsights(db),
       );
       await withIndependent.execute({ organizationId: org.orgId });
 
@@ -355,6 +358,7 @@ describe('Understanding Engine (integración)', () => {
         dissenting,
         auditService(db),
         subjectIdentity(db),
+        proposeFromInsights(db),
       );
       await withDissent.execute({ organizationId: org.orgId });
 

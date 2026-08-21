@@ -25,6 +25,7 @@ import { BusinessObjectiveService } from './business-objective.service';
 import { GenerativeSynthesisStrategy } from '../infrastructure/strategies/generative-synthesis.strategy';
 import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
 import { SubjectIdentityService } from './subject-identity.service';
+import { ProposeFromInsightsUseCase } from './propose-from-insights.use-case';
 import {
   resolveInsightConflict,
   type ConflictParty,
@@ -69,6 +70,13 @@ export interface AnalysisRunResult {
   insightsCreated: number;
   /** Candidatos cuyo sujeto ya tenía un `Insight` activo: reconocidos, no duplicados ni fallidos. */
   insightsAlreadyKnown: number;
+  /**
+   * Propuestas creadas a partir de las conclusiones vivas, en estado pendiente.
+   *
+   * Es lo que convierte el análisis en algo que una PYME entiende: no solo "he comprendido",
+   * sino "y esto es lo que creo que deberías mirar". Ninguna ejecuta nada.
+   */
+  recommendationsProposed: number;
 }
 
 /**
@@ -95,6 +103,7 @@ export class TriggerAnalysisRunUseCase {
     private readonly generativeStrategy: GenerativeSynthesisStrategy,
     private readonly audit: AuditService,
     private readonly subjectIdentity: SubjectIdentityService,
+    private readonly proposeFromInsights: ProposeFromInsightsUseCase,
   ) {}
 
   /**
@@ -199,6 +208,22 @@ export class TriggerAnalysisRunUseCase {
         else alreadyKnown += 1;
       }
 
+      // Proponer va DESPUÉS de que las conclusiones estén persistidas: una propuesta se apoya
+      // en comprensión ya asentada, no en candidatos a medio escribir. Y no puede tumbar el
+      // análisis — lo que ya se comprendió sigue siendo válido aunque hoy no haya propuestas.
+      let recommendationsProposed = 0;
+      try {
+        recommendationsProposed = await this.proposeFromInsights.execute({
+          organizationId: params.organizationId,
+          analysisRunId: run.id,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `AnalysisRun ${run.id}: no se pudieron redactar propuestas (${(error as Error).message}). ` +
+            `Las conclusiones creadas siguen siendo válidas`,
+        );
+      }
+
       const result = await this.prisma.analysisRun.update({
         where: { id: run.id },
         data: {
@@ -224,6 +249,9 @@ export class TriggerAnalysisRunUseCase {
           candidatesGenerated: candidates.length,
           insightsCreated: created,
           insightsAlreadyKnown: alreadyKnown,
+          recommendationsProposed,
+          // Proponer no es ejecutar: se declara en la traza del propio análisis.
+          externalActionExecuted: false,
         },
       });
 
@@ -238,6 +266,7 @@ export class TriggerAnalysisRunUseCase {
         candidatesGenerated: candidates.length,
         insightsCreated: created,
         insightsAlreadyKnown: alreadyKnown,
+        recommendationsProposed,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

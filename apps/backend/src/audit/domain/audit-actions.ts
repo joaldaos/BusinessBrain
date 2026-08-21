@@ -46,6 +46,9 @@ export const AUDIT_ACTIONS = {
 
   // ── IA: elegir con qué proveedor —y con qué clave— piensa la empresa ──────
   /** Configurar la IA compromete gasto en la cuenta del cliente: queda traza. */
+  /** El analisis PROPONE. No aprueba ni ejecuta: crea una propuesta pendiente de decision. */
+  RECOMMENDATION_PROPOSED: 'recommendation.proposed',
+
   AI_CONFIGURED: 'ai.configured',
   AI_KEY_REMOVED: 'ai.key_removed',
 

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth';
 import { Shell } from './components/Shell';
 import { LoginPage } from './pages/LoginPage';
 import { AskPage } from './pages/AskPage';
+import { RecommendationsPage } from './pages/RecommendationsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { KnowledgePage } from './pages/KnowledgePage';
 import { InsightsPage } from './pages/InsightsPage';
@@ -39,6 +40,7 @@ export function App() {
           <Route path="/insights/:insightId" element={<InsightDetailPage />} />
           <Route path="/objetivos" element={<ObjectivesPage />} />
           <Route path="/analisis" element={<AnalysisPage />} />
+          <Route path="/recomendaciones" element={<RecommendationsPage />} />
           <Route path="/automatizaciones" element={<AutomationsPage />} />
           <Route path="/informes" element={<ReportsPage />} />
           <Route path="/configuracion" element={<SettingsPage />} />

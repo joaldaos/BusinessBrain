@@ -82,6 +82,19 @@ export function AnalysisPage() {
             <Link className="text-blue-700 underline" to="/insights">
               Ver comprensión
             </Link>
+            {(last.recommendationsProposed ?? 0) > 0 && (
+              // La recomendacion es el resultado natural del analisis, no una pantalla
+              // aparte a la que haya que acordarse de ir.
+              <>
+                {' · '}
+                <Link
+                  className="font-medium text-blue-700 underline"
+                  to="/recomendaciones"
+                >
+                  {last.recommendationsProposed} recomendación(es) para revisar
+                </Link>
+              </>
+            )}
           </p>
         )}
       </Card>

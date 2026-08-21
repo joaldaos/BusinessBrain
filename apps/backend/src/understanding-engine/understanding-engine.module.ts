@@ -14,6 +14,7 @@ import { ManualTriggerAdmissionService } from './application/manual-trigger-admi
 import { AnalysisRunsService } from './application/analysis-runs.service';
 import { BeliefHistoryService } from './application/belief-history.service';
 import { SubjectIdentityService } from './application/subject-identity.service';
+import { ProposeFromInsightsUseCase } from './application/propose-from-insights.use-case';
 import { KnowledgeEngineModule } from '../knowledge-engine/knowledge-engine.module';
 import { LlmModule } from '../llm/llm.module';
 import { BusinessObjectivesController } from './api/business-objectives.controller';
@@ -57,6 +58,7 @@ import {
     InsightFeedbackController,
   ],
   providers: [
+    ProposeFromInsightsUseCase,
     {
       provide: KNOWLEDGE_SIGNALS_PORT,
       useClass: PrismaKnowledgeSignalsAdapter,

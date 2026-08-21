@@ -163,6 +163,8 @@ export interface AnalysisRun {
   candidatesGenerated?: number;
   insightsCreated?: number;
   insightsAlreadyKnown?: number;
+  /** Propuestas creadas en esta ejecución. Ninguna ejecuta nada: esperan decisión humana. */
+  recommendationsProposed?: number;
   trigger?: string;
   startedAt?: string;
   finishedAt?: string;
@@ -322,4 +324,40 @@ export interface AiProviderOption {
   defaultModel: string;
   helpUrl: string;
   keyPrefixHint: string;
+}
+
+/**
+ * Una propuesta de BusinessBrain.
+ *
+ * `createdById` nulo significa que la propuso el sistema a partir de una conclusión; con valor,
+ * la redactó esa persona escalando manualmente. No son lo mismo a la hora de decidir, y la
+ * pantalla las distingue.
+ *
+ * `status` NEW es "pendiente de tu decisión". Aceptar NO ejecuta nada: registra la decisión.
+ */
+export interface Recommendation {
+  id: string;
+  title: string;
+  description: string;
+  status: 'NEW' | 'ACCEPTED' | 'DISMISSED';
+  priority: number;
+  createdAt: string;
+  createdById: string | null;
+  resolvedAt: string | null;
+  resolvedBy: { id: string; name: string; email: string } | null;
+  /** Los ocho apartados del contrato. Nulos solo en propuestas antiguas. */
+  detected: string | null;
+  justification: string | null;
+  estimatedImpact: string | null;
+  advantages: string | null;
+  drawbacks: string | null;
+  affectedAreas: string | null;
+  migrationPlan: string | null;
+  /** De dónde sale: la conclusión que la originó. */
+  sourceInsight: {
+    id: string;
+    summary: string;
+    status: string;
+    confidence: number;
+  } | null;
 }

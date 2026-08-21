@@ -22,6 +22,7 @@ import { CollectionAccessService } from '../../src/knowledge-engine/application/
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  proposeFromInsights,
   createInsight,
   createKnowledgeItem,
   createMember,
@@ -571,6 +572,7 @@ describe('Memoria de la creencia (integración)', () => {
           generativa,
           auditService(db),
           subjectIdentity(db),
+          proposeFromInsights(db),
         ).execute({ organizationId: org.orgId });
 
       await analizar(sinGenerativa);
@@ -797,6 +799,7 @@ describe('Memoria de la creencia (integración)', () => {
         independiente,
         auditService(db),
         subjectIdentity(db),
+        proposeFromInsights(db),
       );
 
       const runs = await Promise.all([

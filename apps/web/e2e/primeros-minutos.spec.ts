@@ -47,9 +47,23 @@ const ANEXO =
   'El anexo segundo recoge las condiciones de devolución acordadas con cada distribuidor, ' +
   'incluyendo los plazos máximos de aceptación y el procedimiento de reclamación.';
 
-const PROPUESTA =
+const TEXTO_WORD =
   'La propuesta comercial contempla un plazo de entrega de treinta días naturales desde la ' +
   'firma del contrato, con penalización por cada semana de retraso.';
+
+/** Contrato completo, el que redactaría el modelo cuando sí tiene material. */
+const PROPUESTA = JSON.stringify({
+  title: 'Revisar la política de descuentos del canal mayorista',
+  detected:
+    'El documento que fija los descuentos ha perdido fiabilidad y conviene revisarlo.',
+  justification:
+    'Es la referencia que usa el equipo comercial para autorizar ofertas.',
+  estimatedImpact: 'Evitar autorizaciones apoyadas en una versión desactualizada.',
+  advantages: 'Devuelve fiabilidad a la referencia comercial y es reversible.',
+  drawbacks: 'Exige dedicar tiempo del responsable de área a revisarlo.',
+  affectedAreas: 'Área comercial y control de márgenes.',
+  migrationPlan: 'Revisar el documento y volver a subirlo actualizado.',
+});
 
 const RESPUESTA =
   'El máximo autorizado es del quince por ciento en el canal mayorista [1].';
@@ -77,8 +91,15 @@ test.beforeAll(async () => {
         return;
       }
 
+      // El chat pregunta por el contenido; el análisis pide después que se redacte la
+      // propuesta. Se distinguen por lo que llega en el propio prompt, que es lo que hace que
+      // el servidor sustituto no dependa del orden en que se llame.
+      const pideUnaPropuesta = body.includes('migrationPlan');
+
       json({
-        choices: [{ message: { content: RESPUESTA } }],
+        choices: [
+          { message: { content: pideUnaPropuesta ? PROPUESTA : RESPUESTA } },
+        ],
         usage: { total_tokens: 42 },
       });
     });
@@ -116,10 +137,12 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     page.getByRole('combobox', { name: /organización activa/i }),
   ).toHaveValue(/.+/);
 
-  // El panel dice qué falta, con el estado real de la cuenta.
+  // El panel dice qué falta, con el estado real de la cuenta. No se afirma QUÉ paso concreto
+  // pide: si el despliegue trae una IA incluida, ese ya está hecho, y la prueba no debe
+  // depender de con qué configuración se haya arrancado el servidor.
   await expect(page.getByText('Primeros pasos')).toBeVisible();
   await expect(
-    page.getByRole('link', { name: /configura la inteligencia artificial/i }),
+    page.getByRole('link', { name: /conecta una fuente/i }),
   ).toBeVisible();
 
   // ── 3. CONFIGURAR LA IA desde la interfaz ─────────────────────────────────
@@ -127,7 +150,10 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   // Es el paso que antes solo se podía dar escribiendo en la base de datos. Sin él, lo que la
   // empresa suba no se puede preguntar.
   await page.getByRole('link', { name: 'Configuración', exact: true }).click();
-  await expect(page.getByText('Inteligencia artificial')).toBeVisible();
+  // El título de la tarjeta, no cualquier mención: el texto explicativo también la nombra.
+  await expect(
+    page.getByRole('heading', { name: 'Inteligencia artificial' }),
+  ).toBeVisible();
 
   await page
     .getByLabel(/clave de openai/i)
@@ -187,7 +213,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     name: 'propuesta.docx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    buffer: makeDocx([PROPUESTA]),
+    buffer: makeDocx([TEXTO_WORD]),
   });
 
   await page.reload();
@@ -241,6 +267,58 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await expect(
     page.getByRole('link', { name: /configura la inteligencia artificial/i }),
   ).toHaveCount(0);
+
+  // ── 9. ANALIZAR: BusinessBrain busca por su cuenta ────────────────────────
+  //
+  // Esta empresa exige fuentes muy fiables, así que lo recién ingerido queda por debajo del
+  // listón y produce una señal determinista. Es un escenario real —una asesoría o una clínica
+  // pondrían el listón así— y no depende de que el modelo razone.
+  await page.getByRole('link', { name: 'Configuración', exact: true }).click();
+  await page.getByLabel(/exigencia de fiabilidad/i).fill('0.95');
+  await page.getByRole('button', { name: /guardar exigencia/i }).click();
+  await expect(page.getByText(/exigencia guardada/i)).toBeVisible();
+
+  await page.getByRole('link', { name: 'Análisis', exact: true }).click();
+  await page.getByRole('button', { name: /analizar ahora/i }).click();
+  await expect(page.getByText(/conclusión\(es\) nueva\(s\)/i)).toBeVisible({
+    timeout: 60_000,
+  });
+
+  // ── 10. LA RECOMENDACIÓN, como resultado del análisis ─────────────────────
+  const enlacePropuestas = page.getByRole('link', {
+    name: /recomendación\(es\) para revisar/i,
+  });
+  await expect(enlacePropuestas).toBeVisible({ timeout: 30_000 });
+  await enlacePropuestas.click();
+
+  const propuesta = page.getByRole('listitem').first();
+  await expect(propuesta).toBeVisible();
+  // Queda claro que la propone el sistema, no un compañero.
+  await expect(
+    propuesta.getByText(/propuesta por businessbrain/i),
+  ).toBeVisible();
+  // Con el contrato a la vista: qué se ha detectado y por dónde empezar.
+  await expect(propuesta.getByText(/qué hemos detectado/i)).toBeVisible();
+  await expect(propuesta.getByText(/por dónde empezar/i)).toBeVisible();
+  // Y proponer no es hacer: la pantalla lo dice.
+  await expect(page.getByText(/no ejecuta ninguna acción/i)).toBeVisible();
+
+  // ── 11. VER LA EVIDENCIA: ¿por qué me propones esto? ──────────────────────
+  await propuesta.getByRole('button', { name: /ver evidencia/i }).click();
+  await expect(page.getByText(/por qué me propones esto/i)).toBeVisible();
+  await expect(page.getByText(/sale de esta conclusión/i)).toBeVisible();
+
+  // ── 12. DECIDIR, y que la decisión quede registrada ───────────────────────
+  await propuesta.getByRole('button', { name: 'Aceptar', exact: true }).click();
+
+  await page
+    .getByRole('button', { name: /ver decisiones anteriores/i })
+    .click();
+  const decidida = page.getByRole('listitem').filter({ hasText: 'aceptada' });
+  await expect(decidida).toBeVisible({ timeout: 30_000 });
+  // Con quién decidió y cuándo: la decisión es de una persona, y queda dicho. Se busca dentro
+  // de la fila, no en toda la página — el nombre también sale en la cabecera de sesión.
+  await expect(decidida).toContainText('Dueña de la PYME');
 });
 
 /** Vector unitario de 1536 dimensiones derivado del texto. Determinista a propósito. */

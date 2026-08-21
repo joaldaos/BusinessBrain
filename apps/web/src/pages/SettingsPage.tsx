@@ -103,6 +103,13 @@ export function SettingsPage() {
       </Card>
 
       {canAdmin && (
+        <ReliabilityCard
+          organizationId={organizationId}
+          onSaved={organization.reload}
+        />
+      )}
+
+      {canAdmin && (
         <InviteCard
           organizationId={organizationId}
           onInvited={members.reload}
@@ -156,6 +163,82 @@ export function SettingsPage() {
  * restringen nada, el perímetro de un buzón es indistinguible de no tenerlo, y no hay a quién
  * mostrar una conclusión distinta de la propia.
  */
+/**
+ * Cuánto exige la empresa a sus fuentes.
+ *
+ * Es el listón por debajo del cual BusinessBrain considera que un documento ha dejado de ser
+ * fiable y lo señala para que alguien lo revise. No es un ajuste técnico: una asesoría o una
+ * clínica lo ponen alto porque trabajar con una versión vieja les cuesta caro, y una empresa
+ * con documentación estable lo deja bajo.
+ *
+ * Es además lo que hace que un análisis encuentre algo: sin listón, todo parece correcto.
+ */
+function ReliabilityCard({
+  organizationId,
+  onSaved,
+}: {
+  organizationId: string | null;
+  onSaved: () => void;
+}) {
+  const [floor, setFloor] = useState('');
+  const [saved, setSaved] = useState(false);
+  const action = useAction();
+
+  return (
+    <Card title="Exigencia con tus fuentes">
+      <p className="mb-3 text-xs text-gray-500">
+        Por debajo de este nivel de fiabilidad, BusinessBrain marcará un documento para que
+        alguien lo revise. Un número entre 0 y 1: cuanto más alto, más exigente.
+      </p>
+
+      <ErrorNote error={action.error} />
+
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={action.onSubmit(async () => {
+          await api(`/organizations/${organizationId}`, {
+            method: 'PATCH',
+            body: {
+              settings: {
+                knowledgeEngine: {
+                  confidence: { minimumFloor: Number(floor) },
+                },
+              },
+            },
+          });
+          setSaved(true);
+          onSaved();
+        })}
+      >
+        <div className="min-w-40">
+          <Field label="Exigencia de fiabilidad">
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="0.99"
+              className={inputClass}
+              value={floor}
+              onChange={(event) => {
+                setFloor(event.target.value);
+                setSaved(false);
+              }}
+              placeholder="0.7"
+              required
+            />
+          </Field>
+        </div>
+        <Button type="submit" disabled={action.busy}>
+          Guardar exigencia
+        </Button>
+        {saved && (
+          <span className="text-xs text-green-700">Exigencia guardada.</span>
+        )}
+      </form>
+    </Card>
+  );
+}
+
 function InviteCard({
   organizationId,
   onInvited,

@@ -12,6 +12,9 @@ const NAV = [
   { to: '/insights', label: 'Comprensión' },
   { to: '/objetivos', label: 'Objetivos' },
   { to: '/analisis', label: 'Análisis' },
+  // Justo despues del analisis: una recomendacion es su resultado natural, no una pantalla
+  // aparte a la que haya que acordarse de ir.
+  { to: '/recomendaciones', label: 'Recomendaciones' },
   { to: '/automatizaciones', label: 'Automatizaciones' },
   { to: '/informes', label: 'Informes' },
   { to: '/configuracion', label: 'Configuración' },

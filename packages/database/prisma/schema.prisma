@@ -259,6 +259,7 @@ model User {
 
   // Decisiones humanas sobre propuestas (subfase 5.8) y concesiones de acceso otorgadas.
   resolvedRecommendations Recommendation[]            @relation("RecommendationResolver")
+  authoredRecommendations Recommendation[]            @relation("RecommendationAuthor")
   grantedCollectionAccess KnowledgeCollectionAccess[] @relation("CollectionAccessGrantedBy")
 
   @@index([email])
@@ -873,6 +874,12 @@ model Recommendation {
   resolvedById String?
   resolvedAt   DateTime?
 
+  // Quien REDACTO la propuesta. `null` = la propuso BusinessBrain desde una conclusion; con
+  // valor, la escribio esa persona escalando manualmente. Una PYME tiene que poder distinguir
+  // si detras hay alguien de su empresa o es el sistema quien lo sugiere: no son lo mismo a la
+  // hora de decidir. Mismo patron y misma semantica que `resolvedById`.
+  createdById  String?
+
   // ── Contrato del Principio de Evolucion Asistida ────────────────────────
   // BUSINESSBRAIN_MIGRATION_PLAN.md §3.2 exige SEIS puntos en toda propuesta. Hasta esta
   // migracion solo cabian como texto libre en `description`, lo que contradecia la
@@ -901,10 +908,12 @@ model Recommendation {
   agent         Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
   sourceInsight Insight?     @relation(fields: [sourceInsightId], references: [id], onDelete: SetNull)
   resolvedBy    User?        @relation("RecommendationResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdBy     User?        @relation("RecommendationAuthor", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([sourceInsightId])
   @@index([resolvedById])
+  @@index([createdById])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

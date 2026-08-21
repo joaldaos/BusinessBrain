@@ -25,6 +25,7 @@ import type { ClassifyContentUseCase } from '../../src/knowledge-engine/applicat
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   auditService,
+  proposeFromInsights,
   chunkAndEmbed,
   connectorRegistry,
   restrictedPerimeter,
@@ -93,6 +94,7 @@ describe('Automatizaciones (integración)', () => {
         noGenerative,
         auditService(db),
         subjectIdentity(db),
+        proposeFromInsights(db),
       ),
       reports,
       new IngestFromSourceUseCase(

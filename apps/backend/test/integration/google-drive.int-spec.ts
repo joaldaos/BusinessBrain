@@ -28,6 +28,7 @@ import { FakeGoogleDrive } from '../fake-google-drive';
 import { FakeGmail } from '../fake-gmail';
 import {
   auditService,
+  proposeFromInsights,
   chunkAndEmbed,
   connectorRegistry,
   restrictedPerimeter,
@@ -748,6 +749,7 @@ describe('Google Drive (integración)', () => {
           } as unknown as GenerativeSynthesisStrategy,
           auditService(db),
           subjectIdentity(db),
+          proposeFromInsights(db),
         ),
         { generate: () => Promise.resolve({}) } as unknown as ReportsService,
         ingest,

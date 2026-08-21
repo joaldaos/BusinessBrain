@@ -6,6 +6,7 @@ import { FileUploadConnector } from '../../src/knowledge-engine/infrastructure/c
 import { WebPageConnector } from '../../src/knowledge-engine/infrastructure/connectors/web-page.connector';
 import { RestrictedPerimeterService } from '../../src/knowledge-engine/application/restricted-perimeter.service';
 import { ChunkAndEmbedUseCase } from '../../src/knowledge-engine/application/chunk-and-embed.use-case';
+import { ProposeFromInsightsUseCase } from '../../src/understanding-engine/application/propose-from-insights.use-case';
 import { EncryptionService } from '../../src/common/utils/encryption.util';
 import { SubjectIdentityService } from '../../src/understanding-engine/application/subject-identity.service';
 import { InsightScopeService } from '../../src/understanding-engine/application/insight-scope.service';
@@ -194,6 +195,68 @@ function deterministicVector(text: string): number[] {
   const norm = Math.sqrt(values.reduce((sum, v) => sum + v * v, 0)) || 1;
 
   return values.map((v) => v / norm);
+}
+
+/**
+ * Propuesta REAL de recomendaciones, con el modelo guionizado.
+ *
+ * Se construye de verdad —regla de elegibilidad, alcance heredado, persistencia y traza— y solo
+ * se sustituye la redacción del modelo, que es lo único que no es lógica nuestra. `answer`
+ * controla qué devuelve: un contrato completo, uno a medias o `SIN_PROPUESTA`, que son los tres
+ * casos que decide si se publica algo o no se publica nada.
+ */
+export function proposeFromInsights(
+  db: unknown,
+  answer: string = JSON.stringify(FULL_PROPOSAL),
+): ProposeFromInsightsUseCase {
+  const prismaService = db as ConstructorParameters<
+    typeof ProposeFromInsightsUseCase
+  >[0];
+
+  return new ProposeFromInsightsUseCase(
+    prismaService,
+    {
+      resolveForOrganization: () =>
+        Promise.resolve({
+          profile: { modelName: 'test-model' },
+          provider: {
+            complete: () =>
+              Promise.resolve({ content: answer, model: 'test-model' }),
+          },
+          apiKey: undefined,
+        }),
+    } as unknown as ConstructorParameters<typeof ProposeFromInsightsUseCase>[1],
+    insightScopeService(prismaService),
+    auditService(prismaService),
+  );
+}
+
+/** Contrato completo, como el que redactaría el modelo cuando sí tiene material. */
+export const FULL_PROPOSAL = {
+  title: 'Revisar los descuentos del canal mayorista',
+  detected:
+    'Los descuentos aplicados superan de forma recurrente el máximo autorizado.',
+  justification:
+    'Erosiona el margen objetivo declarado por la compañía para el ejercicio.',
+  estimatedImpact:
+    'Recuperar entre dos y cuatro puntos de margen en el canal mayorista.',
+  advantages:
+    'Alinea la práctica comercial con la política escrita y es reversible.',
+  drawbacks:
+    'Puede tensar la relación con distribuidores habituados a ese descuento.',
+  affectedAreas: 'Área comercial y control de márgenes.',
+  migrationPlan:
+    'Comunicar el límite al equipo y revisar las ofertas abiertas antes del cierre.',
+};
+
+function insightScopeService(prismaService: unknown): InsightScopeService {
+  return new InsightScopeService(
+    prismaService as ConstructorParameters<typeof InsightScopeService>[0],
+    new CollectionAccessService(
+      prismaService as ConstructorParameters<typeof CollectionAccessService>[0],
+      auditService(prismaService),
+    ),
+  );
 }
 
 export interface TestOrg {

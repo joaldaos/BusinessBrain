@@ -201,9 +201,12 @@ export class IngestFromSourceUseCase {
 
       for (const candidate of extracted) {
         try {
-          const normalized = normalizeContent(
+          // El título de un fichero subido es su nombre, y hace falta para reconocer el
+          // formato real: el tipo declarado lo pone el navegador a partir de la extensión.
+          const normalized = await normalizeContent(
             candidate.rawContent,
             candidate.mimeType,
+            candidate.title,
           );
 
           // Nivel 3 (§7): puerto invocable, sin candidatos reales todavía (hallazgo C) — no

@@ -24,9 +24,20 @@ import { IngestFromSourceUseCase } from '../application/ingest-from-source.use-c
 import { CreateKnowledgeSourceDto } from '../dto/create-knowledge-source.dto';
 import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { UploadedFilePayload } from '../infrastructure/connectors/file-upload.connector';
+import {
+  acceptedExtensions,
+  acceptedMimeTypes,
+} from '../domain/document-formats';
 
-/** Límite de cordura para la subfase 2.1 — sin él, un único archivo podría agotar memoria. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/**
+ * Tope por archivo.
+ *
+ * Sin él, una sola subida podría agotar la memoria del proceso. 25 MB cubre de sobra un
+ * contrato, una propuesta o un manual en PDF —lo que sube una PYME— sin convertir la ruta en
+ * una vía cómoda para saturar el servidor. El texto EXTRAÍDO tiene su propio tope aparte: un
+ * PDF comprimido de pocos megas puede rendir muchísimo más texto del que ocupa.
+ */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 /**
  * Rutas con `:knowledgeSourceId` (no `:id`) a propósito: `OrgRoleGuard` resuelve la
@@ -58,6 +69,24 @@ export class KnowledgeSourcesController {
     return this.knowledgeSourcesService.findAll(org.id);
   }
 
+  /**
+   * Qué formatos se admiten de verdad.
+   *
+   * Existe para que la pantalla NO tenga su propia lista: el selector prometía `.pdf` y
+   * `.docx` cuando la normalización los rechazaba, y nadie lo detectó porque eran dos listas
+   * distintas. Ahora sale de la misma fuente que valida.
+   *
+   * Declarada ANTES de `:knowledgeSourceId` a propósito: si no, la ruta con parámetro se la
+   * comería y esto respondería "fuente no encontrada".
+   */
+  @Get('supported-formats')
+  supportedFormats() {
+    return {
+      extensions: acceptedExtensions(),
+      mimeTypes: acceptedMimeTypes(),
+    };
+  }
+
   @Get(':knowledgeSourceId')
   async findOne(
     @CurrentOrg() org: RequestOrganization,
@@ -87,8 +116,19 @@ export class KnowledgeSourcesController {
     const connector = this.connectorRegistry.get(source.connectorKey);
 
     if (connector.acquisition === 'PUSH' && !file) {
+      throw new BadRequestException('Elige un archivo para subirlo.');
+    }
+
+    // El tipo se comprueba ANTES de aceptar el trabajo: rechazar aquí da un error inmediato y
+    // claro en la pantalla, en vez de una ingesta que termina "con 1 error" y obliga a ir a
+    // buscar el motivo. La comprobación de fondo —la que mira el contenido real— sigue
+    // estando en la normalización, que es por donde entran también Drive y Gmail.
+    if (
+      file &&
+      !acceptedMimeTypes().includes(file.mimetype.split(';')[0].trim())
+    ) {
       throw new BadRequestException(
-        'Falta el archivo a sincronizar (campo de formulario "file")',
+        `No podemos leer este tipo de archivo. Admitimos ${acceptedExtensions().join(', ')}.`,
       );
     }
 

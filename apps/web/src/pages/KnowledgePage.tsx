@@ -600,6 +600,23 @@ function SourcesCard({
 }
 
 /**
+ * Mensaje de error que puede leer una persona.
+ *
+ * La API devuelve texto en `error`, pero la validación de entrada devuelve una LISTA de motivos.
+ * Enseñar el array crudo pondría corchetes y comillas en la pantalla.
+ */
+function readableError(error: unknown): string | null {
+  if (typeof error === 'string') return error;
+  if (Array.isArray(error) && typeof error[0] === 'string') return error[0];
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message: unknown }).message;
+    if (typeof message === 'string') return message;
+    if (Array.isArray(message) && typeof message[0] === 'string') return message[0];
+  }
+  return null;
+}
+
+/**
  * Una fuente y su carga de documentos.
  *
  * La subida va por `multipart/form-data`, así que no pasa por el cliente JSON: se construye a
@@ -615,12 +632,22 @@ function SourceRow({
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const action = useAction();
+  const [resultado, setResultado] = useState<string | null>(null);
+
+  // La lista de formatos la publica el backend, que es quien valida. Tenerla aquí a mano fue
+  // exactamente el fallo anterior: el selector ofrecía PDF y Word y la ingesta los rechazaba.
+  const formats = useResource(() =>
+    api<{ extensions: string[]; mimeTypes: string[] }>(
+      '/knowledge-sources/supported-formats',
+    ),
+  );
 
   const upload = (file: File) =>
     action.run(async () => {
       const form = new FormData();
       form.append('file', file);
 
+      setResultado(null);
       const response = await fetch(
         `/api/knowledge-sources/${source.id}/sync`,
         {
@@ -632,16 +659,28 @@ function SourceRow({
           body: form,
         },
       );
+      const body = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        data?: { stats?: { itemsCreated?: number; itemsFailed?: number } };
+      } | null;
+
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: unknown;
-        } | null;
         throw new Error(
-          typeof body?.error === 'string'
-            ? body.error
-            : `No se pudo subir el documento (${response.status})`,
+          readableError(body?.error) ??
+            'No hemos podido subir este documento. Revísalo y vuelve a intentarlo.',
         );
       }
+
+      // El resultado por documento, en la pantalla. Una ingesta que termina "bien" con cero
+      // documentos creados es justo el caso en el que la persona cree que ha funcionado.
+      const stats = body?.data?.stats;
+      setResultado(
+        (stats?.itemsFailed ?? 0) > 0
+          ? `No hemos podido leer \${file.name}\. Revísalo y vuelve a intentarlo.`
+          : (stats?.itemsCreated ?? 0) > 0
+            ? `\${file.name}\ indexado y listo para preguntar.`
+            : `\${file.name}\ ya estaba: no se ha duplicado.`,
+      );
       onSynced();
     });
 
@@ -680,6 +719,14 @@ function SourceRow({
         <span className="text-xs text-red-700">{source.lastError}</span>
       )}
 
+      {resultado && (
+        <span
+          className={`text-xs ${resultado.startsWith('No hemos') ? 'text-amber-700' : 'text-green-700'}`}
+        >
+          {resultado}
+        </span>
+      )}
+
       <div className="ml-auto flex items-center gap-2">
         {action.error instanceof Error && (
           <span className="text-xs text-red-700">{action.error.message}</span>
@@ -713,7 +760,7 @@ function SourceRow({
               ref={fileInput}
               type="file"
               className="hidden"
-              accept=".txt,.md,.pdf,.docx,.html"
+              accept={formats.data?.extensions.join(',')}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void upload(file);

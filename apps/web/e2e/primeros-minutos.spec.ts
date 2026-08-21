@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { expect, test } from '@playwright/test';
+import { makeDocx, makePdf } from '../../backend/test/documentos-reales';
 
 /**
  * Los primeros minutos de una PYME, con un navegador de verdad.
@@ -41,6 +42,14 @@ const POLITICA =
   'La política de descuentos comerciales fija un máximo del quince por ciento para el canal ' +
   'mayorista. Cualquier descuento superior exige autorización expresa del responsable de área, ' +
   'registrada por escrito antes de trasladar la oferta al cliente.';
+
+const ANEXO =
+  'El anexo segundo recoge las condiciones de devolución acordadas con cada distribuidor, ' +
+  'incluyendo los plazos máximos de aceptación y el procedimiento de reclamación.';
+
+const PROPUESTA =
+  'La propuesta comercial contempla un plazo de entrega de treinta días naturales desde la ' +
+  'firma del contrato, con penalización por cada semana de retraso.';
 
 const RESPUESTA =
   'El máximo autorizado es del quince por ciento en el canal mayorista [1].';
@@ -146,22 +155,49 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await page.getByRole('button', { name: /crear fuente/i }).click();
   await expect(page.getByText('Mis documentos')).toBeVisible();
 
-  // ── 5. SUBIR UN DOCUMENTO ─────────────────────────────────────────────────
-  const subida = page.waitForResponse(
-    (response) =>
-      response.url().includes('/sync') && response.request().method() === 'POST',
-  );
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'politica-descuentos.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from(POLITICA, 'utf8'),
-  });
-  expect((await subida).ok()).toBe(true);
+  // ── 5. SUBIR UN PDF Y UN WORD REALES ──────────────────────────────────────
+  //
+  // Son los documentos que sube una PYME. El selector los ofrecía y la ingesta los rechazaba:
+  // aquí se comprueba con ficheros de verdad, generados en el propio test.
+  const subirDocumento = async (file: {
+    name: string;
+    mimeType: string;
+    buffer: Buffer;
+  }) => {
+    const respuesta = page.waitForResponse(
+      (response) =>
+        response.url().includes('/sync') &&
+        response.request().method() === 'POST',
+    );
+    await page.locator('input[type="file"]').setInputFiles(file);
+    expect((await respuesta).ok()).toBe(true);
+  };
 
-  await page.reload();
-  await expect(page.getByText('Documentos (1)')).toBeVisible({
+  await subirDocumento({
+    name: 'politica-descuentos.pdf',
+    mimeType: 'application/pdf',
+    buffer: await makePdf([POLITICA, ANEXO]),
+  });
+  // La pantalla confirma el resultado de ESE documento, no solo que la petición fue bien.
+  await expect(page.getByText(/indexado y listo para preguntar/i)).toBeVisible({
     timeout: 30_000,
   });
+
+  await subirDocumento({
+    name: 'propuesta.docx',
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer: makeDocx([PROPUESTA]),
+  });
+
+  await page.reload();
+  await expect(page.getByText('Documentos (2)')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByRole('cell', { name: 'politica-descuentos.pdf' }),
+  ).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'propuesta.docx' })).toBeVisible();
   // Y NO se avisa de que falte indexar para búsqueda: si apareciera, el documento estaría
   // guardado pero no sería preguntable.
   await expect(page.getByText(/sin indexar para búsqueda/i)).toHaveCount(0);
@@ -180,7 +216,10 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     timeout: 60_000,
   });
   await expect(page.getByText('Fuentes')).toBeVisible();
-  await expect(page.getByText(/politica-descuentos\.txt/i)).toBeVisible();
+  // `.first()`: un PDF de dos páginas rinde varias citas, y todas apuntan al mismo documento.
+  await expect(
+    page.getByText(/politica-descuentos\.pdf/i).first(),
+  ).toBeVisible();
   // Y no se avisa de falta de fuentes: la respuesta se apoya en un documento real.
   await expect(page.getByText(/sin fuentes/i)).toHaveCount(0);
 

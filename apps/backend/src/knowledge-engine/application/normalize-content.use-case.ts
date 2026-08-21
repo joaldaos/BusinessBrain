@@ -1,57 +1,63 @@
 import { computeContentHash } from '../domain/content-canonicalization';
+import {
+  DocumentRejectedError,
+  resolveDocumentFormat,
+  type DocumentFormat,
+} from '../domain/document-formats';
+import { extractDocxText, extractPdfText } from './extract-document-text';
 
 export interface NormalizedContent {
   text: string;
   contentHash: string;
 }
 
-const SUPPORTED_MIME_TYPES = [
-  'text/plain',
-  'text/markdown',
-  'text/html',
-] as const;
-type SupportedMimeType = (typeof SUPPORTED_MIME_TYPES)[number];
-
-export class UnsupportedContentTypeError extends Error {
-  constructor(mimeType: string) {
-    super(
-      `Tipo de contenido no soportado todavía por la normalización: "${mimeType}" (soportados: ${SUPPORTED_MIME_TYPES.join(', ')})`,
-    );
-    this.name = 'UnsupportedContentTypeError';
-  }
-}
-
-export class EmptyNormalizedContentError extends Error {
+export class EmptyNormalizedContentError extends DocumentRejectedError {
   constructor() {
-    super('El contenido quedó vacío tras la normalización');
+    super(
+      'Este documento está vacío o no tiene texto que podamos leer. Revísalo y vuelve a ' +
+        'intentarlo.',
+    );
     this.name = 'EmptyNormalizedContentError';
   }
 }
 
 /**
- * Normalización básica (KNOWLEDGE_ENGINE_DESIGN.md §4, §11): convierte el contenido crudo a
- * texto plano estructurado, independiente del formato de origen. `text` es lo que se ALMACENA
- * (legible, conserva formato humano — citas y chunking futuro lo necesitan tal cual). El hash se
- * calcula sobre el contenido CANÓNICO de ese texto (§3.12, `computeContentHash`), nunca sobre
- * `text` directamente — es el único punto de entrada admitido para nivel 1 de deduplicación (§7).
+ * Normalización (KNOWLEDGE_ENGINE_DESIGN.md §4, §11): convierte el contenido crudo a texto plano
+ * estructurado, independiente del formato de origen. `text` es lo que se ALMACENA (legible,
+ * conserva formato humano — las citas y el troceado lo necesitan tal cual). El hash se calcula
+ * sobre el contenido CANÓNICO de ese texto (§3.12, `computeContentHash`), nunca sobre `text`
+ * directamente — es el único punto de entrada admitido para nivel 1 de deduplicación (§7).
  *
- * Soporta en esta subfase texto plano, Markdown (se indexa tal cual, sin renderizar) y HTML
- * (se descartan las etiquetas de forma básica). Cualquier otro tipo MIME se rechaza de forma
- * explícita en vez de fingir una extracción no construida todavía (p. ej. PDF/DOCX binarios) —
- * ampliar la cobertura es añadir un caso aquí, no tocar el resto del pipeline.
+ * ## Un solo sitio para todos los formatos
+ *
+ * Texto plano, Markdown, HTML, **PDF y Word**. Es deliberadamente el ÚNICO punto donde un
+ * formato se convierte en texto, y por eso ampliarlo sirve a todos los conectores a la vez: un
+ * PDF que llega por subida manual y otro que llega de Google Drive recorren exactamente el mismo
+ * camino. Una segunda tubería para binarios habría dejado a Drive fuera desde el primer día.
+ *
+ * ## Por qué ahora es asíncrona
+ *
+ * Extraer texto de un PDF o un Word no es una transformación de cadena: hay que interpretar
+ * estructura binaria. El resto del pipeline no cambia — la ingesta la espera y sigue igual.
+ *
+ * ## Qué NO se acepta
+ *
+ * Lo que no está en el catálogo, y lo que dice ser algo que su contenido desmiente. Ver
+ * `resolveDocumentFormat`: fiarse del nombre del fichero es dejar que quien sube decida a qué
+ * intérprete binario llega su contenido.
  */
-export function normalizeContent(
+export async function normalizeContent(
   rawContent: Buffer,
   mimeType: string,
-): NormalizedContent {
-  const baseMimeType = mimeType.split(';')[0].trim().toLowerCase();
+  filename = '',
+): Promise<NormalizedContent> {
+  const format = resolveDocumentFormat({
+    filename,
+    declaredMimeType: mimeType,
+    content: rawContent,
+  });
 
-  if (!isSupportedMimeType(baseMimeType)) {
-    throw new UnsupportedContentTypeError(baseMimeType);
-  }
-
-  const raw = rawContent.toString('utf8');
-  const text = baseMimeType === 'text/html' ? stripHtml(raw) : raw;
+  const text = await toText(format, rawContent);
   const trimmed = text.replace(/\r\n/g, '\n').trim();
 
   if (!trimmed) {
@@ -64,8 +70,20 @@ export function normalizeContent(
   };
 }
 
-function isSupportedMimeType(value: string): value is SupportedMimeType {
-  return (SUPPORTED_MIME_TYPES as readonly string[]).includes(value);
+async function toText(
+  format: DocumentFormat,
+  rawContent: Buffer,
+): Promise<string> {
+  switch (format) {
+    case 'application/pdf':
+      return extractPdfText(rawContent);
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return extractDocxText(rawContent);
+    case 'text/html':
+      return stripHtml(rawContent.toString('utf8'));
+    default:
+      return rawContent.toString('utf8');
+  }
 }
 
 function stripHtml(html: string): string {

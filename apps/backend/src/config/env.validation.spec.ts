@@ -16,9 +16,9 @@ describe('validación del entorno', () => {
   };
 
   it('CRÍTICO: producción sin FRONTEND_URL no arranca', () => {
-    expect(() =>
-      validateEnv({ ...base, NODE_ENV: 'production' }),
-    ).toThrow(/FRONTEND_URL/);
+    expect(() => validateEnv({ ...base, NODE_ENV: 'production' })).toThrow(
+      /FRONTEND_URL/,
+    );
   });
 
   it('producción con FRONTEND_URL arranca', () => {
@@ -34,7 +34,9 @@ describe('validación del entorno', () => {
   it('desarrollo sin FRONTEND_URL sigue siendo cómodo', () => {
     // En local la política de origen cruzado acepta cualquier bucle local, así que exigirla
     // aquí solo añadiría fricción sin cerrar nada.
-    expect(() => validateEnv({ ...base, NODE_ENV: 'development' })).not.toThrow();
+    expect(() =>
+      validateEnv({ ...base, NODE_ENV: 'development' }),
+    ).not.toThrow();
   });
 
   it('una FRONTEND_URL que no es una URL se rechaza al arrancar', () => {

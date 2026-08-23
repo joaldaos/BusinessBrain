@@ -11,3 +11,6 @@ apps/web/tsconfig.tsbuildinfo
 # Resultados y trazas de Playwright: artefactos, no codigo fuente.
 apps/web/test-results/
 apps/web/playwright-report/
+
+# Buzon de correo de las pruebas de navegador: lleva enlaces de recuperacion.
+apps/web/.correo-de-prueba.jsonl

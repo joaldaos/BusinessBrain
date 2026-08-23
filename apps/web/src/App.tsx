@@ -2,6 +2,10 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Shell } from './components/Shell';
 import { LoginPage } from './pages/LoginPage';
+import {
+  PasswordRecoveryPage,
+  PasswordResetPage,
+} from './pages/PasswordRecoveryPage';
 import { AskPage } from './pages/AskPage';
 import { RecommendationsPage } from './pages/RecommendationsPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -32,6 +36,10 @@ export function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Fuera de `Protected` a propósito: a quien no puede entrar no se le puede pedir
+            que esté dentro. */}
+        <Route path="/recuperar" element={<PasswordRecoveryPage />} />
+        <Route path="/restablecer" element={<PasswordResetPage />} />
         <Route element={<Protected />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/preguntar" element={<AskPage />} />

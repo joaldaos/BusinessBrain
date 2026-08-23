@@ -256,6 +256,7 @@ model User {
   auditLogsAsActor AuditLog[]     @relation("AuditActor")
   createdApiKeys   ApiKey[]
   refreshTokens    RefreshToken[]
+  passwordResets   PasswordResetToken[]
 
   // Decisiones humanas sobre propuestas (subfase 5.8) y concesiones de acceso otorgadas.
   resolvedRecommendations Recommendation[]            @relation("RecommendationResolver")
@@ -272,6 +273,27 @@ model RefreshToken {
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Recuperación de contraseña.
+///
+/// Se guarda el HMAC del testigo, nunca el testigo: quien consiguiera leer esta tabla no podría
+/// entrar en ninguna cuenta sin conocer además el secreto de la aplicación. Es el mismo trato
+/// que reciben los tokens de refresco, y por la misma razón.
+///
+/// `usedAt` en vez de borrar la fila: un testigo usado tiene que poder distinguirse de uno que
+/// nunca existió, tanto para rechazarlo con certeza como para poder mirar después si alguien
+/// estuvo pidiendo recuperaciones que no eran suyas.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])

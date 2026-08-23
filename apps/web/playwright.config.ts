@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { OUTBOX_PATH } from './e2e/buzon';
 
 /**
  * E2E de navegador — el recorrido comercial, sobre el build real.
@@ -36,6 +37,14 @@ const backendEnv = {
   GMAIL_API_URL: 'http://127.0.0.1:4599/gmail/v1/users/me',
   // El conector web lee una página servida en local durante el recorrido principal.
   ALLOW_LOOPBACK_FETCH: 'true',
+  /**
+   * El correo se escribe en un fichero en vez de mandarse.
+   *
+   * Es lo que permite recorrer la recuperación de contraseña entera —incluido abrir el enlace
+   * que llega por correo— sin que el testigo viaje jamás en una respuesta HTTP. El adaptador
+   * se niega a activarse en producción.
+   */
+  MAIL_OUTBOX_PATH: OUTBOX_PATH,
 };
 
 export default defineConfig({

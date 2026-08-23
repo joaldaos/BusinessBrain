@@ -26,8 +26,9 @@ describe('Origen cruzado (E2E)', () => {
   });
 
   /** La cabecera que autoriza al navegador a ENTREGAR la respuesta al script que la pidió. */
-  const allowOrigin = (headers: Record<string, string | string[] | undefined>) =>
-    headers['access-control-allow-origin'];
+  const allowOrigin = (
+    headers: Record<string, string | string[] | undefined>,
+  ) => headers['access-control-allow-origin'];
 
   describe('comprobación previa', () => {
     it('el origen autorizado recibe permiso', async () => {

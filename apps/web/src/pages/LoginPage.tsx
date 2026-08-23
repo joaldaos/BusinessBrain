@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth';
 import { Button, ErrorNote, Field, inputClass, useAction } from '../components/ui';
@@ -134,6 +134,16 @@ export function LoginPage() {
             ? '¿No tienes cuenta? Crear una'
             : 'Ya tengo cuenta'}
         </button>
+
+        {/* Solo al entrar: ofrecérselo a quien está creando una cuenta no tiene sentido. */}
+        {mode === 'login' && (
+          <Link
+            to="/recuperar"
+            className="block text-center text-xs text-gray-500 underline"
+          >
+            ¿Has olvidado tu contraseña?
+          </Link>
+        )}
       </form>
     </main>
   );

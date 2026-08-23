@@ -20,7 +20,10 @@ describe('política de origen cruzado', () => {
       // No basta con omitir `Allow-Origin`: mientras `Allow-Credentials` salga igual, la
       // garantía depende de que el navegador exija las dos. Aquí no sale ninguna.
       expect(
-        corsDecisionFor({ ...produccion, requestOrigin: 'https://atacante.io' }),
+        corsDecisionFor({
+          ...produccion,
+          requestOrigin: 'https://atacante.io',
+        }),
       ).toEqual({ origin: false, credentials: false });
     });
 
@@ -47,8 +50,10 @@ describe('política de origen cruzado', () => {
 
     it('CRÍTICO: el bucle local no vale en producción', () => {
       expect(
-        corsDecisionFor({ ...produccion, requestOrigin: 'http://localhost:5173' })
-          .origin,
+        corsDecisionFor({
+          ...produccion,
+          requestOrigin: 'http://localhost:5173',
+        }).origin,
       ).toBe(false);
     });
 

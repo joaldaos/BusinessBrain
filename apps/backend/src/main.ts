@@ -12,7 +12,8 @@ async function bootstrap() {
   // La misma función que usa el arranque de los tests. Si aquí se añadiera algo que allí no
   // está, la suite dejaría de probar la aplicación que se despliega.
   configureApp(app, {
-    isProduction: configService.get('nodeEnv', { infer: true }) === 'production',
+    isProduction:
+      configService.get('nodeEnv', { infer: true }) === 'production',
     frontendUrl: configService.get('frontendUrl', { infer: true }),
   });
 

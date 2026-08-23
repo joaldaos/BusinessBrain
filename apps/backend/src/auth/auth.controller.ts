@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Req,
   Res,
@@ -14,6 +16,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthService, type AuthTokens } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import {
+  ConfirmPasswordResetDto,
+  RequestPasswordResetDto,
+} from './dto/password-reset.dto';
+import { PasswordResetService } from './application/password-reset.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import {
@@ -43,6 +50,7 @@ import type { AppConfig } from '../config/configuration';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly passwordReset: PasswordResetService,
     private readonly configService: ConfigService<AppConfig, true>,
   ) {}
 
@@ -114,6 +122,40 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return user;
+  }
+
+  /**
+   * "He olvidado mi contraseña".
+   *
+   * Responde SIEMPRE lo mismo, exista la cuenta o no. Decir "no hay ninguna cuenta con ese
+   * correo" convertiría esta ruta en un buscador de clientes de la competencia.
+   *
+   * `202` y no `200` porque es literalmente lo que ocurre: se ha aceptado la petición y el
+   * correo sale por su cuenta. La interfaz no espera confirmación de entrega, ni podría.
+   */
+  @Public()
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Post('password-reset/request')
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    await this.passwordReset.request(dto.email);
+
+    // Ni el testigo ni ninguna pista sobre la cuenta. Solo que la petición se recibió.
+    return { success: true };
+  }
+
+  /**
+   * Elegir la contraseña nueva con el testigo del enlace.
+   *
+   * No inicia sesión al terminar, a propósito: entrar con la contraseña recién puesta es la
+   * comprobación de que se guardó lo que la persona escribió. Iniciar sesión aquí escondería
+   * un fallo en el guardado detrás de una sesión que funciona.
+   */
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('password-reset/confirm')
+  async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
+    await this.passwordReset.confirm(dto.token, dto.password);
+    return { success: true };
   }
 
   /**

@@ -18,12 +18,14 @@ import { AutomationsModule } from './automations/automations.module';
 import { ReportsModule } from './reports/reports.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthModule } from './health/health.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     PrismaModule,
     AuditModule,
+    MailModule,
     AuthModule,
     OrganizationsModule,
     AdminModule,

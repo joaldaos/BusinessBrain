@@ -46,8 +46,18 @@ export const envSchema = z.object({
    */
   FRONTEND_URL: z
     .string()
-    .url('FRONTEND_URL debe ser una URL absoluta, p. ej. https://app.tuempresa.com')
+    .url(
+      'FRONTEND_URL debe ser una URL absoluta, p. ej. https://app.tuempresa.com',
+    )
     .optional(),
+
+  /**
+   * Fichero donde volcar los correos en vez de mandarlos. Solo fuera de producción.
+   *
+   * Existe para que la suite de navegador pueda recorrer la recuperación de contraseña entera
+   * sin que el testigo viaje nunca en una respuesta HTTP. Ver `mail/mail.module.ts`.
+   */
+  MAIL_OUTBOX_PATH: z.string().optional(),
 });
 
 /**

@@ -2,7 +2,13 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
+import type { CorsOptionsDelegate } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { corsDecisionFor } from './common/http/cors';
+
+/** Lo único que se mira de la petición para decidir el origen. */
+interface CorsRequest {
+  headers?: Record<string, unknown>;
+}
 
 /**
  * Todo lo que envuelve a la aplicación antes de escuchar: origen cruzado, cookies, validación,
@@ -30,7 +36,10 @@ export function configureApp(
 ): void {
   // Se decide por petición, no con una lista fija: así a un origen no autorizado no se le
   // responde ninguna cabecera de origen cruzado, ni siquiera `Allow-Credentials`.
-  app.enableCors((request: { headers?: Record<string, unknown> }, callback) => {
+  const corsDelegate: CorsOptionsDelegate<CorsRequest> = (
+    request,
+    callback,
+  ) => {
     const origin = request.headers?.origin;
     callback(
       null,
@@ -39,7 +48,8 @@ export function configureApp(
         requestOrigin: typeof origin === 'string' ? origin : undefined,
       }),
     );
-  });
+  };
+  app.enableCors(corsDelegate);
 
   // El token de refresco viaja en una cookie `HttpOnly`: sin esto, `req.cookies` no existe y
   // no habría forma de leerla.

@@ -17,6 +17,7 @@ export interface AppConfig {
     openai?: string;
   };
   frontendUrl?: string;
+  mailOutboxPath?: string;
 }
 
 export default (): AppConfig => {
@@ -38,5 +39,6 @@ export default (): AppConfig => {
       openai: env.OPENAI_API_KEY,
     },
     frontendUrl: env.FRONTEND_URL,
+    mailOutboxPath: env.MAIL_OUTBOX_PATH,
   };
 };

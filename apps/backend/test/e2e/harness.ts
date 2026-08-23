@@ -1,11 +1,9 @@
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import cookieParser from 'cookie-parser';
 import { PrismaClient, type MembershipRole } from '@businessbrain/database';
 import { AppModule } from '../../src/app.module';
-import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
-import { TransformResponseInterceptor } from '../../src/common/interceptors/transform-response.interceptor';
+import { configureApp, type AppSurfaceOptions } from '../../src/bootstrap';
 import { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
 
 /**
@@ -50,6 +48,16 @@ export interface ProviderOverride {
 
 export async function startTestApp(
   overrides: ProviderOverride[] = [],
+  /**
+   * Cómo se envuelve la aplicación. Por defecto, lo mismo que un desarrollo local.
+   *
+   * La suite de origen cruzado lo levanta como PRODUCCIÓN, que es el único modo donde la
+   * política es estricta y por tanto el único donde tiene sentido comprobarla.
+   */
+  surface: AppSurfaceOptions = {
+    isProduction: false,
+    frontendUrl: 'http://localhost:5173',
+  },
 ): Promise<INestApplication> {
   let builder = Test.createTestingModule({ imports: [AppModule] })
     // Sustitución por defecto. El proveedor real no puede llamarse sin credenciales, y esta
@@ -66,23 +74,10 @@ export async function startTestApp(
 
   app = moduleRef.createNestApplication();
 
-  // EXACTAMENTE la misma configuración que `main.ts`. Si aquí divergiera, la suite estaría
-  // probando una aplicación que no es la que se despliega — que es justo lo que hace inútil
-  // un test de extremo a extremo.
-  // MISMA configuración que `main.ts`. El token de refresco viaja en cookie, así que sin
-  // esto `req.cookies` no existiría y la suite probaría una aplicación que no es la que se
-  // despliega — justo lo que hace inútil un test de extremo a extremo.
-  app.use(cookieParser());
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.useGlobalInterceptors(new TransformResponseInterceptor());
+  // La MISMA función que `main.ts`, no una copia. Mientras fueron dos listas paralelas, la
+  // política de origen cruzado existía en producción y no aquí: se podía cerrar mal sin que
+  // ninguna prueba se enterara.
+  configureApp(app, surface);
 
   await app.init();
 

@@ -2,6 +2,7 @@ import { roleLabel } from '../api/labels';
 import { useState } from 'react';
 import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
+import { PrivacyCard } from '../components/PrivacyCard';
 import { useAuth } from '../auth';
 import {
   hasRole,
@@ -57,6 +58,14 @@ export function SettingsPage() {
     <>
       {/* Primero: sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
       <AiConfigurationCard canAdmin={canAdmin} />
+
+      {/* Justo después, y no al final de la pantalla: quien acaba de dar su clave de IA es
+          exactamente quien se está preguntando qué sale de su empresa. */}
+      <PrivacyCard
+        organizationId={organizationId}
+        organizationName={organization.data?.name ?? null}
+        isOwner={role === 'OWNER'}
+      />
 
       <Card title="Organización">
         <ErrorNote error={organization.error} />

@@ -98,6 +98,18 @@ export const AUDIT_ACTIONS = {
   RECOMMENDATION_ACCEPTED: 'recommendation.accepted',
   RECOMMENDATION_DISMISSED: 'recommendation.dismissed',
 
+  // ── Datos de la empresa: llevárselos y borrarlos ──────────────────────────
+  //
+  // Las dos son irreversibles a su manera: una saca una copia completa fuera del sistema, la
+  // otra no deja nada. Quien responde por la empresa tiene que poder demostrar después quién
+  // las hizo y cuándo.
+  ORGANIZATION_DATA_EXPORTED: 'organization.data_exported',
+  /**
+   * Se escribe SIN `organizationId`, y tiene que ser así: `AuditLog` cuelga de la organización
+   * en cascada, así que una entrada con su identificador se habría borrado con ella.
+   */
+  ORGANIZATION_DATA_ERASED: 'organization.data_erased',
+
   // ── Plataforma (super admin) ──────────────────────────────────────────────
   USER_BANNED: 'user.banned',
   /** Desbanear NO es "banear con otro estado": es la acción contraria y se nombra aparte. */

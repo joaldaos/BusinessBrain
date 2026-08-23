@@ -19,6 +19,7 @@ import { ReportsModule } from './reports/reports.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
+import { PrivacyModule } from './privacy/privacy.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { MailModule } from './mail/mail.module';
     MailModule,
     AuthModule,
     OrganizationsModule,
+    PrivacyModule,
     AdminModule,
     LlmModule,
     KnowledgeEngineModule,

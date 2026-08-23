@@ -14,3 +14,6 @@ apps/web/playwright-report/
 
 # Buzon de correo de las pruebas de navegador: lleva enlaces de recuperacion.
 apps/web/.correo-de-prueba.jsonl
+
+# Copias de seguridad: llevan los documentos de todos los clientes en claro.
+backups/

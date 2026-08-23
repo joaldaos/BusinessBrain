@@ -22,7 +22,8 @@
     "backfill:content-hashes": "tsx scripts/recompute-knowledge-item-content-hashes.ts",
     "test:int": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config ./test/jest-integration.json",
     "test:live": "jest --config ./test/jest-live.json",
-    "start:e2e": "nest build && node dist/src/main.js"
+    "start:e2e": "nest build && node dist/src/main.js",
+    "test:ops": "node --env-file=.env --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config ./test/jest-ops.json --runInBand"
   },
   "dependencies": {
     "@businessbrain/database": "*",

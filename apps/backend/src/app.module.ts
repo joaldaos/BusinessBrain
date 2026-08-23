@@ -21,10 +21,33 @@ import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { PrivacyModule } from './privacy/privacy.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
+import { rateLimitsFor } from './common/http/rate-limits';
+import type { AppConfig } from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    /**
+     * Límites de peticiones.
+     *
+     * El guard NO es global, igual que `OrgRoleGuard`: se aplica exactamente en las rutas que
+     * lo necesitan (ver `common/http/rate-limits.ts`). Un límite global obligaría a acordarse
+     * de excluir cada ruta interna, y el día que a alguien se le olvide, una sincronización
+     * larga empezaría a recibir 429 sin que nadie entienda por qué.
+     *
+     * Aquí se declara el catálogo con los números ya escalados; cada ruta elige el suyo con
+     * `@Throttle`.
+     */
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<AppConfig, true>) => ({
+        throttlers: Object.entries(
+          rateLimitsFor(config.get('rateLimitMultiplier', { infer: true })),
+        ).map(([name, policy]) => ({ name, ...policy })),
+      }),
+    }),
     PrismaModule,
     AuditModule,
     MailModule,

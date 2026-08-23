@@ -20,6 +20,17 @@ import { ProviderRegistry } from '../../src/llm/application/provider-registry.se
  * porque una llamada real sigue pendiente de credenciales; todo lo demás es producción.
  */
 
+/**
+ * Los límites de peticiones se relajan MUCHO para las suites, no se apagan.
+ *
+ * Cada suite registra decenas de usuarios desde la misma dirección (127.0.0.1) y con los
+ * números de producción se cortaría a sí misma a los cinco registros. Subir el multiplicador
+ * en vez de desactivar el guard es deliberado: el mecanismo sigue montado y enchufado en todas
+ * las rutas, que es lo que hay que verificar aquí. Los números de verdad los comprueba
+ * `limites-peticiones.e2e-spec.ts`, que los baja a propósito.
+ */
+process.env.RATE_LIMIT_MULTIPLIER ??= '1000';
+
 export const prisma = new PrismaClient();
 
 /** Respuestas del modelo que devolverá el doble, en orden. Se reinicia en cada test. */

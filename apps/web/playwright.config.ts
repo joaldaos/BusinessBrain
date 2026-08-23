@@ -45,6 +45,14 @@ const backendEnv = {
    * se niega a activarse en producción.
    */
   MAIL_OUTBOX_PATH: OUTBOX_PATH,
+  /**
+   * Los límites de peticiones se relajan, no se apagan.
+   *
+   * La suite crea varias cuentas seguidas desde la misma dirección y con los números de
+   * producción se cortaría a sí misma. El mecanismo sigue montado en todas las rutas —que es
+   * lo que importa comprobar aquí—; los números los verifica una suite HTTP dedicada.
+   */
+  RATE_LIMIT_MULTIPLIER: '1000',
 };
 
 export default defineConfig({

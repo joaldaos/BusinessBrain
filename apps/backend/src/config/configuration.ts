@@ -19,6 +19,7 @@ export interface AppConfig {
   frontendUrl?: string;
   mailOutboxPath?: string;
   alertsWebhookUrl?: string;
+  rateLimitMultiplier: number;
 }
 
 export default (): AppConfig => {
@@ -42,5 +43,6 @@ export default (): AppConfig => {
     frontendUrl: env.FRONTEND_URL,
     mailOutboxPath: env.MAIL_OUTBOX_PATH,
     alertsWebhookUrl: env.ALERTS_WEBHOOK_URL,
+    rateLimitMultiplier: env.RATE_LIMIT_MULTIPLIER,
   };
 };

@@ -69,6 +69,15 @@ export const envSchema = z.object({
     .string()
     .url('ALERTS_WEBHOOK_URL debe ser una URL absoluta')
     .optional(),
+
+  /**
+   * Holgura de los límites de peticiones.
+   *
+   * Los límites se cuentan por dirección IP, así que una oficina entera comparte límite. Si a
+   * un cliente grande le va justo: `RATE_LIMIT_MULTIPLIER=5`. Un solo mando en vez de una
+   * variable por límite, porque esa es la pregunta que se hace de verdad.
+   */
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().min(1).default(1),
 });
 
 /**

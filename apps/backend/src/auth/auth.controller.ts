@@ -21,6 +21,7 @@ import {
   RequestPasswordResetDto,
 } from './dto/password-reset.dto';
 import { PasswordResetService } from './application/password-reset.service';
+import { RateLimited } from '../common/decorators/rate-limited.decorator';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import {
@@ -55,13 +56,23 @@ export class AuthController {
   ) {}
 
   @Public()
+  @RateLimited('register')
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  /**
+   * El orden de estos dos guards NO es cosmético.
+   *
+   * Los decoradores se aplican de abajo arriba, y los guards se ejecutan en ese mismo orden.
+   * Con `@RateLimited` encima, `LocalAuthGuard` corría PRIMERO y devolvía 401 por contraseña
+   * incorrecta — el límite no llegaba a contar nada, y probar contraseñas era gratis. El
+   * límite tiene que contar el intento antes de que nadie lo juzgue.
+   */
   @Public()
   @UseGuards(LocalAuthGuard)
+  @RateLimited('login')
   @Post('login')
   async login(
     @Body() _dto: LoginDto,
@@ -134,6 +145,7 @@ export class AuthController {
    * correo sale por su cuenta. La interfaz no espera confirmación de entrega, ni podría.
    */
   @Public()
+  @RateLimited('passwordResetRequest')
   @HttpCode(HttpStatus.ACCEPTED)
   @Post('password-reset/request')
   async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
@@ -151,6 +163,7 @@ export class AuthController {
    * un fallo en el guardado detrás de una sesión que funciona.
    */
   @Public()
+  @RateLimited('passwordResetConfirm')
   @HttpCode(HttpStatus.OK)
   @Post('password-reset/confirm')
   async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {

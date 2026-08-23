@@ -27,6 +27,7 @@ import { StreamMessageUseCase } from './stream-message.use-case';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { RenameConversationDto } from './dto/rename-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { RateLimited } from '../common/decorators/rate-limited.decorator';
 
 /**
  * Rutas con `:conversationId` (no `:id`) por el mismo motivo que en el Knowledge Engine:
@@ -122,6 +123,9 @@ export class ConversationsController {
    * Envía un mensaje y devuelve la respuesta con sus citas. La comprensión y el
    * conocimiento se resuelven aguas arriba: este controlador no decide nada sobre ellos.
    */
+  // Cada pregunta cuesta dinero en la cuenta del cliente. El límite es generoso: aquí el
+  // peligro no es un atacante sino un bucle accidental o una pestaña que reintenta sola.
+  @RateLimited('ask')
   @Post(':conversationId/messages')
   @OrgRoles(MembershipRole.MEMBER)
   send(

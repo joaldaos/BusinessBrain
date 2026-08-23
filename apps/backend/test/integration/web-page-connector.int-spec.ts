@@ -18,6 +18,7 @@ import {
   encryptionService,
   prisma,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -54,6 +55,7 @@ describe('Conector de página web (integración)', () => {
     auditService(db),
     restrictedPerimeter(db, connectors),
     chunkAndEmbed(db),
+    operationalAlerts(db),
   );
   const sources = new KnowledgeSourcesService(
     db,

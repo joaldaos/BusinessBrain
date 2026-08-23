@@ -35,6 +35,7 @@ import {
   prisma,
   restrictedPerimeter,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -93,6 +94,7 @@ describe('Gmail (integración)', () => {
       auditService(db),
       restrictedPerimeter(db, connectors),
       chunkAndEmbed(db),
+      operationalAlerts(db),
     );
     sources = new KnowledgeSourcesService(
       db,

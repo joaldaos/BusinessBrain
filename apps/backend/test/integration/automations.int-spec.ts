@@ -37,6 +37,7 @@ import {
   subjectIdentity,
   encryptionService,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -95,6 +96,7 @@ describe('Automatizaciones (integración)', () => {
         auditService(db),
         subjectIdentity(db),
         proposeFromInsights(db),
+        operationalAlerts(db),
       ),
       reports,
       new IngestFromSourceUseCase(
@@ -108,6 +110,7 @@ describe('Automatizaciones (integración)', () => {
         auditService(db),
         restrictedPerimeter(db, connectors),
         chunkAndEmbed(db),
+        operationalAlerts(db),
       ),
     );
     clock = new AutomationSchedulerService(db, runner, scheduler);

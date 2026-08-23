@@ -32,6 +32,7 @@ import {
   prisma,
   subjectIdentity,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -573,6 +574,7 @@ describe('Memoria de la creencia (integración)', () => {
           auditService(db),
           subjectIdentity(db),
           proposeFromInsights(db),
+          operationalAlerts(db),
         ).execute({ organizationId: org.orgId });
 
       await analizar(sinGenerativa);
@@ -800,6 +802,7 @@ describe('Memoria de la creencia (integración)', () => {
         auditService(db),
         subjectIdentity(db),
         proposeFromInsights(db),
+        operationalAlerts(db),
       );
 
       const runs = await Promise.all([

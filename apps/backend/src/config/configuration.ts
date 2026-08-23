@@ -18,6 +18,7 @@ export interface AppConfig {
   };
   frontendUrl?: string;
   mailOutboxPath?: string;
+  alertsWebhookUrl?: string;
 }
 
 export default (): AppConfig => {
@@ -40,5 +41,6 @@ export default (): AppConfig => {
     },
     frontendUrl: env.FRONTEND_URL,
     mailOutboxPath: env.MAIL_OUTBOX_PATH,
+    alertsWebhookUrl: env.ALERTS_WEBHOOK_URL,
   };
 };

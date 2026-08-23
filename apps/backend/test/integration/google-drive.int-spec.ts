@@ -39,6 +39,7 @@ import {
   prisma,
   subjectIdentity,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -91,6 +92,7 @@ describe('Google Drive (integración)', () => {
       auditService(db),
       restrictedPerimeter(db, connectors),
       chunkAndEmbed(db),
+      operationalAlerts(db),
     );
     sources = new KnowledgeSourcesService(
       db,
@@ -750,6 +752,7 @@ describe('Google Drive (integración)', () => {
           auditService(db),
           subjectIdentity(db),
           proposeFromInsights(db),
+          operationalAlerts(db),
         ),
         { generate: () => Promise.resolve({}) } as unknown as ReportsService,
         ingest,

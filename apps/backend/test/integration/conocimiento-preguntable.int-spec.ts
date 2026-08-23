@@ -17,6 +17,7 @@ import {
   prisma,
   restrictedPerimeter,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -63,6 +64,7 @@ describe('El conocimiento ingerido es preguntable (integración)', () => {
       auditService(db),
       restrictedPerimeter(db, connectors),
       chunkAndEmbed(db),
+      operationalAlerts(db),
     );
     sources = new KnowledgeSourcesService(
       db,

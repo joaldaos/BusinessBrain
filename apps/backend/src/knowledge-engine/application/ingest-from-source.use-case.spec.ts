@@ -9,6 +9,7 @@ import type { ConnectorRegistry } from '../infrastructure/connectors/connector-r
 import type { ExtractedContent } from '../domain/ports/connector.port';
 import type { RestrictedPerimeterService } from './restricted-perimeter.service';
 import type { ChunkAndEmbedUseCase } from './chunk-and-embed.use-case';
+import type { OperationalAlertsService } from '../../alerts/application/operational-alerts.service';
 
 describe('IngestFromSourceUseCase', () => {
   let tx: {
@@ -41,6 +42,7 @@ describe('IngestFromSourceUseCase', () => {
   };
   let classifyContent: { execute: jest.Mock };
   let chunkAndEmbed: { execute: jest.Mock };
+  let alerts: { syncFailed: jest.Mock };
   let connectorRegistry: { get: jest.Mock };
   let useCase: IngestFromSourceUseCase;
 
@@ -109,6 +111,8 @@ describe('IngestFromSourceUseCase', () => {
     };
 
     // Devuelve fragmentos: lo normal es que un documento con contenido sea preguntable.
+    alerts = { syncFailed: jest.fn().mockResolvedValue(undefined) };
+
     chunkAndEmbed = {
       execute: jest.fn().mockResolvedValue({
         knowledgeItemId: 'item-1',
@@ -141,6 +145,10 @@ describe('IngestFromSourceUseCase', () => {
       // estos tests van de deduplicación y versionado. Lo que SÍ se comprueba abajo es que la
       // ingesta lo LLAMA — sin eso, nada de lo que entra es preguntable.
       chunkAndEmbed as unknown as ChunkAndEmbedUseCase,
+      // Las alertas se doblan aquí porque estos tests van de deduplicación y versionado, pero
+      // se comprueba abajo que un fallo de sincronización las LLAMA: un aviso que no se emite
+      // deja a una PYME con la fuente en rojo y a nadie mirándola.
+      alerts as unknown as OperationalAlertsService,
     );
   });
 
@@ -163,6 +171,30 @@ describe('IngestFromSourceUseCase', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.ingestionJob.create).not.toHaveBeenCalled();
+  });
+
+  it('CRÍTICO: una sincronización que revienta AVISA antes de propagar el fallo', async () => {
+    // Sin esto, la fuente se queda en rojo y nadie lo mira hasta que el cliente pregunta algo
+    // y no obtiene respuesta. Para entonces lleva días decidiendo con conocimiento viejo.
+    connectorRegistry.get.mockReturnValue({
+      key: 'file_upload_v1',
+      extract: jest.fn().mockRejectedValue(new Error('el origen no responde')),
+    });
+
+    await expect(
+      useCase.execute({
+        organizationId: 'org-1',
+        knowledgeSourceId: 'source-1',
+        connectorInput: {},
+      }),
+    ).rejects.toThrow('el origen no responde');
+
+    expect(alerts.syncFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org-1',
+        detail: 'el origen no responde',
+      }),
+    );
   });
 
   it('camino feliz: contenido nuevo crea un KnowledgeItem, sin arista de linaje', async () => {

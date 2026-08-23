@@ -26,6 +26,7 @@ import { GenerativeSynthesisStrategy } from '../infrastructure/strategies/genera
 import { applyRiskOpportunityGate } from '../domain/risk-opportunity-gate';
 import { SubjectIdentityService } from './subject-identity.service';
 import { ProposeFromInsightsUseCase } from './propose-from-insights.use-case';
+import { OperationalAlertsService } from '../../alerts/application/operational-alerts.service';
 import {
   resolveInsightConflict,
   type ConflictParty,
@@ -104,6 +105,7 @@ export class TriggerAnalysisRunUseCase {
     private readonly audit: AuditService,
     private readonly subjectIdentity: SubjectIdentityService,
     private readonly proposeFromInsights: ProposeFromInsightsUseCase,
+    private readonly alerts: OperationalAlertsService,
   ) {}
 
   /**
@@ -292,6 +294,15 @@ export class TriggerAnalysisRunUseCase {
           status: AnalysisRunStatus.FAILED,
           error: message,
         },
+      });
+
+      // Un análisis que revienta deja a la empresa sin comprensión nueva y sin ninguna señal
+      // en la interfaz que lo explique. Quien opera BusinessBrain tiene que enterarse antes
+      // que el cliente.
+      await this.alerts.analysisFailed({
+        organizationId: params.organizationId,
+        analysisRunId: run.id,
+        detail: message,
       });
 
       throw error;

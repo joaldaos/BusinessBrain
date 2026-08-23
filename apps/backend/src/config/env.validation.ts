@@ -58,6 +58,17 @@ export const envSchema = z.object({
    * sin que el testigo viaje nunca en una respuesta HTTP. Ver `mail/mail.module.ts`.
    */
   MAIL_OUTBOX_PATH: z.string().optional(),
+
+  /**
+   * Canal interno donde avisar de que algo se ha roto (sincronización, análisis).
+   *
+   * Cualquier URL que acepte `POST {"text": "..."}` — el formato de Slack y Mattermost. Sin
+   * ella, las alertas van al registro del servidor: menos cómodo, pero no silencioso.
+   */
+  ALERTS_WEBHOOK_URL: z
+    .string()
+    .url('ALERTS_WEBHOOK_URL debe ser una URL absoluta')
+    .optional(),
 });
 
 /**

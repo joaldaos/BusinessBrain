@@ -21,6 +21,7 @@ import { ConnectorRegistry } from '../infrastructure/connectors/connector-regist
 import { RestrictedPerimeterService } from './restricted-perimeter.service';
 import { ClassifyContentUseCase } from './classify-content.use-case';
 import { ChunkAndEmbedUseCase } from './chunk-and-embed.use-case';
+import { OperationalAlertsService } from '../../alerts/application/operational-alerts.service';
 import { computeInitialConfidence } from '../domain/confidence';
 import {
   normalizeContent,
@@ -106,6 +107,7 @@ export class IngestFromSourceUseCase {
     private readonly audit: AuditService,
     private readonly perimeter: RestrictedPerimeterService,
     private readonly chunkAndEmbed: ChunkAndEmbedUseCase,
+    private readonly alerts: OperationalAlertsService,
   ) {}
 
   async execute(
@@ -310,6 +312,18 @@ export class IngestFromSourceUseCase {
             : { status: ConnectionStatus.ERROR, lastError: jobError },
       });
 
+      // Una fuente que se queda en rojo por la noche no se la mira nadie hasta que el cliente
+      // pregunta algo y no obtiene respuesta. El aviso se emite DESPUÉS de persistir el
+      // resultado y no puede alterarlo: se traga sus propios errores.
+      if (status === RunStatus.FAILED) {
+        await this.alerts.syncFailed({
+          organizationId: params.organizationId,
+          knowledgeSourceId: knowledgeSource.id,
+          detail:
+            jobError ?? 'La sincronización terminó sin poder procesar nada.',
+        });
+      }
+
       return { ingestionJobId: job.id, status, stats, knowledgeItemIds };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -325,6 +339,14 @@ export class IngestFromSourceUseCase {
         where: { id: knowledgeSource.id },
         data: { status: ConnectionStatus.ERROR, lastError: message },
       });
+
+      // El fallo se propaga —quien llamó tiene que enterarse— pero antes queda avisado.
+      await this.alerts.syncFailed({
+        organizationId: params.organizationId,
+        knowledgeSourceId: knowledgeSource.id,
+        detail: message,
+      });
+
       throw error;
     }
   }

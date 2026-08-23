@@ -20,6 +20,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { PrivacyModule } from './privacy/privacy.module';
+import { AlertsModule } from './alerts/alerts.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PrivacyModule } from './privacy/privacy.module';
     PrismaModule,
     AuditModule,
     MailModule,
+    AlertsModule,
     AuthModule,
     OrganizationsModule,
     PrivacyModule,

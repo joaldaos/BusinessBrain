@@ -1,4 +1,6 @@
 import { AuditService } from '../../src/audit/audit.service';
+import { OperationalAlertsService } from '../../src/alerts/application/operational-alerts.service';
+import { LogAlertsAdapter } from '../../src/alerts/infrastructure/alerts.adapters';
 import type { GoogleDriveConnector } from '../../src/integrations/infrastructure/google-drive.connector';
 import type { GmailConnector } from '../../src/integrations/infrastructure/gmail.connector';
 import { ConnectorRegistry } from '../../src/knowledge-engine/infrastructure/connectors/connector-registry.service';
@@ -48,6 +50,21 @@ export const prisma = new PrismaClient();
  */
 export function auditService(db: unknown): AuditService {
   return new AuditService(db as ConstructorParameters<typeof AuditService>[0]);
+}
+
+/**
+ * `OperationalAlertsService` real, con el canal apuntando al registro.
+ *
+ * Se construye de verdad y no se dobla: el servicio decide CUÁNDO avisar —incluida la cuenta
+ * de fallos seguidos, que es una consulta a la base de datos— y doblarlo dejaría esa decisión
+ * sin ejecutar nunca. Lo único que no se hace es mandar nada fuera, que es lo que el adaptador
+ * de registro ya resuelve.
+ */
+export function operationalAlerts(db: unknown): OperationalAlertsService {
+  return new OperationalAlertsService(
+    db as ConstructorParameters<typeof OperationalAlertsService>[0],
+    new LogAlertsAdapter(),
+  );
 }
 
 export function insightScope(db: unknown): InsightScopeService {

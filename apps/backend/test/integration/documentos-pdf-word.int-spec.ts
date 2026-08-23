@@ -20,6 +20,7 @@ import {
   prisma,
   restrictedPerimeter,
   type TestOrg,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -66,6 +67,7 @@ describe('Documentos PDF y Word (integración)', () => {
       auditService(db),
       restrictedPerimeter(db, connectors),
       chunkAndEmbed(db),
+      operationalAlerts(db),
     );
     sources = new KnowledgeSourcesService(
       db,

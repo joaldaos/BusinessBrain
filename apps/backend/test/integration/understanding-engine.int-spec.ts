@@ -29,6 +29,7 @@ import {
   type TestOrg,
   insightScope,
   subjectIdentity,
+  operationalAlerts,
 } from './fixtures';
 
 /**
@@ -83,6 +84,7 @@ describe('Understanding Engine (integración)', () => {
       auditService(db),
       subjectIdentity(db),
       proposeFromInsights(db),
+      operationalAlerts(db),
     );
   });
 
@@ -284,6 +286,7 @@ describe('Understanding Engine (integración)', () => {
         auditService(db),
         subjectIdentity(db),
         proposeFromInsights(db),
+        operationalAlerts(db),
       );
       await withIndependent.execute({ organizationId: org.orgId });
 
@@ -359,6 +362,7 @@ describe('Understanding Engine (integración)', () => {
         auditService(db),
         subjectIdentity(db),
         proposeFromInsights(db),
+        operationalAlerts(db),
       );
       await withDissent.execute({ organizationId: org.orgId });
 

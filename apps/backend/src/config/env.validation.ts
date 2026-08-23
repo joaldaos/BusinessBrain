@@ -52,12 +52,25 @@ export const envSchema = z.object({
     .optional(),
 
   /**
-   * Fichero donde volcar los correos en vez de mandarlos. Solo fuera de producción.
+   * Por dónde sale el correo de verdad.
    *
-   * Existe para que la suite de navegador pueda recorrer la recuperación de contraseña entera
-   * sin que el testigo viaje nunca en una respuesta HTTP. Ver `mail/mail.module.ts`.
+   * URL de conexión SMTP completa: `smtps://usuario:clave@servidor:465`. Un solo secreto en
+   * vez de cuatro variables que hay que acertar a la vez, y el formato que documentan casi
+   * todos los proveedores.
+   *
+   * Sin ella no se manda nada: el adaptador por defecto deja constancia y avisa. Es un aviso
+   * ruidoso a propósito — un fallo silencioso aquí son clientes que piden recuperar su
+   * contraseña y no reciben nada.
    */
-  MAIL_OUTBOX_PATH: z.string().optional(),
+  SMTP_URL: z
+    .string()
+    .url(
+      'SMTP_URL debe ser una URL de conexión, p. ej. smtps://usuario:clave@servidor:465',
+    )
+    .optional(),
+
+  /** Remitente de los correos. `BusinessBrain <no-reply@tuempresa.com>`. */
+  MAIL_FROM: z.string().optional(),
 
   /**
    * Canal interno donde avisar de que algo se ha roto (sincronización, análisis).
@@ -95,6 +108,17 @@ const envSchemaWithProductionRules = envSchema.superRefine((env, ctx) => {
       path: ['FRONTEND_URL'],
       message:
         'FRONTEND_URL es obligatorio en producción — es el único origen al que se permite hablar con la API desde un navegador. Sin él no hay forma segura de decidirlo.',
+    });
+  }
+
+  // Un servidor de correo configurado sin remitente falla en el PRIMER envío, que es el de
+  // alguien intentando recuperar su contraseña. Mejor que falle al arrancar.
+  if (env.SMTP_URL && !env.MAIL_FROM) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MAIL_FROM'],
+      message:
+        'MAIL_FROM es obligatorio cuando hay SMTP_URL: sin remitente, el servidor de correo rechaza el envío.',
     });
   }
 });

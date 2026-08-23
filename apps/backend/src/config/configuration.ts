@@ -17,7 +17,8 @@ export interface AppConfig {
     openai?: string;
   };
   frontendUrl?: string;
-  mailOutboxPath?: string;
+  smtpUrl?: string;
+  mailFrom?: string;
   alertsWebhookUrl?: string;
   rateLimitMultiplier: number;
 }
@@ -41,7 +42,8 @@ export default (): AppConfig => {
       openai: env.OPENAI_API_KEY,
     },
     frontendUrl: env.FRONTEND_URL,
-    mailOutboxPath: env.MAIL_OUTBOX_PATH,
+    smtpUrl: env.SMTP_URL,
+    mailFrom: env.MAIL_FROM,
     alertsWebhookUrl: env.ALERTS_WEBHOOK_URL,
     rateLimitMultiplier: env.RATE_LIMIT_MULTIPLIER,
   };

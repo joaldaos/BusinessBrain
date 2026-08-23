@@ -1,10 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MAILER, type MailerPort } from './domain/mailer.port';
-import {
-  FileOutboxMailerAdapter,
-  LoggingMailerAdapter,
-} from './infrastructure/logging-mailer.adapter';
+import { LoggingMailerAdapter } from './infrastructure/logging-mailer.adapter';
+import { SmtpMailerAdapter } from './infrastructure/smtp-mailer.adapter';
 import type { AppConfig } from '../config/configuration';
 
 /**
@@ -27,13 +25,18 @@ import type { AppConfig } from '../config/configuration';
       useFactory: (config: ConfigService<AppConfig, true>): MailerPort => {
         const isProduction =
           config.get('nodeEnv', { infer: true }) === 'production';
-        const outbox = config.get('mailOutboxPath', { infer: true });
+        const smtpUrl = config.get('smtpUrl', { infer: true });
 
-        // El buzón en fichero solo existe si alguien lo pide explícitamente, y el propio
-        // adaptador se niega a arrancar en producción.
-        if (outbox && !isProduction) {
-          return new FileOutboxMailerAdapter(outbox, isProduction);
+        // Con servidor de correo configurado, se manda de verdad. `MAIL_FROM` es obligatorio
+        // junto a `SMTP_URL` —la validación de entorno lo exige— así que aquí no puede faltar.
+        if (smtpUrl) {
+          return new SmtpMailerAdapter(
+            smtpUrl,
+            config.get('mailFrom', { infer: true }) ?? '',
+          );
         }
+
+        // Sin configurar: se deja constancia y se avisa. En producción, ruidosamente.
         return new LoggingMailerAdapter(isProduction);
       },
     },

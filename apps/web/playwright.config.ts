@@ -1,5 +1,4 @@
 import { defineConfig } from '@playwright/test';
-import { OUTBOX_PATH } from './e2e/buzon';
 
 /**
  * E2E de navegador — el recorrido comercial, sobre el build real.
@@ -38,13 +37,14 @@ const backendEnv = {
   // El conector web lee una página servida en local durante el recorrido principal.
   ALLOW_LOOPBACK_FETCH: 'true',
   /**
-   * El correo se escribe en un fichero en vez de mandarse.
+   * El correo sale de VERDAD, por SMTP, a un buzón que levanta la propia prueba.
    *
    * Es lo que permite recorrer la recuperación de contraseña entera —incluido abrir el enlace
-   * que llega por correo— sin que el testigo viaje jamás en una respuesta HTTP. El adaptador
-   * se niega a activarse en producción.
+   * que llega por correo— sin que el testigo viaje jamás en una respuesta HTTP y sin depender
+   * de la cuenta de correo de nadie. El adaptador que se ejercita es el mismo que se despliega.
    */
-  MAIL_OUTBOX_PATH: OUTBOX_PATH,
+  SMTP_URL: 'smtp://buzon-de-pruebas:clave-del-buzon-de-pruebas@127.0.0.1:2527',
+  MAIL_FROM: 'BusinessBrain <no-reply@businessbrain.test>',
   /**
    * Los límites de peticiones se relajan, no se apagan.
    *

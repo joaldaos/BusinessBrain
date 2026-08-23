@@ -1,15 +1,20 @@
 /**
  * Por dónde sale un correo de BusinessBrain.
  *
- * ## Por qué solo hay un puerto y ningún proveedor
+ * ## Por qué un puerto para mandar una sola cosa
  *
- * Hoy el producto necesita mandar exactamente una cosa: el enlace para recuperar la contraseña.
- * Montar alrededor de eso un sistema de correo con plantillas, colas, reintentos y seguimiento
- * de aperturas sería construir la parte cara antes de saber qué hace falta.
+ * Hoy el producto manda exactamente un mensaje: el enlace para recuperar la contraseña. Montar
+ * alrededor de eso un sistema de correo con plantillas, colas, reintentos y seguimiento de
+ * aperturas sería construir la parte cara antes de saber qué hace falta.
  *
- * Lo que sí hace falta ya es que el resto del código **no sepa** cómo se manda. Con el puerto
- * puesto, conectar un proveedor real es escribir un adaptador y cambiar una línea del módulo;
- * sin él, habría que ir a buscar las llamadas repartidas por los servicios.
+ * Lo que sí hacía falta desde el principio es que el resto del código **no sepa** cómo se
+ * manda. Se nota ahora: conectar SMTP fue escribir un adaptador, sin tocar ni una línea del
+ * flujo de recuperación. Sin el puerto habría habido que ir a buscar las llamadas repartidas
+ * por los servicios.
+ *
+ * Hay dos adaptadores: `SmtpMailerAdapter`, que manda de verdad, y `LoggingMailerAdapter`, que
+ * deja constancia cuando no hay servidor configurado. Cuál se usa lo decide el entorno, una
+ * sola vez, en `mail.module.ts`.
  *
  * ## Qué NO es responsabilidad de un adaptador
  *

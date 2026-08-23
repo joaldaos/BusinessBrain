@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { appendFile } from 'node:fs/promises';
 import type { MailerPort, OutboundEmail } from '../domain/mailer.port';
 
 /**
- * El adaptador por defecto: deja constancia de que se mandó un correo, sin mandarlo.
+ * El adaptador de respaldo: deja constancia de que se mandó un correo, sin mandarlo.
+ *
+ * Se usa cuando NO hay `SMTP_URL` configurada. En un despliegue de verdad eso es una
+ * configuración incompleta, no una elección — de ahí el aviso ruidoso de abajo. En local es lo
+ * cómodo: el enlace se lee del registro y no hace falta montar un servidor de correo para
+ * probar una pantalla.
  *
  * ## Lo que registra, y lo que jamás registra
  *
@@ -18,9 +22,9 @@ import type { MailerPort, OutboundEmail } from '../domain/mailer.port';
  *
  * ## Y una advertencia que se repite a propósito
  *
- * Mientras no haya un proveedor real conectado, este adaptador AVISA en cada envío de
- * producción de que el correo no ha salido. Un fallo silencioso aquí significa clientes que
- * piden recuperar su contraseña y no reciben nada, sin que nadie se entere hasta que llaman.
+ * En producción AVISA en cada envío de que el correo no ha salido, en vez de una sola vez al
+ * arrancar. Un fallo silencioso aquí significa clientes que piden recuperar su contraseña y no
+ * reciben nada, sin que nadie se entere hasta que llaman por teléfono.
  */
 @Injectable()
 export class LoggingMailerAdapter implements MailerPort {
@@ -31,7 +35,7 @@ export class LoggingMailerAdapter implements MailerPort {
   send(email: OutboundEmail): Promise<void> {
     if (this.isProduction) {
       this.logger.warn(
-        `Correo "${email.kind}" NO ENVIADO a ${email.to}: no hay proveedor de correo configurado.`,
+        `Correo "${email.kind}" NO ENVIADO a ${email.to}: falta configurar SMTP_URL.`,
       );
       return Promise.resolve();
     }
@@ -40,34 +44,5 @@ export class LoggingMailerAdapter implements MailerPort {
       `Correo "${email.kind}" para ${email.to}\n${email.subject}\n${email.body}`,
     );
     return Promise.resolve();
-  }
-}
-
-/**
- * Adaptador de pruebas: escribe cada correo en un fichero.
- *
- * Existe para que la suite de navegador pueda recorrer la recuperación de contraseña ENTERA,
- * de verdad, sin que el testigo viaje nunca en una respuesta HTTP. La alternativa —devolverlo
- * en el cuerpo "solo en pruebas"— sería abrir en el código de producción justo la puerta que
- * todo este flujo existe para cerrar.
- *
- * Se niega a funcionar en producción. No por prudencia: porque el fichero contendría enlaces
- * de recuperación de clientes reales en texto plano.
- */
-@Injectable()
-export class FileOutboxMailerAdapter implements MailerPort {
-  constructor(
-    private readonly path: string,
-    isProduction: boolean,
-  ) {
-    if (isProduction) {
-      throw new Error(
-        'FileOutboxMailerAdapter no puede usarse en producción: escribiría enlaces de recuperación en texto plano.',
-      );
-    }
-  }
-
-  async send(email: OutboundEmail): Promise<void> {
-    await appendFile(this.path, `${JSON.stringify(email)}\n`, 'utf8');
   }
 }

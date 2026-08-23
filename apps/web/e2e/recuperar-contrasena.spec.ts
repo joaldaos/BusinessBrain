@@ -1,29 +1,46 @@
 import { expect, test, type Page } from '@playwright/test';
-import { correosPara, limpiarBuzon } from './buzon';
+import {
+  abrirBuzonDePruebas,
+  type BuzonDePruebas,
+} from '../../backend/test/buzon-smtp';
 
 /**
- * Una PYME que ha olvidado su contraseña vuelve a entrar sola, con un navegador de verdad.
+ * Una PYME que ha olvidado su contraseña vuelve a entrar sola, con un navegador de verdad y
+ * un correo de verdad.
  *
- * Recorrido: crear cuenta → volver otro día sin sesión → pedir el enlace → abrir el correo →
- * contraseña nueva → entrar.
+ * Recorrido: crear cuenta → volver otro día sin sesión → pedir el enlace → **el correo sale
+ * por SMTP a un buzón real** → abrirlo → contraseña nueva → entrar.
  *
  * ## Qué detecta esto que no detecta la prueba HTTP
  *
- * Que el camino EXISTE en la interfaz. La prueba HTTP demuestra que las rutas funcionan; solo
- * esta demuestra que hay un enlace visible en la pantalla de entrada, que el correo lleva una
- * URL que el navegador sabe abrir, y que esa URL cae en una pantalla que acepta la contraseña
- * nueva. Un backend perfecto al que no se llega desde ninguna pantalla no rescata a nadie —
- * exactamente lo que le pasaba a este producto antes de esta fase.
+ * Que el camino EXISTE de punta a punta. La prueba HTTP demuestra que las rutas funcionan;
+ * solo esta demuestra que hay un enlace visible en la pantalla de entrada, que el correo SALE,
+ * que el enlace sobrevive a la codificación del cuerpo, que el navegador sabe abrirlo y que
+ * esa URL cae en una pantalla que acepta la contraseña nueva.
  *
- * El correo se lee del buzón en fichero que escribe el backend. El testigo no aparece en
- * ninguna respuesta HTTP, ni siquiera en pruebas.
+ * ## El buzón es un servidor SMTP local, no una cuenta de nadie
+ *
+ * El backend arranca apuntando aquí (`SMTP_URL` en la configuración de Playwright) y usa el
+ * MISMO adaptador que se despliega. Una prueba que dependiera del buzón personal de alguien
+ * dejaría de pasar el día que esa persona cambia la contraseña, y no se podría ejecutar en
+ * otra máquina.
+ *
+ * El testigo no aparece en ninguna respuesta HTTP, ni siquiera en pruebas: llega por correo,
+ * como al cliente.
  */
+
+const PUERTO_SMTP = 2527;
+let buzon: BuzonDePruebas;
 
 const unique = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 test.beforeAll(async () => {
-  await limpiarBuzon();
+  buzon = await abrirBuzonDePruebas(PUERTO_SMTP);
+});
+
+test.afterAll(async () => {
+  await buzon.cerrar();
 });
 
 /** Crea una cuenta desde la interfaz y deja el navegador SIN sesión, como quien vuelve otro día. */
@@ -48,9 +65,9 @@ async function cuentaOlvidada(
   await page.context().clearCookies();
 }
 
-/** El enlace del último correo de recuperación mandado a esa dirección. */
-async function enlaceDeRecuperacion(email: string): Promise<string> {
-  const correos = await correosPara(email);
+/** El enlace del último correo recibido en esa dirección. */
+function enlaceDeRecuperacion(email: string): string {
+  const correos = buzon.recibidos.filter((correo) => correo.to.includes(email));
   const ultimo = correos.at(-1);
   expect(ultimo, 'no llegó ningún correo de recuperación').toBeTruthy();
 
@@ -61,7 +78,16 @@ async function enlaceDeRecuperacion(email: string): Promise<string> {
   return encontrado![1];
 }
 
+/**
+ * Pide el enlace y espera a que el correo haya SALIDO.
+ *
+ * La respuesta HTTP llega antes de que el mensaje termine de entregarse por SMTP, así que
+ * mirar el buzón justo después encontraría a veces cero correos. Es la clase de carrera que
+ * produce una suite intermitente, y una suite intermitente acaba ignorándose.
+ */
 async function pedirElEnlace(page: Page, email: string) {
+  const antes = buzon.recibidos.length;
+
   await page.getByLabel('Correo').fill(email);
   const peticion = page.waitForResponse(
     (response) =>
@@ -72,6 +98,12 @@ async function pedirElEnlace(page: Page, email: string) {
   const respuesta = await peticion;
 
   await expect(page.getByText(/mira tu correo/i)).toBeVisible();
+  await expect
+    .poll(() => buzon.recibidos.length, {
+      message: 'el correo no llegó al buzón',
+    })
+    .toBeGreaterThan(antes);
+
   return respuesta;
 }
 
@@ -100,8 +132,16 @@ test('una PYME que ha olvidado su contraseña vuelve a entrar sin que nadie toqu
   // recuperación de otra persona y leer el enlace.
   expect(await respuesta.text()).not.toMatch(/token/i);
 
+  // ── EL CORREO SALIÓ DE VERDAD ─────────────────────────────────────────────
+  const correo = buzon.recibidos.at(-1)!;
+  expect(correo.to).toContain(email);
+  expect(correo.from).toBe('no-reply@businessbrain.test');
+  expect(correo.subject).toBe('Recupera tu acceso a BusinessBrain');
+  // Y la credencial del buzón no viaja dentro del mensaje.
+  expect(correo.raw).not.toContain('clave-del-buzon-de-pruebas');
+
   // ── ABRIR EL CORREO Y ELEGIR CONTRASEÑA ───────────────────────────────────
-  await page.goto(await enlaceDeRecuperacion(email));
+  await page.goto(enlaceDeRecuperacion(email));
   await page.getByLabel('Contraseña').fill(passwordNueva);
   await page.getByLabel('Repítela').fill(passwordNueva);
   await page.getByRole('button', { name: /guardar y entrar/i }).click();
@@ -118,6 +158,17 @@ test('una PYME que ha olvidado su contraseña vuelve a entrar sin que nadie toqu
   await expect(
     page.getByRole('heading', { name: /bienvenido a businessbrain/i }),
   ).toBeVisible();
+
+  // ── Y LA VIEJA YA NO VALE ─────────────────────────────────────────────────
+  await page.context().clearCookies();
+  await page.goto('/login');
+  await page.getByLabel('Correo').fill(email);
+  await page.getByLabel('Contraseña').fill('Password123!');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: /bienvenido a businessbrain/i }),
+  ).toBeHidden();
 });
 
 test('el enlace no sirve dos veces', async ({ page }) => {
@@ -126,7 +177,7 @@ test('el enlace no sirve dos veces', async ({ page }) => {
 
   await page.goto('/recuperar');
   await pedirElEnlace(page, email);
-  const enlace = await enlaceDeRecuperacion(email);
+  const enlace = enlaceDeRecuperacion(email);
 
   await page.goto(enlace);
   await page.getByLabel('Contraseña').fill('OtraMas789!');
@@ -142,4 +193,19 @@ test('el enlace no sirve dos veces', async ({ page }) => {
 
   await expect(page.getByText(/este enlace ya no sirve/i)).toBeVisible();
   await expect(page.getByText(/ya tienes contraseña nueva/i)).toBeHidden();
+});
+
+test('a un correo que no existe no se le manda nada, y no se nota la diferencia', async ({
+  page,
+}) => {
+  // Es la garantía contra el rastreo de clientes: la pantalla responde igual exista la cuenta
+  // o no. Con un buzón real se puede comprobar de verdad que además NO sale ningún correo.
+  const antes = buzon.recibidos.length;
+
+  await page.goto('/recuperar');
+  await page.getByLabel('Correo').fill(`no-existe-${unique()}@test.local`);
+  await page.getByRole('button', { name: /enviarme el enlace/i }).click();
+
+  await expect(page.getByText(/mira tu correo/i)).toBeVisible();
+  expect(buzon.recibidos.length).toBe(antes);
 });

@@ -3,6 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Política de contenido de la interfaz.
+
+      Va aquí, en el propio documento, y no solo en la configuración del servidor que sirva los
+      estáticos: así viaja con el build. Quien despliegue puede añadirla también como cabecera
+      —es más fuerte, porque una cabecera no se puede quitar editando el HTML— pero no depende
+      de que se acuerde.
+
+      Qué permite, y por qué:
+        · 'self' para scripts y conexiones — el bundle y la API, nada más. Es lo que impide que
+          una dependencia comprometida cargue código de otro sitio o mande los documentos de la
+          empresa a un tercero.
+        · 'unsafe-inline' SOLO en estilos: React inyecta estilos en línea y Tailwind los emite.
+          En estilos el riesgo es exfiltrar con selectores, no ejecutar código; en scripts sería
+          otra cosa y por eso ahí no está.
+        · data: en imágenes, para los iconos embebidos.
+        · frame-ancestors 'none' — nadie puede meter BusinessBrain en un marco y engañar a
+          alguien para que pulse donde no cree que pulsa.
+
+      NO lleva 'unsafe-eval': si algún día una dependencia lo necesitara, es exactamente la
+      clase de cosa que hay que ver y decidir, no conceder de antemano.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+
     <title>BusinessBrain</title>
   </head>
   <body>

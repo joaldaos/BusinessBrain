@@ -151,8 +151,13 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   // empresa suba no se puede preguntar.
   await page.getByRole('link', { name: 'Configuración', exact: true }).click();
   // El título de la tarjeta, no cualquier mención: el texto explicativo también la nombra.
+  // `exact`: la pantalla tiene además "Tus datos y la inteligencia artificial", que explica
+  // qué sale hacia el proveedor. Son dos tarjetas distintas y las dos deben estar.
   await expect(
-    page.getByRole('heading', { name: 'Inteligencia artificial' }),
+    page.getByRole('heading', { name: 'Inteligencia artificial', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /tus datos y la inteligencia/i }),
   ).toBeVisible();
 
   await page

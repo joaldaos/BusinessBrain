@@ -1,5 +1,6 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import type { CorsOptionsDelegate } from '@nestjs/common/interfaces/external/cors-options.interface';
@@ -34,6 +35,49 @@ export function configureApp(
   app: INestApplication,
   options: AppSurfaceOptions,
 ): void {
+  /**
+   * Cabeceras de seguridad.
+   *
+   * ## La política de contenido de una API puede ser la más estricta que existe
+   *
+   * Esto no sirve páginas: sirve JSON y algún PDF. No carga scripts, ni hojas de estilo, ni
+   * imágenes, ni se mete en un marco. Así que `default-src 'none'` y `frame-ancestors 'none'`
+   * no son una política ajustada con pinzas que pueda romper algo: son la descripción literal
+   * de lo que esta aplicación hace. Una CSP permisiva "por si acaso" sería peor, porque el día
+   * que alguien devuelva HTML desde aquí por error, no habría nada que lo frenara.
+   *
+   * ## Lo que se desactiva a propósito
+   *
+   * `crossOriginResourcePolicy` en `cross-origin`. La interfaz vive en OTRO origen —ese es el
+   * despliegue normal— y la política estricta de helmet está pensada para servidores que
+   * sirven recursos incrustables. Aquí bloquearía el caso legítimo sin cerrar ninguno ilegítimo:
+   * quien decide qué origen puede hablar con esta API es la política de origen cruzado de
+   * abajo, no esta cabecera.
+   *
+   * `Strict-Transport-Security` solo en producción: en `http://localhost` obligar a HTTPS deja
+   * el navegador del desarrollador redirigiendo a un sitio que no existe, y esa cabecera se
+   * queda cacheada meses.
+   */
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          'default-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+          'base-uri': ["'none'"],
+          'form-action': ["'none'"],
+        },
+      },
+      frameguard: { action: 'deny' },
+      referrerPolicy: { policy: 'no-referrer' },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      hsts: options.isProduction
+        ? { maxAge: 15_552_000, includeSubDomains: true }
+        : false,
+    }),
+  );
+
   // Se decide por petición, no con una lista fija: así a un origen no autorizado no se le
   // responde ninguna cabecera de origen cruzado, ni siquiera `Allow-Credentials`.
   const corsDelegate: CorsOptionsDelegate<CorsRequest> = (

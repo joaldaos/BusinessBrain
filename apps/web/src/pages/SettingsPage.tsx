@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
 import { PrivacyCard } from '../components/PrivacyCard';
+import { AiUsageCard } from '../components/AiUsageCard';
 import { useAuth } from '../auth';
 import {
   hasRole,
@@ -58,6 +59,9 @@ export function SettingsPage() {
     <>
       {/* Primero: sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
       <AiConfigurationCard canAdmin={canAdmin} />
+
+      {/* Justo debajo de la clave: es el gasto de esa clave, y es de la empresa. */}
+      <AiUsageCard canAdmin={canAdmin} organizationId={organizationId} />
 
       {/* Justo después, y no al final de la pantalla: quien acaba de dar su clave de IA es
           exactamente quien se está preguntando qué sale de su empresa. */}

@@ -3,6 +3,7 @@ import { AnthropicProvider } from '../infrastructure/providers/anthropic.provide
 import { OpenAiProvider } from '../infrastructure/providers/openai.provider';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import type { AiUsageService } from './ai-usage.service';
 
 describe('ProviderRegistry', () => {
   const anthropicProvider = {
@@ -22,6 +23,12 @@ describe('ProviderRegistry', () => {
     registry = new ProviderRegistry(
       prisma as unknown as PrismaService,
       encryption,
+      // El contador de uso se dobla: estos tests van de resolución de perfiles y descifrado.
+      // Que el tope se aplique de verdad lo comprueba `ai-budget` y la suite HTTP.
+      {
+        assertWithinBudget: jest.fn().mockResolvedValue(undefined),
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AiUsageService,
       anthropicProvider,
       openAiProvider,
     );
@@ -55,7 +62,7 @@ describe('ProviderRegistry', () => {
       const { provider, profile } =
         await registry.resolveForOrganization('org-1');
 
-      expect(provider).toBe(openAiProvider);
+      expect(provider.name).toBe(openAiProvider.name);
       expect(profile.id).toBe('profile-org');
     });
 
@@ -71,7 +78,7 @@ describe('ProviderRegistry', () => {
       const { provider, profile } =
         await registry.resolveForOrganization('org-sin-perfil');
 
-      expect(provider).toBe(anthropicProvider);
+      expect(provider.name).toBe(anthropicProvider.name);
       expect(profile.id).toBe('profile-platform');
     });
 
@@ -82,7 +89,7 @@ describe('ProviderRegistry', () => {
         organizationId: 'org-1',
       });
       const first = await registry.resolveForOrganization('org-1');
-      expect(first.provider).toBe(anthropicProvider);
+      expect(first.provider.name).toBe(anthropicProvider.name);
 
       prisma.llmProfile.findFirst.mockResolvedValueOnce({
         id: 'p1',
@@ -90,7 +97,7 @@ describe('ProviderRegistry', () => {
         organizationId: 'org-1',
       });
       const second = await registry.resolveForOrganization('org-1');
-      expect(second.provider).toBe(openAiProvider);
+      expect(second.provider.name).toBe(openAiProvider.name);
     });
 
     it('lanza un error claro si no hay ningún perfil configurado ni de organización ni de plataforma', async () => {
@@ -162,7 +169,7 @@ describe('ProviderRegistry', () => {
 
       const resuelto = await registry.resolveEmbeddingsForOrganization('org-1');
 
-      expect(resuelto.provider).toBe(openAiProvider);
+      expect(resuelto.provider.name).toBe(openAiProvider.name);
       // Se cae a la de plataforma en vez de usar una clave que no corresponde.
       expect(resuelto.apiKey).toBeUndefined();
     });

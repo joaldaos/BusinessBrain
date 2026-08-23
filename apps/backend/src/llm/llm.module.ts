@@ -5,6 +5,7 @@ import { AnthropicProvider } from './infrastructure/providers/anthropic.provider
 import { OpenAiProvider } from './infrastructure/providers/openai.provider';
 import { ProviderRegistry } from './application/provider-registry.service';
 import { AiConfigurationService } from './application/ai-configuration.service';
+import { AiUsageService } from './application/ai-usage.service';
 import { AiConfigurationController } from './api/ai-configuration.controller';
 import { EncryptionService } from '../common/utils/encryption.util';
 import { AuditModule } from '../audit/audit.module';
@@ -22,6 +23,7 @@ import { AuditModule } from '../audit/audit.module';
     AnthropicProvider,
     OpenAiProvider,
     ProviderRegistry,
+    AiUsageService,
     AiConfigurationService,
     EncryptionService,
   ],

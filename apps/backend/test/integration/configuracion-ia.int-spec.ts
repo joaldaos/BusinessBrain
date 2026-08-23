@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { AiConfigurationService } from '../../src/llm/application/ai-configuration.service';
 import { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
+import { AiUsageService } from '../../src/llm/application/ai-usage.service';
 import type { AnthropicProvider } from '../../src/llm/infrastructure/providers/anthropic.provider';
 import type { OpenAiProvider } from '../../src/llm/infrastructure/providers/openai.provider';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -41,6 +42,9 @@ describe('Configuración de IA (integración)', () => {
     registry = new ProviderRegistry(
       db,
       encryptionService(),
+      // Contador REAL sobre el Postgres de pruebas: el tope diario se aplica dentro del
+      // registro, y doblarlo dejaría sin ejecutar el camino que frena el gasto.
+      new AiUsageService(db),
       { name: 'ANTHROPIC' } as unknown as AnthropicProvider,
       openAi,
     );

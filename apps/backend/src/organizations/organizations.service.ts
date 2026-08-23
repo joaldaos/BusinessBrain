@@ -40,8 +40,34 @@ export class OrganizationsService {
     return organization;
   }
 
+  /**
+   * Actualiza la organización.
+   *
+   * ## Los ajustes se MEZCLAN, no se reemplazan
+   *
+   * `settings` es un cajón compartido: guarda la exigencia de fiabilidad, el techo diario de
+   * gasto en IA y lo que venga después. Cada pantalla manda solo su parte, así que sustituir
+   * el objeto entero hacía que guardar la exigencia de fiabilidad **borrara en silencio** el
+   * techo de gasto — y al revés. No se notaba mientras solo hubo un ajuste.
+   *
+   * La mezcla es de un nivel: cada pantalla es dueña de su apartado (`knowledgeEngine`, `ai`)
+   * y lo manda entero. Mezclar en profundidad permitiría dejar un apartado a medias con
+   * valores viejos, que es más difícil de explicar que sustituirlo.
+   */
   async update(organizationId: string, dto: UpdateOrganizationDto) {
-    await this.findById(organizationId);
+    const current = await this.findById(organizationId);
+
+    const settings =
+      dto.settings === undefined
+        ? undefined
+        : {
+            ...(typeof current.settings === 'object' &&
+            current.settings !== null
+              ? (current.settings as Record<string, unknown>)
+              : {}),
+            ...dto.settings,
+          };
+
     return this.prisma.organization.update({
       where: { id: organizationId },
       // dto.settings es Record<string, unknown> (validado por class-validator @IsObject());
@@ -49,7 +75,7 @@ export class OrganizationsService {
       // segura porque ya pasó la validación del DTO, no una aserción a ciegas.
       data: {
         name: dto.name,
-        settings: dto.settings as Prisma.InputJsonValue | undefined,
+        settings: settings as Prisma.InputJsonValue | undefined,
       },
     });
   }

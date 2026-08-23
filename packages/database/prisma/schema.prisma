@@ -1115,6 +1115,9 @@ model UsageRecord {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  /// Una fila por empresa, metrica y periodo. Sin esto, dos vectorizaciones simultaneas de la
+  /// misma empresa crearian dos filas del mismo dia y el tope se contaria por la mitad.
+  @@unique([organizationId, metric, periodStart])
   @@index([organizationId, metric, periodStart])
 }
 

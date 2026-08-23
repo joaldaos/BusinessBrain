@@ -9,6 +9,7 @@ import type {
   RequestUser,
 } from '../../common/types/authenticated-request';
 import { AiConfigurationService } from '../application/ai-configuration.service';
+import { AiUsageService } from '../application/ai-usage.service';
 import { ConfigureAiDto } from '../dto/configure-ai.dto';
 
 /**
@@ -24,7 +25,10 @@ import { ConfigureAiDto } from '../dto/configure-ai.dto';
 @Controller('ai-configuration')
 @UseGuards(OrgRoleGuard)
 export class AiConfigurationController {
-  constructor(private readonly aiConfiguration: AiConfigurationService) {}
+  constructor(
+    private readonly aiConfiguration: AiConfigurationService,
+    private readonly aiUsage: AiUsageService,
+  ) {}
 
   @Get()
   @OrgRoles(MembershipRole.VIEWER)
@@ -37,6 +41,18 @@ export class AiConfigurationController {
   @OrgRoles(MembershipRole.VIEWER)
   providers() {
     return this.aiConfiguration.catalog();
+  }
+
+  /**
+   * Cuánto se ha usado hoy y cuál es el techo.
+   *
+   * De cualquier miembro, igual que el estado: quien recibe "has llegado al máximo de hoy"
+   * tiene que poder ver cuánto era el máximo, aunque no pueda cambiarlo.
+   */
+  @Get('usage')
+  @OrgRoles(MembershipRole.VIEWER)
+  usage(@CurrentOrg() org: RequestOrganization) {
+    return this.aiUsage.todayFor(org.id);
   }
 
   @Post()

@@ -6,6 +6,8 @@ import { AnthropicProvider } from '../infrastructure/providers/anthropic.provide
 import { OpenAiProvider } from '../infrastructure/providers/openai.provider';
 import type { LlmProviderPort } from '../domain/ports/llm-provider.port';
 import type { EmbeddingProviderPort } from '../domain/ports/embedding-provider.port';
+import { AiUsageService } from './ai-usage.service';
+import { charactersInMessages, charactersInTexts } from '../domain/ai-budget';
 
 /**
  * Perfil resuelto y LISTO PARA USAR.
@@ -48,6 +50,7 @@ export class ProviderRegistry {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
+    private readonly usage: AiUsageService,
     anthropicProvider: AnthropicProvider,
     openAiProvider: OpenAiProvider,
   ) {
@@ -121,7 +124,7 @@ export class ProviderRegistry {
       );
     }
 
-    return this.usable(profile);
+    return this.usable(profile, organizationId);
   }
 
   /**
@@ -150,7 +153,7 @@ export class ProviderRegistry {
     // conversación: el agente sigue pudiendo responder, solo que con el modelo por defecto.
     if (!profile) return this.resolveForOrganization(organizationId);
 
-    return this.usable(profile);
+    return this.usable(profile, organizationId);
   }
 
   /**
@@ -177,22 +180,102 @@ export class ProviderRegistry {
 
     return {
       // Hoy solo OpenAI vectoriza. Si el perfil es de otro proveedor, su clave NO sirve aquí.
-      provider: this.getEmbeddingProvider(LlmProviderName.OPENAI),
+      provider: this.metered(
+        organizationId,
+        this.getEmbeddingProvider(LlmProviderName.OPENAI),
+      ),
       modelName: resolved.profile.modelName,
       apiKey: canEmbed ? resolved.apiKey : undefined,
     };
   }
 
   /** Descifra la clave propia, si la hay, y aparta el texto cifrado del resultado. */
-  private usable(profile: LlmProfile): ResolvedLlmProfile {
+  private usable(
+    profile: LlmProfile,
+    organizationId: string,
+  ): ResolvedLlmProfile {
     const { apiKeyEnc, ...visible } = profile;
 
     return {
       profile: visible,
-      provider: this.getLlmProvider(profile.provider),
+      provider: this.meteredLlm(
+        organizationId,
+        this.getLlmProvider(profile.provider),
+      ),
       // Sin clave propia se devuelve `undefined`, que es lo que el proveedor interpreta como
       // "usa la de plataforma". Nunca una cadena vacía: parecería una clave y fallaría lejos.
       apiKey: apiKeyEnc ? this.encryption.decrypt(apiKeyEnc) : undefined,
     };
   }
+
+  /**
+   * Envuelve al proveedor para que cuente lo que gasta y frene si la empresa se pasa del día.
+   *
+   * ## Por qué AQUÍ y no en cada sitio que llama al modelo
+   *
+   * Porque los sitios que llaman al modelo son ocho y mañana serán nueve. Instrumentarlos uno a
+   * uno significa que el noveno se olvida —en silencio, y precisamente el que se olvida es el
+   * que nadie tenía en la cabeza al poner el tope—. Todo el que llama al modelo pasa antes por
+   * este registro; envolviendo aquí, la protección la hereda hasta el código que todavía no
+   * está escrito.
+   *
+   * ## La llamada que cruza el umbral se ejecuta entera
+   *
+   * A propósito. Cortar una vectorización por la mitad dejaría un documento a medio indexar, y
+   * ese estado es peor que unos miles de caracteres de más.
+   *
+   * ## Lo que se cuenta al terminar y no al empezar
+   *
+   * Apuntar por adelantado una llamada que luego falla haría pagar —en cupo— por algo que no
+   * ocurrió. La contrapartida está en el flujo por fragmentos: si quien consume abandona el
+   * hilo a medias, ese gasto no se apunta. Es el caso raro y el error va a favor del cliente.
+   */
+  private meteredLlm(
+    organizationId: string,
+    provider: LlmProviderPort,
+  ): LlmProviderPort {
+    const usage = this.usage;
+
+    return {
+      name: provider.name,
+      complete: async (request, modelName, apiKey) => {
+        await usage.assertWithinBudget(organizationId);
+        const result = await provider.complete(request, modelName, apiKey);
+        await usage.record(organizationId, charactersOf(request));
+        return result;
+      },
+      stream: async function* (request, modelName, apiKey) {
+        await usage.assertWithinBudget(organizationId);
+        yield* provider.stream(request, modelName, apiKey);
+        await usage.record(organizationId, charactersOf(request));
+      },
+    };
+  }
+
+  private metered(
+    organizationId: string,
+    provider: EmbeddingProviderPort,
+  ): EmbeddingProviderPort {
+    const usage = this.usage;
+
+    return {
+      name: provider.name,
+      embed: async (texts, modelName, apiKey) => {
+        await usage.assertWithinBudget(organizationId);
+        const vectors = await provider.embed(texts, modelName, apiKey);
+        await usage.record(organizationId, charactersInTexts(texts));
+        return vectors;
+      },
+    };
+  }
+}
+
+/** Todo el texto que viaja: los mensajes y las instrucciones del sistema. */
+function charactersOf(request: {
+  messages?: { content?: unknown }[];
+  systemPrompt?: string;
+}): number {
+  return (
+    charactersInMessages(request.messages) + (request.systemPrompt?.length ?? 0)
+  );
 }

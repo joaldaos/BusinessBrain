@@ -1,9 +1,9 @@
-import { roleLabel } from '../api/labels';
 import { useState } from 'react';
 import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
-import { PrivacyCard } from '../components/PrivacyCard';
 import { AiUsageCard } from '../components/AiUsageCard';
+import { PrivacyCard } from '../components/PrivacyCard';
+import { LanguagePicker } from '../components/LanguagePicker';
 import { useAuth } from '../auth';
 import {
   hasRole,
@@ -24,6 +24,8 @@ import {
   useAction,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 interface Member {
   userId: string;
@@ -41,6 +43,8 @@ interface Member {
  */
 export function SettingsPage() {
   const { organizationId, role } = useAuth();
+  const t = useT();
+  const labels = useLabels();
   const canAdmin = hasRole(role, 'ADMIN');
 
   const organization = useResource(
@@ -57,13 +61,20 @@ export function SettingsPage() {
 
   return (
     <>
-      {/* Primero: sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
+      {/* El idioma primero: si alguien no entiende la pantalla, es lo único que necesita
+          encontrar. */}
+      <Card title={t('settings.language')}>
+        <p className="mb-3 text-xs text-gray-500">{t('settings.languageHint')}</p>
+        <LanguagePicker compact />
+      </Card>
+
+      {/* Sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
       <AiConfigurationCard canAdmin={canAdmin} />
 
       {/* Justo debajo de la clave: es el gasto de esa clave, y es de la empresa. */}
       <AiUsageCard canAdmin={canAdmin} organizationId={organizationId} />
 
-      {/* Justo después, y no al final de la pantalla: quien acaba de dar su clave de IA es
+      {/* Después, y no al final de la pantalla: quien acaba de dar su clave de IA es
           exactamente quien se está preguntando qué sale de su empresa. */}
       <PrivacyCard
         organizationId={organizationId}
@@ -71,33 +82,45 @@ export function SettingsPage() {
         isOwner={role === 'OWNER'}
       />
 
-      <Card title="Organización">
+      <Card title={t('settings.org.title')}>
         <ErrorNote error={organization.error} />
         {organization.data && (
           <dl className="grid gap-2 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-gray-500">Nombre</dt>
+              <dt className="text-xs text-gray-500">{t('settings.org.name')}</dt>
               <dd>{organization.data.name}</dd>
             </div>
             <div>
-              <dt className="text-xs text-gray-500">Identificador</dt>
+              <dt className="text-xs text-gray-500">{t('settings.org.slug')}</dt>
               <dd className="font-mono text-xs">{organization.data.slug}</dd>
             </div>
             <div>
-              <dt className="text-xs text-gray-500">Tu rol</dt>
+              <dt className="text-xs text-gray-500">
+                {t('settings.org.yourRole')}
+              </dt>
               <dd>
-                <Badge>{roleLabel(role ?? null)}</Badge>
+                <Badge>{labels.role(role ?? null)}</Badge>
               </dd>
             </div>
           </dl>
         )}
       </Card>
 
-      <Card title={`Miembros (${members.data?.length ?? 0})`}>
+      <Card
+        title={t('settings.members.title', {
+          count: members.data?.length ?? 0,
+        })}
+      >
         <ErrorNote error={members.error} />
-        {members.loading && <Empty>Cargando…</Empty>}
+        {members.loading && <Empty>{t('common.loading')}</Empty>}
         {(members.data?.length ?? 0) > 0 && (
-          <Table head={['Nombre', 'Correo', 'Rol']}>
+          <Table
+            head={[
+              t('settings.members.column.name'),
+              t('settings.members.column.email'),
+              t('settings.members.column.role'),
+            ]}
+          >
             {members.data?.map((member) => (
               <tr
                 key={member.userId}
@@ -108,7 +131,7 @@ export function SettingsPage() {
                   {member.user?.email ?? '—'}
                 </td>
                 <td className="px-2 py-2">
-                  <Badge>{roleLabel(member.role)}</Badge>
+                  <Badge>{labels.role(member.role)}</Badge>
                 </td>
               </tr>
             ))}
@@ -131,16 +154,14 @@ export function SettingsPage() {
       )}
 
       {canAdmin && (
-        <Card title="Quién ve qué">
+        <Card title={t('settings.access.title')}>
           <p className="mb-3 text-xs text-gray-500">
-            El acceso a una colección determina qué comprensión puede leer una
-            persona. Si no cubre TODAS las colecciones en las que se apoya una
-            conclusión, no la ve — el acceso parcial deniega.
+            {t('settings.access.explain')}
           </p>
 
           <ErrorNote error={collections.error} />
           {(collections.data?.length ?? 0) === 0 && (
-            <Empty>Crea una colección en Conocimiento para empezar.</Empty>
+            <Empty>{t('settings.access.noCollections')}</Empty>
           )}
 
           <ul className="space-y-3">
@@ -159,25 +180,6 @@ export function SettingsPage() {
 }
 
 /**
- * Invitar a alguien de la empresa.
- *
- * ## Por qué es un enlace y no un correo
- *
- * BusinessBrain no envía correo todavía, y montar un envío a medias —que falle en silencio y
- * deje invitaciones que nadie recibe— sería peor que no tenerlo. Se entrega el enlace para
- * copiar y pegar por donde la empresa ya se comunica. Cuando exista envío de correo, esta
- * pantalla cambia y la invitación no.
- *
- * El enlace no es un permiso en blanco: al aceptarlo, el backend exige que el correo de quien
- * acepta COINCIDA con el invitado, así que reenviarlo a otra persona no le da acceso.
- *
- * ## Por qué importa para el producto
- *
- * Sin segundo usuario no existe la mitad de BusinessBrain: las colecciones restringidas no
- * restringen nada, el perímetro de un buzón es indistinguible de no tenerlo, y no hay a quién
- * mostrar una conclusión distinta de la propia.
- */
-/**
  * Cuánto exige la empresa a sus fuentes.
  *
  * Es el listón por debajo del cual BusinessBrain considera que un documento ha dejado de ser
@@ -194,15 +196,15 @@ function ReliabilityCard({
   organizationId: string | null;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [floor, setFloor] = useState('');
   const [saved, setSaved] = useState(false);
   const action = useAction();
 
   return (
-    <Card title="Exigencia con tus fuentes">
+    <Card title={t('settings.reliability.title')}>
       <p className="mb-3 text-xs text-gray-500">
-        Por debajo de este nivel de fiabilidad, BusinessBrain marcará un documento para que
-        alguien lo revise. Un número entre 0 y 1: cuanto más alto, más exigente.
+        {t('settings.reliability.explain')}
       </p>
 
       <ErrorNote error={action.error} />
@@ -225,7 +227,7 @@ function ReliabilityCard({
         })}
       >
         <div className="min-w-40">
-          <Field label="Exigencia de fiabilidad">
+          <Field label={t('settings.reliability.field')}>
             <input
               type="number"
               step="0.05"
@@ -243,16 +245,31 @@ function ReliabilityCard({
           </Field>
         </div>
         <Button type="submit" disabled={action.busy}>
-          Guardar exigencia
+          {t('settings.reliability.save')}
         </Button>
         {saved && (
-          <span className="text-xs text-green-700">Exigencia guardada.</span>
+          <span className="text-xs text-green-700">
+            {t('settings.reliability.saved')}
+          </span>
         )}
       </form>
     </Card>
   );
 }
 
+/**
+ * Invitar a alguien de la empresa.
+ *
+ * ## Por qué es un enlace y no un correo
+ *
+ * El correo saliente existe hoy para una sola cosa: recuperar la contraseña. Montar el envío de
+ * invitaciones encima —con su plantilla, su seguimiento y sus rebotes— es otra pieza, y a
+ * medias sería peor que no tenerla. Se entrega el enlace para copiar y pegar por donde la
+ * empresa ya se comunica.
+ *
+ * El enlace no es un permiso en blanco: al aceptarlo, el backend exige que el correo de quien
+ * acepta COINCIDA con el invitado, así que reenviarlo a otra persona no le da acceso.
+ */
 function InviteCard({
   organizationId,
   onInvited,
@@ -260,17 +277,16 @@ function InviteCard({
   organizationId: string | null;
   onInvited: () => void;
 }) {
+  const t = useT();
+  const labels = useLabels();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<MembershipRole>('MEMBER');
   const [link, setLink] = useState<string | null>(null);
   const action = useAction();
 
   return (
-    <Card title="Invitar a alguien">
-      <p className="mb-3 text-xs text-gray-500">
-        Se crea un enlace de invitación. Cópialo y mándaselo por donde ya habléis:
-        BusinessBrain todavía no envía correos. Solo funcionará para esa dirección.
-      </p>
+    <Card title={t('settings.invite.title')}>
+      <p className="mb-3 text-xs text-gray-500">{t('settings.invite.explain')}</p>
 
       <ErrorNote error={action.error} />
 
@@ -289,42 +305,45 @@ function InviteCard({
         })}
       >
         <div className="min-w-56 flex-1">
-          <Field label="Correo de la persona">
+          <Field label={t('settings.invite.email')}>
             <input
               type="email"
               className={inputClass}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="companero@tuempresa.com"
+              placeholder={t('settings.invite.emailPlaceholder')}
               required
             />
           </Field>
         </div>
         <div className="min-w-40">
-          <Field label="Rol" hint="VIEWER solo lee; MEMBER puede preguntar y curar.">
+          <Field
+            label={t('settings.invite.role')}
+            hint={t('settings.invite.roleHint')}
+          >
             <select
-              aria-label="Rol"
+              aria-label={t('settings.invite.role')}
               className={inputClass}
               value={role}
               onChange={(event) =>
                 setRole(event.target.value as MembershipRole)
               }
             >
-              <option value="VIEWER">Solo lectura</option>
-              <option value="MEMBER">Miembro</option>
-              <option value="ADMIN">Administrador</option>
+              <option value="VIEWER">{labels.role('VIEWER')}</option>
+              <option value="MEMBER">{labels.role('MEMBER')}</option>
+              <option value="ADMIN">{labels.role('ADMIN')}</option>
             </select>
           </Field>
         </div>
         <Button type="submit" disabled={action.busy}>
-          Crear invitación
+          {t('settings.invite.submit')}
         </Button>
       </form>
 
       {link && (
         <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
           <p className="text-xs text-gray-600">
-            Enlace de invitación. Caduca, y solo sirve para el correo indicado:
+            {t('settings.invite.linkTitle')}
           </p>
           <code className="mt-1 block break-all text-xs">{link}</code>
         </div>
@@ -340,6 +359,7 @@ function CollectionAccess({
   collection: KnowledgeCollection;
   members: Member[];
 }) {
+  const t = useT();
   const [userId, setUserId] = useState('');
   const action = useAction();
   const granted = useResource(
@@ -352,6 +372,7 @@ function CollectionAccess({
 
   return (
     <li className="rounded border border-gray-200 p-3">
+      {/* El nombre de la colección lo puso la empresa: se muestra tal cual. */}
       <p className="text-sm font-medium">{collection.name}</p>
 
       <ul className="mt-2 flex flex-wrap gap-2">
@@ -362,7 +383,7 @@ function CollectionAccess({
             </Badge>
             <button
               type="button"
-              title="Retirar acceso"
+              title={t('settings.access.revokeTitle')}
               className="text-xs text-red-700 underline"
               onClick={() =>
                 void action
@@ -375,12 +396,14 @@ function CollectionAccess({
                   .then(granted.reload)
               }
             >
-              retirar
+              {t('settings.access.revoke')}
             </button>
           </li>
         ))}
         {(granted.data?.length ?? 0) === 0 && !granted.loading && (
-          <li className="text-xs text-gray-500">Nadie tiene acceso todavía.</li>
+          <li className="text-xs text-gray-500">
+            {t('settings.access.nobody')}
+          </li>
         )}
       </ul>
 
@@ -396,14 +419,14 @@ function CollectionAccess({
         })}
       >
         <div className="min-w-56">
-          <Field label="Conceder acceso a">
+          <Field label={t('settings.access.grantTo')}>
             <select
               className={inputClass}
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               required
             >
-              <option value="">Elige a alguien…</option>
+              <option value="">{t('settings.access.choose')}</option>
               {members.map((member) => (
                 <option key={member.userId} value={member.userId}>
                   {member.user?.name} ({member.user?.email})
@@ -413,7 +436,7 @@ function CollectionAccess({
           </Field>
         </div>
         <Button type="submit" variant="secondary" disabled={action.busy}>
-          Conceder
+          {t('settings.access.grant')}
         </Button>
       </form>
 

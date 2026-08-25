@@ -8,6 +8,11 @@ import type {
   LlmCompletionRequest,
   LlmMessage,
 } from '../llm/domain/ports/llm-provider.port';
+import type { Locale } from '../common/i18n/locales';
+import {
+  answerLanguageDirective,
+  noKnowledgeAnswerIn,
+} from './domain/answer-language';
 
 /**
  * Construcción del prompt del chat — BUSINESSBRAIN_MIGRATION_PLAN.md §7.2.
@@ -34,6 +39,13 @@ export interface PromptInput {
   context: BuiltContext;
   insights: PromptInsight[];
   history: { role: MessageRole; content: string }[];
+  /**
+   * En qué idioma se le responde a la persona.
+   *
+   * NO es el idioma de los documentos: son cosas independientes y el producto sería
+   * inservible si exigiera que coincidieran. Ver `domain/answer-language.ts`.
+   */
+  locale: Locale;
 }
 
 @Injectable()
@@ -47,12 +59,12 @@ export class PromptBuilderService {
     return input.context.pieces.length > 0 || input.insights.length > 0;
   }
 
-  noKnowledgeAnswer(): string {
-    return (
-      'No tengo conocimiento indexado que responda a esa pregunta. ' +
-      'Si la información debería estar disponible, comprueba que la fuente correspondiente ' +
-      'esté conectada y sincronizada.'
-    );
+  /**
+   * La escribimos nosotros, no el modelo — a él no se le llega a llamar. Por eso es de las
+   * pocas frases del backend que hay que tener escritas en cada idioma.
+   */
+  noKnowledgeAnswer(locale: Locale): string {
+    return noKnowledgeAnswerIn(locale);
   }
 
   build(input: PromptInput): LlmCompletionRequest {
@@ -80,6 +92,10 @@ export class PromptBuilderService {
   private systemPrompt(input: PromptInput): string {
     return [
       'Eres el asistente de BusinessBrain. Respondes sobre el conocimiento interno de una empresa.',
+      '',
+      // Antes que nada: en qué idioma se contesta y qué no se puede tocar al citar. Va arriba
+      // a propósito — es una regla sobre CÓMO se responde, no sobre qué se responde.
+      answerLanguageDirective(input.locale),
       '',
       GROUNDING_DIRECTIVE,
       this.understandingBlock(input.insights),

@@ -1,4 +1,3 @@
-import { runStatusLabel } from '../api/labels';
 import { useState } from 'react';
 import { api, download } from '../api/client';
 import { useAuth } from '../auth';
@@ -10,11 +9,13 @@ import {
   Empty,
   ErrorNote,
   Field,
-  formatDate,
   inputClass,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Informes.
@@ -33,6 +34,7 @@ import {
  */
 export function ReportsPage() {
   const { role } = useAuth();
+  const t = useT();
   const canAdmin = hasRole(role, 'ADMIN');
   const reports = useResource(() => api<Report[]>('/reports'));
 
@@ -40,11 +42,11 @@ export function ReportsPage() {
     <>
       {canAdmin && <CreateCard onCreated={reports.reload} />}
 
-      <Card title={`Informes (${reports.data?.length ?? 0})`}>
+      <Card title={t('reports.title', { count: reports.data?.length ?? 0 })}>
         <ErrorNote error={reports.error} />
-        {reports.loading && <Empty>Cargando…</Empty>}
+        {reports.loading && <Empty>{t('common.loading')}</Empty>}
         {!reports.loading && (reports.data?.length ?? 0) === 0 && (
-          <Empty>Ninguno todavía.</Empty>
+          <Empty>{t('reports.empty')}</Empty>
         )}
 
         <ul className="space-y-3">
@@ -58,14 +60,17 @@ export function ReportsPage() {
 }
 
 function CreateCard({ onCreated }: { onCreated: () => void }) {
+  const t = useT();
   const [name, setName] = useState('');
-  const [title, setTitle] = useState('Qué hemos comprendido');
+  // El título por defecto se toma del catálogo, pero una vez escrito es texto DE LA EMPRESA:
+  // viaja al informe tal cual y no se retraduce si luego cambia de idioma.
+  const [title, setTitle] = useState(t('reports.new.sectionDefault'));
   const [limit, setLimit] = useState(10);
   const [query, setQuery] = useState('');
   const action = useAction();
 
   return (
-    <Card title="Nuevo informe">
+    <Card title={t('reports.new.title')}>
       <form
         className="space-y-3"
         onSubmit={action.onSubmit(async () => {
@@ -75,7 +80,7 @@ function CreateCard({ onCreated }: { onCreated: () => void }) {
           if (query.trim()) {
             sections.push({
               type: 'KNOWLEDGE_SEARCH',
-              title: `Sobre: ${query.trim()}`,
+              title: t('reports.new.searchSection', { query: query.trim() }),
               query: query.trim(),
               limit,
             });
@@ -92,18 +97,18 @@ function CreateCard({ onCreated }: { onCreated: () => void }) {
       >
         <div className="flex flex-wrap gap-2">
           <div className="min-w-56 flex-1">
-            <Field label="Nombre del informe">
+            <Field label={t('reports.new.name')}>
               <input
                 className={inputClass}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Resumen semanal"
+                placeholder={t('reports.new.namePlaceholder')}
                 required
               />
             </Field>
           </div>
           <div className="min-w-24">
-            <Field label="Elementos por sección">
+            <Field label={t('reports.new.limit')}>
               <input
                 type="number"
                 min={1}
@@ -116,7 +121,7 @@ function CreateCard({ onCreated }: { onCreated: () => void }) {
           </div>
         </div>
 
-        <Field label="Título de la sección de comprensión">
+        <Field label={t('reports.new.sectionTitle')}>
           <input
             className={inputClass}
             value={title}
@@ -126,20 +131,20 @@ function CreateCard({ onCreated }: { onCreated: () => void }) {
         </Field>
 
         <Field
-          label="Añadir una búsqueda en el conocimiento (opcional)"
-          hint="Se buscará en tus documentos y se citará lo encontrado."
+          label={t('reports.new.search')}
+          hint={t('reports.new.searchHint')}
         >
           <input
             className={inputClass}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="política de descuentos"
+            placeholder={t('reports.new.searchPlaceholder')}
           />
         </Field>
 
         <ErrorNote error={action.error} />
         <Button type="submit" disabled={action.busy}>
-          Crear informe
+          {t('reports.new.submit')}
         </Button>
       </form>
     </Card>
@@ -147,6 +152,9 @@ function CreateCard({ onCreated }: { onCreated: () => void }) {
 }
 
 function ReportRow({ report }: { report: Report }) {
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
   const [open, setOpen] = useState(false);
   const action = useAction();
   const runs = useResource(
@@ -186,43 +194,42 @@ function ReportRow({ report }: { report: Report }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{report.name}</span>
         <span className="text-xs text-gray-500">
-          {report.template?.sections?.length ?? 0} sección(es) · {report.format}
+          {t('reports.sections', {
+            count: report.template?.sections?.length ?? 0,
+          })}{' '}
+          · {report.format}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
           <Button variant="secondary" onClick={() => setOpen(!open)}>
-            {open ? 'Ocultar' : 'Generaciones'}
+            {open ? t('reports.runs.hide') : t('reports.runs')}
           </Button>
           <Button disabled={action.busy} onClick={() => void generate()}>
-            {action.busy ? 'Generando…' : 'Descargar PDF'}
+            {action.busy ? t('reports.downloading') : t('reports.download')}
           </Button>
         </div>
       </div>
 
-      <p className="mt-1 text-xs text-gray-500">
-        El contenido depende de tu alcance: solo incluye lo que tú puedes ver.
-      </p>
+      <p className="mt-1 text-xs text-gray-500">{t('reports.scopeWarning')}</p>
 
       <ErrorNote error={action.error} />
 
       {open && (
         <div className="mt-3 border-t border-gray-100 pt-2">
-          {runs.loading && <Empty>Cargando…</Empty>}
+          {runs.loading && <Empty>{t('common.loading')}</Empty>}
           {!runs.loading && (runs.data?.length ?? 0) === 0 && (
-            <Empty>Sin generaciones todavía.</Empty>
+            <Empty>{t('reports.runs.empty')}</Empty>
           )}
           <ul className="space-y-1 text-xs">
             {runs.data?.map((run) => (
               <li key={run.id} className="flex flex-wrap items-center gap-2">
                 <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
-                  {runStatusLabel(run.status)}
+                  {labels.runStatus(run.status)}
                 </Badge>
                 <span className="text-gray-500">
                   {formatDate(run.generatedAt)}
                 </span>
-                <span className="text-gray-400">
-                  el fichero no se conserva; se regenera cuando hace falta
-                </span>
+                <span className="text-gray-400">{t('reports.notStored')}</span>
                 {run.error && <span className="text-red-700">{run.error}</span>}
               </li>
             ))}

@@ -1,4 +1,3 @@
-import { knowledgeItemStatusLabel, connectionStatusLabel } from '../api/labels';
 import { useRef, useState } from 'react';
 import { api, session } from '../api/client';
 import { useAuth } from '../auth';
@@ -19,11 +18,13 @@ import {
   ErrorNote,
   Field,
   Table,
-  formatDate,
   inputClass,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT, type TranslationKey } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Conocimiento: colecciones, fuentes y documentos.
@@ -35,9 +36,19 @@ import {
  * él — ni siquiera quien lo subió. Por eso la pantalla obliga a elegir colección al crear una
  * fuente, en vez de dejarlo como un detalle opcional que se descubre cuando la lista de
  * conclusiones aparece vacía sin explicación.
+ *
+ * ## Nada de lo que hay aquí dentro se traduce
+ *
+ * Los títulos de los documentos, los nombres de las colecciones y de las fuentes, las etiquetas
+ * de Gmail y las carpetas de Drive son de la empresa y de sus sistemas. Un documento llamado
+ * "Contract with Acme Ltd." se llama así aunque la interfaz esté en castellano: es el nombre
+ * con el que lo van a buscar.
  */
 export function KnowledgePage() {
   const { role } = useAuth();
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
   const canAdmin = hasRole(role, 'ADMIN');
 
   const collections = useResource(() =>
@@ -99,14 +110,22 @@ export function KnowledgePage() {
         }}
       />
 
-      <Card title={`Documentos (${items.data?.length ?? 0})`}>
-        {items.loading && <Empty>Cargando…</Empty>}
+      <Card title={t('knowledge.items.title', { count: items.data?.length ?? 0 })}>
+        {items.loading && <Empty>{t('common.loading')}</Empty>}
         <ErrorNote error={items.error} />
         {!items.loading && (items.data?.length ?? 0) === 0 && (
-          <Empty>Aún no hay documentos indexados.</Empty>
+          <Empty>{t('knowledge.items.empty')}</Empty>
         )}
         {(items.data?.length ?? 0) > 0 && (
-          <Table head={['Título', 'Área', 'Estado', 'Confianza', 'Indexado']}>
+          <Table
+            head={[
+              t('knowledge.items.column.title'),
+              t('knowledge.items.column.area'),
+              t('knowledge.items.column.status'),
+              t('knowledge.items.column.confidence'),
+              t('knowledge.items.column.indexed'),
+            ]}
+          >
             {items.data?.map((item) => (
               <tr key={item.id} className="border-b border-gray-100 last:border-0">
                 <td className="px-2 py-2">{item.title}</td>
@@ -114,12 +133,14 @@ export function KnowledgePage() {
                 <td className="px-2 py-2">
                   <span className="flex flex-wrap items-center gap-1">
                     <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
-                      {knowledgeItemStatusLabel(item.status)}
+                      {labels.knowledgeItemStatus(item.status)}
                     </Badge>
                     {item.sourceMissingSince && (
                       // No se ha borrado nada: el documento sigue aquí entero. Lo que ya no
                       // se puede es volver a comprobarlo contra su origen.
-                      <Badge tone="warn">ya no está en su origen</Badge>
+                      <Badge tone="warn">
+                        {t('knowledge.items.missingAtSource')}
+                      </Badge>
                     )}
                   </span>
                 </td>
@@ -151,18 +172,18 @@ function CollectionsCard({
   canCreate: boolean;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState('');
   const action = useAction();
 
   return (
-    <Card title="Colecciones">
+    <Card title={t('knowledge.collections.title')}>
       <p className="mb-3 text-xs text-gray-500">
-        Una colección delimita quién puede ver qué. Todo documento debe estar en
-        alguna: lo que no pertenece a ninguna no lo ve nadie.
+        {t('knowledge.collections.why')}
       </p>
 
       <ErrorNote error={error ?? action.error} />
-      {loading && <Empty>Cargando…</Empty>}
+      {loading && <Empty>{t('common.loading')}</Empty>}
 
       <ul className="mb-3 flex flex-wrap gap-2">
         {collections.map((collection) => (
@@ -171,7 +192,9 @@ function CollectionsCard({
           </li>
         ))}
         {!loading && collections.length === 0 && (
-          <li className="text-sm text-gray-500">Ninguna todavía.</li>
+          <li className="text-sm text-gray-500">
+            {t('knowledge.collections.empty')}
+          </li>
         )}
       </ul>
 
@@ -188,18 +211,18 @@ function CollectionsCard({
           })}
         >
           <div className="min-w-48 flex-1">
-            <Field label="Nueva colección">
+            <Field label={t('knowledge.collections.new')}>
               <input
                 className={inputClass}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ventas"
+                placeholder={t('knowledge.collections.placeholder')}
                 required
               />
             </Field>
           </div>
           <Button type="submit" disabled={action.busy}>
-            Crear
+            {t('common.create')}
           </Button>
         </form>
       )}
@@ -223,17 +246,20 @@ function GoogleDriveCard({
   error: unknown;
   onChanged: () => void;
 }) {
+  const t = useT();
   const action = useAction();
 
   return (
-    <Card title="Google Drive">
+    <Card title={t('knowledge.drive.title')}>
       <ErrorNote error={error ?? action.error} />
 
       {drive ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Badge tone="good">conectado</Badge>
+          <Badge tone="good">{t('knowledge.drive.connected')}</Badge>
           <span className="text-xs text-gray-600">
-            {drive._count?.knowledgeSources ?? 0} carpeta(s) sincronizandose
+            {t('knowledge.drive.folders', {
+              count: drive._count?.knowledgeSources ?? 0,
+            })}
           </span>
           <Button
             variant="danger"
@@ -245,14 +271,13 @@ function GoogleDriveCard({
                 .then(onChanged)
             }
           >
-            Desconectar
+            {t('knowledge.disconnect')}
           </Button>
         </div>
       ) : (
         <>
           <p className="mb-3 text-xs text-gray-500">
-            BusinessBrain pedira permiso de SOLO LECTURA sobre tu Drive. Nunca
-            escribe ni modifica nada, y puedes retirarlo cuando quieras.
+            {t('knowledge.drive.permission')}
           </p>
           <Button
             disabled={action.busy}
@@ -265,7 +290,7 @@ function GoogleDriveCard({
               })
             }
           >
-            Conectar Google Drive
+            {t('knowledge.drive.connect')}
           </Button>
         </>
       )}
@@ -291,21 +316,25 @@ function GmailCard({
   error: unknown;
   onChanged: () => void;
 }) {
+  const t = useT();
   const action = useAction();
   const activa = gmail?.status === 'CONNECTED';
 
   return (
-    <Card title="Gmail">
+    <Card title={t('knowledge.gmail.title')}>
       <ErrorNote error={error ?? action.error} />
 
       {activa ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Badge tone="good">activa</Badge>
+          <Badge tone="good">{t('knowledge.gmail.active')}</Badge>
+          {/* La dirección de correo es de la empresa: se muestra tal cual. */}
           <span className="text-xs text-gray-600">
-            {gmail?.accountLabel ?? 'cuenta no identificada'}
+            {gmail?.accountLabel ?? t('knowledge.gmail.unknownAccount')}
           </span>
           <span className="text-xs text-gray-500">
-            {gmail?._count?.knowledgeSources ?? 0} etiqueta(s) sincronizandose
+            {t('knowledge.gmail.labels', {
+              count: gmail?._count?.knowledgeSources ?? 0,
+            })}
           </span>
           <Button
             variant="danger"
@@ -319,7 +348,7 @@ function GmailCard({
                 .then(onChanged)
             }
           >
-            Desconectar
+            {t('knowledge.disconnect')}
           </Button>
         </div>
       ) : (
@@ -330,17 +359,15 @@ function GmailCard({
               dejaba a la empresa sin ninguna forma de volver a conectar su buzon. */}
           {gmail && (
             <p className="mb-2 flex items-center gap-2 text-xs text-gray-600">
-              <Badge tone="warn">revocada</Badge>
-              El acceso a {gmail.accountLabel ?? 'esa cuenta'} se retiro. Lo que ya
-              se habia leido sigue disponible; para volver a recibir correo nuevo,
-              conectala otra vez.
+              <Badge tone="warn">{t('knowledge.gmail.revoked')}</Badge>
+              {t('knowledge.gmail.revokedExplain', {
+                account:
+                  gmail.accountLabel ?? t('knowledge.gmail.thatAccount'),
+              })}
             </p>
           )}
           <p className="mb-3 text-xs text-gray-500">
-            BusinessBrain pedira permiso de SOLO LECTURA sobre tu correo. Nunca
-            envia ni modifica nada. Solo entrara la etiqueta que elijas, y el
-            correo indexado ira a una coleccion de acceso restringido: conectar
-            Gmail no lo hace visible a toda la organizacion.
+            {t('knowledge.gmail.permission')}
           </p>
           <Button
             disabled={action.busy}
@@ -353,7 +380,7 @@ function GmailCard({
               })
             }
           >
-            Conectar Gmail
+            {t('knowledge.gmail.connect')}
           </Button>
         </>
       )}
@@ -378,6 +405,7 @@ function SourcesCard({
   error: unknown;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [collectionId, setCollectionId] = useState('');
   const [kind, setKind] = useState<
@@ -407,9 +435,9 @@ function SourcesCard({
   );
 
   return (
-    <Card title="Fuentes de conocimiento">
+    <Card title={t('knowledge.sources.title')}>
       <ErrorNote error={error ?? create.error} />
-      {loading && <Empty>Cargando…</Empty>}
+      {loading && <Empty>{t('common.loading')}</Empty>}
 
       <ul className="mb-4 space-y-2">
         {sources.map((source) => (
@@ -417,7 +445,7 @@ function SourcesCard({
         ))}
         {!loading && sources.length === 0 && (
           <li className="text-sm text-gray-500">
-            Ninguna todavía. Crea una para poder subir documentos.
+            {t('knowledge.sources.empty')}
           </li>
         )}
       </ul>
@@ -475,9 +503,9 @@ function SourcesCard({
         })}
       >
         <div className="min-w-40">
-          <Field label="Tipo de fuente">
+          <Field label={t('knowledge.sources.kind')}>
             <select
-              aria-label="Tipo de fuente"
+              aria-label={t('knowledge.sources.kind')}
               className={inputClass}
               value={kind}
               onChange={(e) =>
@@ -490,24 +518,34 @@ function SourcesCard({
                 )
               }
             >
-              <option value="FILE_UPLOAD">Documentos que subo yo</option>
-              <option value="WEBSITE">Una página web</option>
+              <option value="FILE_UPLOAD">
+                {t('knowledge.sources.kind.upload')}
+              </option>
+              <option value="WEBSITE">
+                {t('knowledge.sources.kind.website')}
+              </option>
               {drive && (
-                <option value="GOOGLE_DRIVE">Una carpeta de Google Drive</option>
+                <option value="GOOGLE_DRIVE">
+                  {t('knowledge.sources.kind.drive')}
+                </option>
               )}
-              {gmail && <option value="GMAIL">Una etiqueta de Gmail</option>}
+              {gmail && (
+                <option value="GMAIL">{t('knowledge.sources.kind.gmail')}</option>
+              )}
             </select>
           </Field>
         </div>
         <div className="min-w-48 flex-1">
-          <Field label="Nueva fuente">
+          <Field label={t('knowledge.sources.new')}>
             <input
               className={inputClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={
-                kind === 'WEBSITE' ? 'Política de descuentos' : 'Documentos de ventas'
-              }
+              placeholder={t(
+                kind === 'WEBSITE'
+                  ? 'knowledge.sources.namePlaceholder.website'
+                  : 'knowledge.sources.namePlaceholder.upload',
+              )}
               required
             />
           </Field>
@@ -515,8 +553,8 @@ function SourcesCard({
         {kind === 'GOOGLE_DRIVE' && (
           <div className="min-w-56 flex-1">
             <Field
-              label="Carpeta de Drive"
-              hint="Se leera entera la primera vez; despues, solo lo que cambie."
+              label={t('knowledge.sources.driveFolder')}
+              hint={t('knowledge.sources.driveFolderHint')}
             >
               <select
                 className={inputClass}
@@ -525,7 +563,9 @@ function SourcesCard({
                 required
               >
                 <option value="">
-                  {folders.loading ? 'Cargando carpetas…' : 'Elige una…'}
+                  {folders.loading
+                    ? t('knowledge.sources.loadingFolders')
+                    : t('knowledge.sources.chooseOne')}
                 </option>
                 {folders.data?.map((folder) => (
                   <option key={folder.id} value={folder.id}>
@@ -540,18 +580,20 @@ function SourcesCard({
         {kind === 'GMAIL' && (
           <div className="min-w-56 flex-1">
             <Field
-              label="Etiqueta de Gmail"
-              hint="Solo entrara el correo de esta etiqueta. Nada de fuera de ella se sincroniza."
+              label={t('knowledge.sources.gmailLabel')}
+              hint={t('knowledge.sources.gmailLabelHint')}
             >
               <select
-                aria-label="Etiqueta de Gmail"
+                aria-label={t('knowledge.sources.gmailLabel')}
                 className={inputClass}
                 value={labelId}
                 onChange={(e) => setLabelId(e.target.value)}
                 required
               >
                 <option value="">
-                  {labels.loading ? 'Cargando etiquetas…' : 'Elige una…'}
+                  {labels.loading
+                    ? t('knowledge.sources.loadingLabels')
+                    : t('knowledge.sources.chooseOne')}
                 </option>
                 {labels.data?.map((label) => (
                   <option key={label.id} value={label.id}>
@@ -566,15 +608,15 @@ function SourcesCard({
         {kind === 'WEBSITE' && (
           <div className="min-w-64 flex-1">
             <Field
-              label="Dirección web"
-              hint="Debe ser accesible desde internet. BusinessBrain la leerá y la volverá a leer cuando lo pidas."
+              label={t('knowledge.sources.url')}
+              hint={t('knowledge.sources.urlHint')}
             >
               <input
                 type="url"
                 className={inputClass}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://ejemplo.com/politica-de-descuentos"
+                placeholder={t('knowledge.sources.urlPlaceholder')}
                 required
               />
             </Field>
@@ -582,12 +624,12 @@ function SourcesCard({
         )}
         <div className="min-w-48">
           <Field
-            label="Colección de destino"
-            hint={
+            label={t('knowledge.sources.collection')}
+            hint={t(
               kind === 'GMAIL'
-                ? 'El correo exige una coleccion RESTRINGIDA: elige una a la que no tenga acceso toda la organizacion.'
-                : 'Sin colección, lo que subas no lo verá nadie.'
-            }
+                ? 'knowledge.sources.collectionHintGmail'
+                : 'knowledge.sources.collectionHint',
+            )}
           >
             <select
               className={inputClass}
@@ -595,7 +637,7 @@ function SourcesCard({
               onChange={(e) => setCollectionId(e.target.value)}
               required
             >
-              <option value="">Elige una…</option>
+              <option value="">{t('knowledge.sources.chooseOne')}</option>
               {collections.map((collection) => (
                 <option key={collection.id} value={collection.id}>
                   {collection.name}
@@ -605,7 +647,7 @@ function SourcesCard({
           </Field>
         </div>
         <Button type="submit" disabled={create.busy || collections.length === 0}>
-          Crear fuente
+          {t('knowledge.sources.create')}
         </Button>
       </form>
     </Card>
@@ -643,9 +685,18 @@ function SourceRow({
   source: KnowledgeSource;
   onSynced: () => void;
 }) {
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
   const fileInput = useRef<HTMLInputElement>(null);
   const action = useAction();
-  const [resultado, setResultado] = useState<string | null>(null);
+  // Se guarda la CLAVE y el nombre del fichero, no la frase ya montada: si la persona cambia
+  // de idioma con el mensaje en pantalla, el mensaje cambia con ella.
+  const [resultado, setResultado] = useState<{
+    key: TranslationKey;
+    file: string;
+    ok: boolean;
+  } | null>(null);
 
   // La lista de formatos la publica el backend, que es quien valida. Tenerla aquí a mano fue
   // exactamente el fallo anterior: el selector ofrecía PDF y Word y la ingesta los rechazaba.
@@ -661,17 +712,14 @@ function SourceRow({
       form.append('file', file);
 
       setResultado(null);
-      const response = await fetch(
-        `/api/knowledge-sources/${source.id}/sync`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.accessToken ?? ''}`,
-            'x-org-id': session.organizationId ?? '',
-          },
-          body: form,
+      const response = await fetch(`/api/knowledge-sources/${source.id}/sync`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.accessToken ?? ''}`,
+          'x-org-id': session.organizationId ?? '',
         },
-      );
+        body: form,
+      });
       const body = (await response.json().catch(() => null)) as {
         error?: unknown;
         data?: { stats?: { itemsCreated?: number; itemsFailed?: number } };
@@ -679,21 +727,23 @@ function SourceRow({
 
       if (!response.ok) {
         throw new Error(
-          readableError(body?.error) ??
-            'No hemos podido subir este documento. Revísalo y vuelve a intentarlo.',
+          readableError(body?.error) ?? t('knowledge.upload.failed'),
         );
       }
 
       // El resultado por documento, en la pantalla. Una ingesta que termina "bien" con cero
       // documentos creados es justo el caso en el que la persona cree que ha funcionado.
       const stats = body?.data?.stats;
-      setResultado(
-        (stats?.itemsFailed ?? 0) > 0
-          ? `No hemos podido leer \${file.name}\. Revísalo y vuelve a intentarlo.`
+      const fallo = (stats?.itemsFailed ?? 0) > 0;
+      setResultado({
+        key: fallo
+          ? 'knowledge.upload.unreadable'
           : (stats?.itemsCreated ?? 0) > 0
-            ? `\${file.name}\ indexado y listo para preguntar.`
-            : `\${file.name}\ ya estaba: no se ha duplicado.`,
-      );
+            ? 'knowledge.upload.indexed'
+            : 'knowledge.upload.duplicate',
+        file: file.name,
+        ok: !fallo,
+      });
       onSynced();
     });
 
@@ -701,31 +751,38 @@ function SourceRow({
     <li className="flex flex-wrap items-center gap-2 rounded border border-gray-200 px-3 py-2">
       <span className="text-sm font-medium">{source.name}</span>
       <Badge tone={source.status === 'CONNECTED' ? 'good' : 'neutral'}>
-        {connectionStatusLabel(source.status)}
+        {labels.connectionStatus(source.status)}
       </Badge>
       {source.syncScope && (
         // QUE se esta sincronizando: la etiqueta, la carpeta o la direccion. Sin esto, dos
-        // fuentes del mismo tipo son indistinguibles.
+        // fuentes del mismo tipo son indistinguibles. Es un nombre de sus sistemas: sin tocar.
         <span className="text-xs text-gray-600">{source.syncScope}</span>
       )}
       <span className="text-xs text-gray-500">
-        última sincronización {formatDate(source.lastSyncedAt)}
+        {t('knowledge.source.lastSync', {
+          date: formatDate(source.lastSyncedAt),
+        })}
       </span>
       {source.lastSync?.stats && (
         // Lo que trajo de verdad. "Sincronizado" no distingue traer 40 mensajes de ninguno.
         <span className="text-xs text-gray-600">
-          {source.lastSync.stats.itemsCreated ?? 0} nuevo(s),{' '}
-          {source.lastSync.stats.itemsUpdated ?? 0} actualizado(s)
+          {t('knowledge.source.stats', {
+            created: source.lastSync.stats.itemsCreated ?? 0,
+            updated: source.lastSync.stats.itemsUpdated ?? 0,
+          })}
           {(source.lastSync.stats.itemsFailed ?? 0) > 0 &&
-            `, ${source.lastSync.stats.itemsFailed} con error`}
+            t('knowledge.source.statsFailed', {
+              failed: source.lastSync.stats.itemsFailed ?? 0,
+            })}
         </span>
       )}
       {(source.lastSync?.stats?.itemsNotRetrievable ?? 0) > 0 && (
         // El documento está aquí y se ve en la lista, pero NO aparece al preguntar. Callarlo
         // dejaría a la persona creyendo que el sistema ignoró su documento.
         <span className="text-xs text-amber-700">
-          {source.lastSync?.stats?.itemsNotRetrievable} sin indexar para búsqueda:
-          vuelve a sincronizar
+          {t('knowledge.source.notRetrievable', {
+            count: source.lastSync?.stats?.itemsNotRetrievable ?? 0,
+          })}
         </span>
       )}
       {source.lastError && (
@@ -734,9 +791,9 @@ function SourceRow({
 
       {resultado && (
         <span
-          className={`text-xs ${resultado.startsWith('No hemos') ? 'text-amber-700' : 'text-green-700'}`}
+          className={`text-xs ${resultado.ok ? 'text-green-700' : 'text-amber-700'}`}
         >
-          {resultado}
+          {t(resultado.key, { file: resultado.file })}
         </span>
       )}
 
@@ -762,10 +819,10 @@ function SourceRow({
             }
           >
             {action.busy
-              ? 'Sincronizando…'
+              ? t('knowledge.source.syncing')
               : source.type === 'WEBSITE'
-                ? 'Leer la página'
-                : 'Sincronizar'}
+                ? t('knowledge.source.readPage')
+                : t('knowledge.source.sync')}
           </Button>
         ) : (
           <>
@@ -785,7 +842,9 @@ function SourceRow({
               disabled={action.busy}
               onClick={() => fileInput.current?.click()}
             >
-              {action.busy ? 'Subiendo…' : 'Subir documento'}
+              {action.busy
+                ? t('knowledge.source.uploading')
+                : t('knowledge.source.upload')}
             </Button>
           </>
         )}

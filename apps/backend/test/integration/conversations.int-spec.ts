@@ -297,6 +297,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿Cuántos días de vacaciones tengo?',
+        locale: 'es',
       });
 
       expect(result.citations).toHaveLength(1);
@@ -340,6 +341,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿Qué problemas tenemos?',
+        locale: 'es',
       });
 
       expect(result.insightsUsed).toHaveLength(1);
@@ -360,6 +362,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿Cuál es la política de teletrabajo?',
+        locale: 'es',
       });
 
       expect(complete).not.toHaveBeenCalled();
@@ -380,6 +383,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'pregunta',
+        locale: 'es',
       });
 
       expect(result.content).toMatch(/no he podido generar/i);
@@ -402,12 +406,14 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'primera pregunta',
+        locale: 'es',
       });
       await sendMessage.execute({
         organizationId: org.orgId,
         userId: org.userId,
         conversationId: conversation.id,
         content: 'segunda pregunta',
+        locale: 'es',
       });
 
       const secondCall = complete.mock.calls[1][0];
@@ -429,6 +435,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: theirs.id,
           content: 'intruso',
+          locale: 'es',
         }),
       ).rejects.toThrow();
 
@@ -450,6 +457,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: '¿Cuántos días tengo?',
+          locale: 'es',
         }),
       );
 
@@ -475,6 +483,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: 'pregunta',
+          locale: 'es',
         }),
       );
 
@@ -503,6 +512,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: 'pregunta',
+          locale: 'es',
         }),
       );
 
@@ -532,6 +542,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'la misma pregunta',
+        locale: 'es',
       });
 
       const otra = await conversations.create({
@@ -544,6 +555,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: otra.id,
           content: 'la misma pregunta',
+          locale: 'es',
         }),
       );
 
@@ -570,6 +582,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: 'pregunta',
+          locale: 'es',
         }),
       );
 
@@ -594,6 +607,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: 'algo no indexado',
+          locale: 'es',
         }),
       );
 
@@ -618,6 +632,7 @@ describe('Conversations (integración)', () => {
             userId: org.userId,
             conversationId: theirs.id,
             content: 'intruso',
+            locale: 'es',
           }),
         ),
       ).rejects.toThrow();
@@ -695,6 +710,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(complete.mock.calls[0][0].systemPrompt).toContain(
@@ -718,6 +734,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(resolvedProfileIds).toEqual([perfil.id]);
@@ -734,6 +751,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(complete.mock.calls[0][0].systemPrompt).toContain('nóminas');
@@ -763,6 +781,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿qué pasa en la empresa?',
+        locale: 'es',
       });
 
       // El agente está acotado a Ventas: una conclusión de RR. HH. no le llega, aunque la
@@ -792,6 +811,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: conversation.id,
           content: 'hola',
+          locale: 'es',
         }),
       ).rejects.toThrow(/alcance de conocimiento/i);
     });
@@ -823,6 +843,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿qué recuerdas?',
+        locale: 'es',
       });
 
       expect(complete.mock.calls[0][0].systemPrompt).not.toContain(
@@ -849,6 +870,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'la misma pregunta',
+        locale: 'es',
       });
       await collect(
         streamMessage.execute({
@@ -856,6 +878,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: otra.id,
           content: 'la misma pregunta',
+          locale: 'es',
         }),
       );
 
@@ -883,6 +906,7 @@ describe('Conversations (integración)', () => {
           userId: org.userId,
           conversationId: suya.id,
           content: 'intruso',
+          locale: 'es',
         }),
       ).rejects.toThrow();
 
@@ -912,6 +936,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // Prompt genérico de plataforma, comprensión sin acotar por agente y perfil de la
@@ -970,6 +995,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'contáctame por email',
+        locale: 'es',
       });
 
       expect(result.memoriesRecorded).toBe(1);
@@ -995,6 +1021,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(result.content).toBe('Anotado.');
@@ -1017,6 +1044,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'primer turno',
+        locale: 'es',
       });
 
       // Segundo turno: sin anotar nada nuevo.
@@ -1026,6 +1054,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'segundo turno',
+        locale: 'es',
       });
 
       // El ciclo completo: se escribió, se recuperó y entró en el prompt como DATOS.
@@ -1044,6 +1073,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // Guardar recuerdos que nunca se recuperarán acumula datos personales sin propósito.
@@ -1062,6 +1092,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(complete.mock.calls[0][0].systemPrompt).not.toContain('BB_MEMORY');
@@ -1077,6 +1108,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // Otra persona del MISMO tenant, con el MISMO agente.
@@ -1106,6 +1138,7 @@ describe('Conversations (integración)', () => {
         userId: otro.id,
         conversationId: suyaConversacion.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // Lo que el agente aprendió de una persona NO aflora en la conversación de otra.
@@ -1134,6 +1167,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'llámame',
+        locale: 'es',
       })) {
         if (event.type === 'token') emitted.push(event.text);
       }
@@ -1164,6 +1198,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(result.memoriesRecorded).toBe(0);
@@ -1230,6 +1265,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿cómo van los descuentos?',
+        locale: 'es',
       });
 
       // Se ejecutó de verdad, atravesando el gate.
@@ -1258,6 +1294,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       const systemPrompt = complete.mock.calls[0][0].systemPrompt;
@@ -1277,6 +1314,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(result.toolInvocations[0]).toMatchObject({
@@ -1310,6 +1348,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'manda un correo',
+        locale: 'es',
       });
 
       // El techo de permisos de la Fase 5 sigue siendo READ_ONLY.
@@ -1328,6 +1367,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'lanza la automatización',
+        locale: 'es',
       });
 
       expect(result.toolInvocations[0].executed).toBe(false);
@@ -1345,6 +1385,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       expect(result.toolInvocations[0]).toMatchObject({
@@ -1365,6 +1406,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'consulta la base de datos',
+        locale: 'es',
       });
 
       // Decisión congelada de la Fase 5: no hay SQL libre.
@@ -1400,6 +1442,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'insiste',
+        locale: 'es',
       });
 
       const executed = result.toolInvocations.filter((i) => i.executed);
@@ -1426,6 +1469,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'bucle',
+        locale: 'es',
       });
 
       // Techo absoluto del bucle, independiente del guardrail: acota coste y latencia.
@@ -1446,6 +1490,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'busca en todas las colecciones de la empresa',
+        locale: 'es',
       });
 
       // La búsqueda se acotó a la colección del agente: el alcance viene de la
@@ -1480,6 +1525,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: '¿cómo van los descuentos?',
+        locale: 'es',
       })) {
         if (event.type === 'token') emitted.push(event.text);
       }
@@ -1514,6 +1560,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'resume el documento',
+        locale: 'es',
       });
 
       expect(result.toolInvocations).toEqual([]);
@@ -1540,6 +1587,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // La seguridad no depende de que el parser acierte: depende del gate.
@@ -1568,6 +1616,7 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       const stored = await prisma.agentMemory.findMany({
@@ -1590,11 +1639,166 @@ describe('Conversations (integración)', () => {
         userId: org.userId,
         conversationId: conversation.id,
         content: 'hola',
+        locale: 'es',
       });
 
       // El camino de Fase 4 no adquiere herramientas por la puerta de atrás.
       expect(result.toolInvocations).toEqual([]);
       expect(complete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * El idioma de la INTERFAZ y el de los DOCUMENTOS son independientes.
+   *
+   * Es el caso normal de una PYME: contratos en castellano, facturas de proveedor en inglés, y
+   * alguien que quiere que le contesten en su idioma. Lo que se comprueba aquí es lo único que
+   * está en nuestra mano: que se PIDE la respuesta en el idioma correcto, y que el contenido de
+   * la empresa llega al modelo sin tocar.
+   *
+   * Que el modelo obedezca no lo puede garantizar ninguna prueba —es un modelo— pero que no se
+   * le pida bien, o que le llegue el documento alterado, sí serían fallos nuestros.
+   */
+  describe('idioma de la respuesta frente al de los documentos', () => {
+    const documento = (id: string, title: string, content: string) => ({
+      chunkId: id,
+      content,
+      confidenceScore: 0.85,
+      citation: {
+        knowledgeItemId: `item-${id}`,
+        title,
+        chunkIndex: 0,
+        heading: title,
+        headingPath: [title],
+      },
+    });
+
+    const CONTRATO_INGLES =
+      'The maximum authorised discount for the wholesale channel is fifteen per cent.';
+    const CONTRATO_ESPANOL =
+      'El descuento máximo autorizado para el canal mayorista es del quince por ciento.';
+
+    const preguntar = async (
+      locale: 'es' | 'en',
+      pregunta: string,
+      fragmento: ReturnType<typeof documento>,
+    ) => {
+      retrievedChunks = [fragmento];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      return sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: pregunta,
+        locale,
+      });
+    };
+
+    /** El prompt que se le mandó al modelo en la última llamada. */
+    const ultimoPrompt = () => complete.mock.calls.at(-1)![0].systemPrompt;
+
+    it('CRÍTICO: usuario español + documento inglés → se pide la respuesta en español', async () => {
+      const resultado = await preguntar(
+        'es',
+        '¿Cuál es el descuento máximo?',
+        documento('c1', 'Wholesale Agreement 2026', CONTRATO_INGLES),
+      );
+
+      expect(ultimoPrompt()).toContain('Responde en español');
+      // El documento viaja ENTERO y en su idioma: traducirlo antes de razonar sobre él sería
+      // razonar sobre algo que la empresa no escribió.
+      expect(ultimoPrompt()).toContain(CONTRATO_INGLES);
+      // Y la cita conserva el nombre original, que es con el que van a buscar el documento.
+      expect(resultado.citations[0].label).toContain(
+        'Wholesale Agreement 2026',
+      );
+    });
+
+    it('CRÍTICO: usuario inglés + documento español → se pide la respuesta en inglés', async () => {
+      const resultado = await preguntar(
+        'en',
+        'What is the maximum discount?',
+        documento('c2', 'Contrato mayorista 2026', CONTRATO_ESPANOL),
+      );
+
+      expect(ultimoPrompt()).toContain('Write your answer in English');
+      expect(ultimoPrompt()).toContain(CONTRATO_ESPANOL);
+      expect(resultado.citations[0].label).toContain('Contrato mayorista 2026');
+    });
+
+    it('usuario español + documento español', async () => {
+      await preguntar(
+        'es',
+        '¿Cuál es el descuento máximo?',
+        documento('c3', 'Contrato mayorista 2026', CONTRATO_ESPANOL),
+      );
+
+      expect(ultimoPrompt()).toContain('Responde en español');
+      expect(ultimoPrompt()).toContain(CONTRATO_ESPANOL);
+    });
+
+    it('usuario inglés + documento inglés', async () => {
+      await preguntar(
+        'en',
+        'What is the maximum discount?',
+        documento('c4', 'Wholesale Agreement 2026', CONTRATO_INGLES),
+      );
+
+      expect(ultimoPrompt()).toContain('Write your answer in English');
+      expect(ultimoPrompt()).toContain(CONTRATO_INGLES);
+    });
+
+    it('CRÍTICO: nunca se le pide al modelo que traduzca lo que cita', async () => {
+      await preguntar(
+        'en',
+        'What is the maximum discount?',
+        documento('c5', 'Contrato mayorista 2026', CONTRATO_ESPANOL),
+      );
+
+      // Un fragmento traducido dentro de una respuesta deja de ser evidencia: quien lo lee no
+      // puede ir al documento y encontrarlo igual.
+      expect(ultimoPrompt()).toMatch(/NO TRADUZCAS/);
+      expect(ultimoPrompt()).toMatch(/documento original/i);
+    });
+
+    it('CRÍTICO: el idioma es de la PERSONA, no de la organización', async () => {
+      // Dos personas de la misma empresa, el mismo documento, dos idiomas. Si el idioma
+      // colgara de la organización, una gestoría con un cliente francés no podría trabajar.
+      const fragmento = documento('c6', 'Contrato mayorista', CONTRATO_ESPANOL);
+
+      await preguntar('es', '¿Descuento?', fragmento);
+      const enEspanol = ultimoPrompt();
+      await preguntar('en', 'Discount?', fragmento);
+      const enIngles = ultimoPrompt();
+
+      expect(enEspanol).toContain('Responde en español');
+      expect(enIngles).toContain('Write your answer in English');
+      // El material recuperado es idéntico: lo único que cambia es en qué idioma se contesta.
+      expect(enEspanol).toContain(CONTRATO_ESPANOL);
+      expect(enIngles).toContain(CONTRATO_ESPANOL);
+    });
+
+    it('sin material, la respuesta que escribimos nosotros también va en su idioma', async () => {
+      retrievedChunks = [];
+      retrievedInsights = [];
+      const conversation = await conversations.create({
+        organizationId: org.orgId,
+        userId: org.userId,
+      });
+
+      const resultado = await sendMessage.execute({
+        organizationId: org.orgId,
+        userId: org.userId,
+        conversationId: conversation.id,
+        content: 'What do we know about anything?',
+        locale: 'en',
+      });
+
+      expect(resultado.content).toMatch(/indexed knowledge/i);
     });
   });
 });

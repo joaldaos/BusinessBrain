@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AppConfig } from '../config/configuration';
 import type { RegisterDto } from './dto/register.dto';
 import type { User } from '@businessbrain/database';
+import type { Locale } from '../common/i18n/locales';
 
 const BCRYPT_ROUNDS = 10;
 const REFRESH_TOKEN_BYTES = 32;
@@ -118,6 +119,22 @@ export class AuthService {
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Guarda el idioma elegido.
+   *
+   * Vive en el usuario y no en la organización: dos personas de la misma empresa pueden
+   * querer el producto en idiomas distintos, y eso no es un caso raro — una gestoría con un
+   * cliente francés tiene exactamente ese problema.
+   */
+  async setLocale(userId: string, locale: Locale): Promise<{ locale: Locale }> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { locale },
+    });
+
+    return { locale };
   }
 
   toPublicUser(user: User): PublicUser {

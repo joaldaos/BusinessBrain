@@ -5,6 +5,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AppConfig } from '../../config/configuration';
 import type { RequestUser } from '../../common/types/authenticated-request';
+import { DEFAULT_LOCALE, isSupportedLocale } from '../../common/i18n/locales';
 
 interface JwtPayload {
   sub: string;
@@ -46,6 +47,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: user.email,
       name: user.name,
       platformRole: user.platformRole,
+      // Se resuelve AQUÍ, una sola vez, en vez de dejar que cada consumidor decida qué hacer
+      // con un nulo. Un idioma sin resolver acabaría con alguna pantalla —o el chat— cayendo
+      // a un idioma distinto del resto.
+      locale: isSupportedLocale(user.locale) ? user.locale : DEFAULT_LOCALE,
       memberships: user.memberships,
     };
   }

@@ -10,6 +10,7 @@ import {
   useAction,
   useResource,
 } from './ui';
+import { useT, type TranslationKey } from '../i18n';
 
 /**
  * Qué sabemos de esta empresa, cómo se lo lleva y cómo lo borra.
@@ -20,17 +21,20 @@ import {
  * contratos. Remitirles a un documento en otra página es la respuesta de alguien que preferiría
  * no darla. Está en la misma pantalla donde se configura la IA porque es la misma decisión.
  *
- * ## El aviso lo redacta el servidor
+ * ## El servidor declara QUÉ sale; esta pantalla lo dice en el idioma de quien mira
  *
- * La lista de qué sale hacia el proveedor no está escrita aquí: la sirve el backend, donde una
- * prueba estructural comprueba que no hay ninguna llamada al modelo sin declarar. Escribirla en
- * esta pantalla habría bastado hoy y se habría quedado corta en cuanto alguien añadiera una
- * función — y un aviso de privacidad desactualizado afirma algo falso.
+ * La lista de salidas no está escrita aquí: la declara el backend, donde una prueba estructural
+ * comprueba que no hay ninguna llamada al modelo sin declarar. Lo que sí está aquí es la
+ * traducción, porque el servidor no puede saber en qué idioma se le habla a esta persona.
+ *
+ * Si alguna vez llegara una salida sin traducir —porque se añadió una y nadie tradujo el
+ * texto— se muestra la frase que manda el servidor. Un aviso en otro idioma es feo; un aviso
+ * incompleto sería falso.
  */
 interface PrivacyNotice {
-  aiProvider: { callSite: string; what: string; trigger: string }[];
-  stored: { what: string; detail: string }[];
-  pending: string[];
+  aiProvider: { callSite: string; code: string; what: string; trigger: string }[];
+  stored: { code: string; what: string; detail: string }[];
+  pending: { code: string; text: string }[];
 }
 
 export function PrivacyCard({
@@ -42,22 +46,25 @@ export function PrivacyCard({
   organizationName: string | null;
   isOwner: boolean;
 }) {
+  const t = useT();
   const notice = useResource(() => api<PrivacyNotice>('/privacy/notice'));
 
+  /** Traduce por código, y si no hay traducción usa lo que mandó el servidor. */
+  const traducir = (clave: string, respaldo: string) => {
+    const texto = t(clave as TranslationKey);
+    return texto === clave ? respaldo : texto;
+  };
+
   return (
-    <Card title="Tus datos y la inteligencia artificial">
+    <Card title={t('privacy.title')}>
       <ErrorNote error={notice.error} />
 
       {notice.data && (
         <>
           <section className="mb-4">
-            <p className="text-sm font-medium">
-              Qué sale hacia el proveedor de IA que has configurado
-            </p>
+            <p className="text-sm font-medium">{t('privacy.outgoing.title')}</p>
             <p className="mt-1 text-xs text-gray-600">
-              Para leer tus documentos y responder tus preguntas, BusinessBrain
-              envía el texto necesario al proveedor de IA. Esto es exactamente lo
-              que sale y cuándo:
+              {t('privacy.outgoing.explain')}
             </p>
             <ul className="mt-2 space-y-1.5 text-xs text-gray-700">
               {notice.data.aiProvider.map((flujo) => (
@@ -66,8 +73,13 @@ export function PrivacyCard({
                     →
                   </span>
                   <span>
-                    {flujo.what}{' '}
-                    <span className="text-gray-500">{flujo.trigger}</span>
+                    {traducir(`privacy.flow.${flujo.code}.what`, flujo.what)}{' '}
+                    <span className="text-gray-500">
+                      {traducir(
+                        `privacy.flow.${flujo.code}.trigger`,
+                        flujo.trigger,
+                      )}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -75,12 +87,19 @@ export function PrivacyCard({
           </section>
 
           <section className="mb-4">
-            <p className="text-sm font-medium">Qué guarda BusinessBrain</p>
+            <p className="text-sm font-medium">{t('privacy.stored.title')}</p>
             <ul className="mt-2 space-y-1.5 text-xs text-gray-700">
               {notice.data.stored.map((dato) => (
-                <li key={dato.what}>
-                  <span className="font-medium">{dato.what}.</span>{' '}
-                  <span className="text-gray-600">{dato.detail}</span>
+                <li key={dato.code}>
+                  <span className="font-medium">
+                    {traducir(`privacy.stored.${dato.code}.what`, dato.what)}.
+                  </span>{' '}
+                  <span className="text-gray-600">
+                    {traducir(
+                      `privacy.stored.${dato.code}.detail`,
+                      dato.detail,
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -91,11 +110,13 @@ export function PrivacyCard({
               que recibe "todavía no, y lo sabemos". */}
           <section className="mb-4 rounded border border-amber-200 bg-amber-50 p-3">
             <p className="text-xs font-medium text-amber-900">
-              Todavía pendiente
+              {t('privacy.pending.title')}
             </p>
             <ul className="mt-1 space-y-1 text-xs text-amber-900">
               {notice.data.pending.map((punto) => (
-                <li key={punto}>{punto}</li>
+                <li key={punto.code}>
+                  {traducir(`privacy.pending.${punto.code}`, punto.text)}
+                </li>
               ))}
             </ul>
           </section>
@@ -126,16 +147,13 @@ function ExportSection({
   organizationId: string | null;
   organizationName: string | null;
 }) {
+  const t = useT();
   const action = useAction();
 
   return (
     <section className="mb-4 border-t border-gray-100 pt-3">
-      <p className="text-sm font-medium">Llévate una copia</p>
-      <p className="mt-1 text-xs text-gray-600">
-        Un fichero con tus documentos, tus conversaciones, tus conclusiones y tus
-        recomendaciones. No incluye tu clave del proveedor de IA ni ninguna
-        credencial.
-      </p>
+      <p className="text-sm font-medium">{t('privacy.export.title')}</p>
+      <p className="mt-1 text-xs text-gray-600">{t('privacy.export.explain')}</p>
 
       <ErrorNote error={action.error} />
 
@@ -163,7 +181,7 @@ function ExportSection({
           })
         }
       >
-        {action.busy ? 'Preparando…' : 'Descargar mis datos'}
+        {action.busy ? t('privacy.export.busy') : t('privacy.export.button')}
       </Button>
     </section>
   );
@@ -183,6 +201,7 @@ function EraseSection({
   organizationId: string | null;
   organizationName: string | null;
 }) {
+  const t = useT();
   const { logout } = useAuth();
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState('');
@@ -190,13 +209,10 @@ function EraseSection({
 
   return (
     <section className="border-t border-gray-100 pt-3">
-      <p className="text-sm font-medium text-red-800">Borrar todo</p>
-      <p className="mt-1 text-xs text-gray-600">
-        Se borran los documentos, las conversaciones, las conclusiones, las
-        recomendaciones y la configuración de esta empresa. No se puede deshacer.
-        Las cuentas de las personas no se borran: pueden pertenecer a otra
-        empresa.
+      <p className="text-sm font-medium text-red-800">
+        {t('privacy.erase.title')}
       </p>
+      <p className="mt-1 text-xs text-gray-600">{t('privacy.erase.explain')}</p>
 
       {!abierto ? (
         <Button
@@ -204,7 +220,7 @@ function EraseSection({
           variant="danger"
           onClick={() => setAbierto(true)}
         >
-          Quiero borrar los datos de esta empresa
+          {t('privacy.erase.open')}
         </Button>
       ) : (
         <form
@@ -220,8 +236,10 @@ function EraseSection({
           })}
         >
           <Field
-            label={`Escribe «${organizationName ?? ''}» para confirmar`}
-            hint="Exactamente igual, incluidas mayúsculas y acentos."
+            label={t('privacy.erase.confirmLabel', {
+              name: organizationName ?? '',
+            })}
+            hint={t('privacy.erase.confirmHint')}
           >
             <input
               className={inputClass}
@@ -235,7 +253,9 @@ function EraseSection({
 
           <div className="flex gap-2">
             <Button type="submit" variant="danger" disabled={action.busy}>
-              {action.busy ? 'Borrando…' : 'Borrar definitivamente'}
+              {action.busy
+                ? t('privacy.erase.busy')
+                : t('privacy.erase.submit')}
             </Button>
             <Button
               type="button"
@@ -245,7 +265,7 @@ function EraseSection({
                 setNombre('');
               }}
             >
-              Cancelar
+              {t('common.cancel')}
             </Button>
           </div>
         </form>

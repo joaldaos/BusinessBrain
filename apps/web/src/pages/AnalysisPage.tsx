@@ -1,4 +1,3 @@
-import { runStatusLabel } from '../api/labels';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -11,10 +10,12 @@ import {
   Empty,
   ErrorNote,
   Table,
-  formatDate,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Análisis: pedirle al motor que razone ahora.
@@ -25,6 +26,9 @@ import {
  */
 export function AnalysisPage() {
   const { role } = useAuth();
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
   const canTrigger = hasRole(role, 'ADMIN');
 
   const runs = useResource(() =>
@@ -35,11 +39,8 @@ export function AnalysisPage() {
 
   if (!canTrigger) {
     return (
-      <Card title="Análisis">
-        <Empty>
-          Lanzar y consultar análisis requiere permisos de administración en
-          esta organización.
-        </Empty>
+      <Card title={t('analysis.title')}>
+        <Empty>{t('analysis.needsAdmin')}</Empty>
       </Card>
     );
   }
@@ -47,7 +48,7 @@ export function AnalysisPage() {
   return (
     <>
       <Card
-        title="Lanzar un análisis"
+        title={t('analysis.run.title')}
         actions={
           <Button
             disabled={trigger.busy}
@@ -63,25 +64,23 @@ export function AnalysisPage() {
                 .then(runs.reload)
             }
           >
-            {trigger.busy ? 'Analizando…' : 'Analizar ahora'}
+            {trigger.busy ? t('analysis.run.busy') : t('analysis.run.button')}
           </Button>
         }
       >
-        <p className="text-xs text-gray-500">
-          El motor recorre el conocimiento indexado, deriva conclusiones y las
-          reconcilia con lo que ya creía. Si una conclusión cambia, la anterior
-          no se borra: queda como versión superada.
-        </p>
+        <p className="text-xs text-gray-500">{t('analysis.run.explain')}</p>
 
         <ErrorNote error={trigger.error} />
 
         {last && (
           <p className="mt-3 rounded bg-gray-50 px-3 py-2 text-sm">
-            {last.insightsCreated ?? 0} conclusión(es) nueva(s) ·{' '}
-            {last.insightsAlreadyKnown ?? 0} ya conocida(s) ·{' '}
-            {last.candidatesGenerated ?? 0} candidato(s) evaluado(s).{' '}
+            {t('analysis.result.summary', {
+              created: last.insightsCreated ?? 0,
+              known: last.insightsAlreadyKnown ?? 0,
+              candidates: last.candidatesGenerated ?? 0,
+            })}{' '}
             <Link className="text-blue-700 underline" to="/insights">
-              Ver comprensión
+              {t('analysis.result.seeInsights')}
             </Link>
             {(last.recommendationsProposed ?? 0) > 0 && (
               // La recomendacion es el resultado natural del analisis, no una pantalla
@@ -92,7 +91,9 @@ export function AnalysisPage() {
                   className="font-medium text-blue-700 underline"
                   to="/recomendaciones"
                 >
-                  {last.recommendationsProposed} recomendación(es) para revisar
+                  {t('analysis.result.proposals', {
+                    count: last.recommendationsProposed ?? 0,
+                  })}
                 </Link>
               </>
             )}
@@ -100,15 +101,22 @@ export function AnalysisPage() {
         )}
       </Card>
 
-      <Card title="Ejecuciones">
+      <Card title={t('analysis.runs.title')}>
         <ErrorNote error={runs.error} />
-        {runs.loading && <Empty>Cargando…</Empty>}
+        {runs.loading && <Empty>{t('common.loading')}</Empty>}
         {!runs.loading && (runs.data?.length ?? 0) === 0 && (
-          <Empty>Todavía no se ha ejecutado ningún análisis.</Empty>
+          <Empty>{t('analysis.runs.empty')}</Empty>
         )}
 
         {(runs.data?.length ?? 0) > 0 && (
-          <Table head={['Estado', 'Origen', 'Inicio', 'Fin']}>
+          <Table
+            head={[
+              t('analysis.runs.column.status'),
+              t('analysis.runs.column.origin'),
+              t('analysis.runs.column.started'),
+              t('analysis.runs.column.finished'),
+            ]}
+          >
             {runs.data?.map((run) => (
               <tr
                 key={run.id ?? run.analysisRunId}
@@ -116,13 +124,13 @@ export function AnalysisPage() {
               >
                 <td className="px-2 py-2">
                   <Badge tone={run.status === 'SUCCESS' ? 'good' : 'warn'}>
-                    {runStatusLabel(run.status)}
+                    {labels.runStatus(run.status)}
                   </Badge>
                 </td>
                 <td className="px-2 py-2 text-xs text-gray-600">
                   {run.trigger === 'PERIODIC_SWEEP'
-                    ? 'automático'
-                    : 'manual'}
+                    ? t('analysis.trigger.automatic')
+                    : t('analysis.trigger.manual')}
                 </td>
                 <td className="px-2 py-2 text-xs text-gray-600">
                   {formatDate(run.startedAt ?? run.createdAt)}

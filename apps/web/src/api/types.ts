@@ -29,6 +29,13 @@ export interface CurrentUser {
   email: string;
   name: string;
   platformRole: string;
+  /**
+   * Idioma en el que quiere que se le hable.
+   *
+   * Llega siempre resuelto: el backend cae al idioma por defecto si la persona no ha elegido
+   * ninguno, así que aquí nunca hay que decidir qué hacer con un vacío.
+   */
+  locale: string;
   memberships: { organizationId: string; role: MembershipRole }[];
 }
 
@@ -315,6 +322,18 @@ export interface AiConfiguration {
   provider: string | null;
   modelName: string | null;
   hasOwnKey: boolean;
+  /**
+   * Qué situación es esta, sin depender de un idioma.
+   *
+   * La frase la escribe la interfaz, que es quien sabe en qué idioma se le habla a esta
+   * persona. `explanation` sigue llegando en castellano para consumidores que no son la
+   * interfaz, pero no es lo que se pinta.
+   */
+  explanationCode:
+    | 'OWN_KEY'
+    | 'OWN_PROFILE_PLATFORM_KEY'
+    | 'PLATFORM'
+    | 'NOT_CONFIGURED';
   explanation: string;
 }
 

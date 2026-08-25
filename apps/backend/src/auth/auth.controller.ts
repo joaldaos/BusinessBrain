@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   HttpStatus,
   Post,
   Req,
@@ -22,6 +23,8 @@ import {
 } from './dto/password-reset.dto';
 import { PasswordResetService } from './application/password-reset.service';
 import { RateLimited } from '../common/decorators/rate-limited.decorator';
+import { SetLanguageDto } from './dto/set-language.dto';
+import type { Locale } from '../common/i18n/locales';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import {
@@ -133,6 +136,25 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return user;
+  }
+
+  /**
+   * El idioma en el que quiere que se le hable.
+   *
+   * Se guarda en la persona, no en la organización: dos personas de la misma empresa pueden
+   * quererlo distinto, y una gestoría con un cliente francés tiene exactamente ese caso.
+   *
+   * Devuelve el idioma guardado para que la interfaz confirme lo que quedó, en vez de asumir
+   * que se guardó lo que mandó.
+   */
+  @Patch('me/language')
+  async setLanguage(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SetLanguageDto,
+  ) {
+    // El DTO ya validó que es un idioma que hablamos; el estrechamiento de tipo es lo único
+    // que falta para que el dominio no vea nunca una cadena cualquiera.
+    return this.authService.setLocale(user.id, dto.locale as Locale);
   }
 
   /**

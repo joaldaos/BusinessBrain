@@ -9,11 +9,12 @@ import {
   ErrorNote,
   Field,
   Table,
-  formatDate,
   inputClass,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
 
 /**
  * Objetivos de negocio.
@@ -24,8 +25,13 @@ import {
  *
  * Un objetivo declarado a mano nace ya confirmado: lo dijo una persona. Uno inferido por el
  * sistema nace como candidato y necesita que alguien lo confirme antes de poder anclar nada.
+ *
+ * El ENUNCIADO lo escribe la empresa y se muestra tal cual, en el idioma en que lo escribió:
+ * traducirlo cambiaría lo que la empresa dijo que quería.
  */
 export function ObjectivesPage() {
+  const t = useT();
+  const formatDate = useFormatDate();
   const objectives = useResource(() =>
     api<BusinessObjective[]>('/business-objectives'),
   );
@@ -35,11 +41,8 @@ export function ObjectivesPage() {
 
   return (
     <>
-      <Card title="Declarar un objetivo">
-        <p className="mb-3 text-xs text-gray-500">
-          Sin un objetivo confirmado, el sistema puede decirte qué está pasando,
-          pero no si eso es un riesgo o una oportunidad para tu empresa.
-        </p>
+      <Card title={t('objectives.declare.title')}>
+        <p className="mb-3 text-xs text-gray-500">{t('objectives.declare.why')}</p>
 
         <form
           className="flex flex-wrap items-end gap-2"
@@ -53,33 +56,43 @@ export function ObjectivesPage() {
           })}
         >
           <div className="min-w-64 flex-1">
-            <Field label="Objetivo">
+            <Field label={t('objectives.field')}>
               <input
                 className={inputClass}
                 value={statement}
                 onChange={(e) => setStatement(e.target.value)}
-                placeholder="El margen comercial no debe bajar del 30 %."
+                placeholder={t('objectives.placeholder')}
                 required
               />
             </Field>
           </div>
           <Button type="submit" disabled={create.busy}>
-            Declarar
+            {t('objectives.declare')}
           </Button>
         </form>
 
         <ErrorNote error={create.error} />
       </Card>
 
-      <Card title={`Objetivos (${objectives.data?.length ?? 0})`}>
+      <Card
+        title={t('objectives.title', { count: objectives.data?.length ?? 0 })}
+      >
         <ErrorNote error={objectives.error ?? decide.error} />
-        {objectives.loading && <Empty>Cargando…</Empty>}
+        {objectives.loading && <Empty>{t('common.loading')}</Empty>}
         {!objectives.loading && (objectives.data?.length ?? 0) === 0 && (
-          <Empty>Ninguno declarado todavía.</Empty>
+          <Empty>{t('objectives.empty')}</Empty>
         )}
 
         {(objectives.data?.length ?? 0) > 0 && (
-          <Table head={['Objetivo', 'Estado', 'Origen', 'Declarado', '']}>
+          <Table
+            head={[
+              t('objectives.column.statement'),
+              t('objectives.column.status'),
+              t('objectives.column.origin'),
+              t('objectives.column.declared'),
+              '',
+            ]}
+          >
             {objectives.data?.map((objective) => (
               <tr
                 key={objective.id}
@@ -91,16 +104,16 @@ export function ObjectivesPage() {
                     tone={objective.status === 'CONFIRMED' ? 'good' : 'warn'}
                   >
                     {objective.status === 'CONFIRMED'
-                      ? 'confirmado'
+                      ? t('objectives.status.confirmed')
                       : objective.status === 'INFERRED'
-                        ? 'propuesto por el sistema'
+                        ? t('objectives.status.inferred')
                         : objective.status}
                   </Badge>
                 </td>
                 <td className="px-2 py-2 text-xs text-gray-600">
                   {objective.origin === 'MANUAL_DECLARATION'
-                    ? 'una persona'
-                    : 'inferido'}
+                    ? t('objectives.origin.person')
+                    : t('objectives.origin.inferred')}
                 </td>
                 <td className="px-2 py-2 text-xs text-gray-600">
                   {formatDate(objective.createdAt)}
@@ -121,7 +134,7 @@ export function ObjectivesPage() {
                           .then(objectives.reload)
                       }
                     >
-                      Confirmar
+                      {t('objectives.confirm')}
                     </Button>
                   )}
                   {objective.status === 'CONFIRMED' && (
@@ -139,7 +152,7 @@ export function ObjectivesPage() {
                           .then(objectives.reload)
                       }
                     >
-                      Descartar
+                      {t('objectives.discard')}
                     </Button>
                   )}
                 </td>

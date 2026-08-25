@@ -1,4 +1,3 @@
-import { freshnessLabel, insightTypeLabel } from '../api/labels';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type {
@@ -10,7 +9,16 @@ import type {
   KnowledgeSource,
   Report,
 } from '../api/types';
-import { Badge, Card, Empty, ErrorNote, formatDate, useResource } from '../components/ui';
+import {
+  Badge,
+  Card,
+  Empty,
+  ErrorNote,
+  useFormatDate,
+  useResource,
+} from '../components/ui';
+import { useT, type TranslationKey } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Panel: en qué estado está la comprensión de la empresa ahora mismo.
@@ -19,9 +27,11 @@ import { Badge, Card, Empty, ErrorNote, formatDate, useResource } from '../compo
  * se enseña aquí no puede divergir de lo que se ve al entrar.
  */
 export function DashboardPage() {
-  const insights = useResource(() =>
-    api<Insight[]>('/insights?limit=5'),
-  );
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
+
+  const insights = useResource(() => api<Insight[]>('/insights?limit=5'));
   const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'));
   const automations = useResource(() => api<Automation[]>('/automations'));
   const reports = useResource(() => api<Report[]>('/reports'));
@@ -46,30 +56,41 @@ export function DashboardPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Metric label="Documentos" value={items.data?.length} to="/conocimiento" />
-        <Metric label="Conclusiones" value={insights.data?.length} to="/insights" />
         <Metric
-          label="Automatizaciones"
+          label={t('dashboard.metric.documents')}
+          value={items.data?.length}
+          to="/conocimiento"
+        />
+        <Metric
+          label={t('dashboard.metric.conclusions')}
+          value={insights.data?.length}
+          to="/insights"
+        />
+        <Metric
+          label={t('dashboard.metric.automations')}
           value={automations.data?.length}
           to="/automatizaciones"
         />
-        <Metric label="Informes" value={reports.data?.length} to="/informes" />
+        <Metric
+          label={t('dashboard.metric.reports')}
+          value={reports.data?.length}
+          to="/informes"
+        />
       </div>
 
       <ErrorNote error={insights.error ?? items.error} />
 
       {(disputed.length > 0 || stale.length > 0) && (
-        <Card title="Requiere tu atención">
+        <Card title={t('dashboard.attention.title')}>
           <ul className="space-y-2 text-sm">
             {disputed.map((insight) => (
               <li key={`d-${insight.id}`}>
                 <Link className="text-blue-700 underline" to={`/insights/${insight.id}`}>
                   {insight.summary}
                 </Link>{' '}
-                <Badge tone="bad">validación en disputa</Badge>
+                <Badge tone="bad">{t('insight.badge.disputed')}</Badge>
                 <p className="text-xs text-gray-500">
-                  Alguien validó una versión anterior y la evidencia nueva la
-                  contradice.
+                  {t('dashboard.attention.disputedWhy')}
                 </p>
               </li>
             ))}
@@ -78,7 +99,9 @@ export function DashboardPage() {
                 <Link className="text-blue-700 underline" to={`/insights/${insight.id}`}>
                   {insight.summary}
                 </Link>{' '}
-                <Badge tone="warn">{freshnessLabel(insight.freshness)}</Badge>
+                <Badge tone="warn">{labels.freshness(insight.freshness)}</Badge>
+                {/* La explicación la redacta el motor a partir de la evidencia de esta
+                    empresa: es contenido suyo y se muestra tal cual. */}
                 <p className="text-xs text-gray-500">
                   {insight.freshnessRationale}
                 </p>
@@ -88,12 +111,10 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <Card title="Lo último que hemos comprendido">
-        {insights.loading && <Empty>Cargando…</Empty>}
+      <Card title={t('dashboard.latest.title')}>
+        {insights.loading && <Empty>{t('common.loading')}</Empty>}
         {!insights.loading && (insights.data?.length ?? 0) === 0 && (
-          <Empty>
-            Todavía no hay conclusiones. Sube conocimiento y lanza un análisis.
-          </Empty>
+          <Empty>{t('dashboard.latest.empty')}</Empty>
         )}
         <ul className="space-y-3">
           {insights.data?.map((insight) => (
@@ -105,8 +126,12 @@ export function DashboardPage() {
                 {insight.summary}
               </Link>
               <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <Badge>{insightTypeLabel(insight.type)}</Badge>
-                <span>confianza {insight.confidence.toFixed(2)}</span>
+                <Badge>{labels.insightType(insight.type)}</Badge>
+                <span>
+                  {t('common.confidence', {
+                    value: insight.confidence.toFixed(2),
+                  })}
+                </span>
                 <span>· {formatDate(insight.createdAt)}</span>
               </p>
             </li>
@@ -142,38 +167,46 @@ function FirstSteps({
   understood: boolean;
   loading: boolean;
 }) {
-  const steps = [
+  const t = useT();
+
+  // Los pasos guardan CLAVES, no frases: la lista es estructura, no texto.
+  const steps: {
+    done: boolean;
+    to: string;
+    action: TranslationKey;
+    why: TranslationKey;
+  }[] = [
     {
       // Primero de la lista porque bloquea a todos los demás: sin IA, lo que se suba no se
       // puede preguntar y un análisis no encuentra nada.
       done: aiReady,
       to: '/configuracion',
-      action: 'Configura la inteligencia artificial',
-      why: 'Sin ella BusinessBrain no puede leer tus documentos ni responder preguntas.',
+      action: 'dashboard.steps.ai.action',
+      why: 'dashboard.steps.ai.why',
     },
     {
       done: connected,
       to: '/conocimiento',
-      action: 'Conecta una fuente',
-      why: 'Sube documentos, una página web, tu Google Drive o una etiqueta de Gmail.',
+      action: 'dashboard.steps.source.action',
+      why: 'dashboard.steps.source.why',
     },
     {
       done: learned,
       to: '/conocimiento',
-      action: 'Sincroniza para que aprenda',
-      why: 'Hasta que no entre nada, BusinessBrain no sabe nada de tu empresa.',
+      action: 'dashboard.steps.sync.action',
+      why: 'dashboard.steps.sync.why',
     },
     {
       done: asked,
       to: '/preguntar',
-      action: 'Hazle una pregunta',
-      why: 'Responderá con lo que sabe y te dirá de qué documentos lo ha sacado.',
+      action: 'dashboard.steps.ask.action',
+      why: 'dashboard.steps.ask.why',
     },
     {
       done: understood,
       to: '/analisis',
-      action: 'Lanza un análisis',
-      why: 'Busca por su cuenta riesgos, anomalías y oportunidades en lo que ya sabe.',
+      action: 'dashboard.steps.analysis.action',
+      why: 'dashboard.steps.analysis.why',
     },
   ];
 
@@ -182,9 +215,12 @@ function FirstSteps({
   if (loading || steps.every((step) => step.done)) return null;
 
   return (
-    <Card title="Primeros pasos">
+    <Card title={t('dashboard.steps.title')}>
       <p className="mb-3 text-xs text-gray-500">
-        {steps.filter((step) => step.done).length} de {steps.length} completados.
+        {t('dashboard.steps.progress', {
+          done: steps.filter((step) => step.done).length,
+          total: steps.length,
+        })}
       </p>
       <ol className="space-y-2 text-sm">
         {steps.map((step) => (
@@ -193,14 +229,14 @@ function FirstSteps({
               ●
             </span>
             {step.done ? (
-              <span className="text-gray-400 line-through">{step.action}</span>
+              <span className="text-gray-400 line-through">{t(step.action)}</span>
             ) : (
               <Link className="font-medium text-blue-700 underline" to={step.to}>
-                {step.action}
+                {t(step.action)}
               </Link>
             )}
             {!step.done && (
-              <span className="text-xs text-gray-500">{step.why}</span>
+              <span className="text-xs text-gray-500">{t(step.why)}</span>
             )}
           </li>
         ))}

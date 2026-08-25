@@ -9,12 +9,14 @@ import {
   Empty,
   ErrorNote,
   Field,
-  formatDate,
   inputClass,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
 import { CurationBadge, FreshnessBadge } from './InsightsPage';
+import { useT, type TranslationKey } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Una conclusión: en qué se apoya, qué se ha decidido sobre ella y cómo ha cambiado.
@@ -22,9 +24,16 @@ import { CurationBadge, FreshnessBadge } from './InsightsPage';
  * Reúne las tres capacidades del motor que solo tenían sentido juntas: la conclusión con su
  * evidencia, la curación humana, y la **historia de la creencia** — qué se creía antes y qué
  * evidencia exacta lo movió.
+ *
+ * El resumen de cada versión y el comentario de quien la validó son contenido de la empresa:
+ * se muestran tal cual, en el idioma en que se escribieron.
  */
 export function InsightDetailPage() {
   const { insightId = '' } = useParams();
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
+
   const insight = useResource(
     () => api<Insight>(`/insights/${insightId}`),
     [insightId],
@@ -39,20 +48,22 @@ export function InsightDetailPage() {
   // Vaciar la pantalla en cada recarga desmontaría los formularios y perdería lo que la
   // persona acababa de hacer: el mensaje de "decisión registrada" desaparecía antes de que
   // nadie pudiera leerlo, y un comentario a medio escribir se perdía al recargar.
-  if (insight.loading && !insight.data) return <Empty>Cargando…</Empty>;
+  if (insight.loading && !insight.data) return <Empty>{t('common.loading')}</Empty>;
   if (insight.error && !insight.data) return <ErrorNote error={insight.error} />;
-  if (!insight.data) return <Empty>No encontrada.</Empty>;
+  if (!insight.data) return <Empty>{t('insight.notFound')}</Empty>;
 
   const data = insight.data;
 
   return (
     <>
-      <Card title="Conclusión">
+      <Card title={t('insight.title')}>
         <p className="text-sm">{data.summary}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-          <Badge>{data.type}</Badge>
-          <span>confianza {data.confidence.toFixed(2)}</span>
+          <Badge>{labels.insightType(data.type)}</Badge>
+          <span>
+            {t('common.confidence', { value: data.confidence.toFixed(2) })}
+          </span>
           <FreshnessBadge insight={data} />
           <CurationBadge insight={data} />
           <span className="text-gray-400">{formatDate(data.createdAt)}</span>
@@ -63,25 +74,24 @@ export function InsightDetailPage() {
         {data.curation && (
           <p className="mt-2 text-xs text-gray-600">
             {data.curation.origin === 'OWN'
-              ? 'Validada sobre esta misma versión'
-              : 'Validada sobre una versión anterior de esta creencia'}{' '}
-            el {formatDate(data.curation.at)}.
+              ? t('insight.curatedOwn')
+              : t('insight.curatedInherited')}{' '}
+            {t('insight.curatedOn', { date: formatDate(data.curation.at) })}
             {data.curation.comment && ` «${data.curation.comment}»`}
-            {data.curation.disputed &&
-              ' La evidencia posterior contradice lo que se validó.'}
+            {data.curation.disputed && ` ${t('insight.curationDisputed')}`}
           </p>
         )}
 
         {data.businessObjectives.length > 0 && (
           <p className="mt-2 text-xs text-gray-600">
-            Importa porque:{' '}
+            {t('insight.mattersBecause')}{' '}
             {data.businessObjectives.map((o) => o.statement).join(' · ')}
           </p>
         )}
 
         <div className="mt-3">
           <p className="text-xs font-medium text-gray-700">
-            Evidencia ({data.evidence.length})
+            {t('insight.evidence', { count: data.evidence.length })}
           </p>
           <ul className="mt-1 space-y-1 text-xs text-gray-600">
             {data.evidence.map((piece, index) => (
@@ -101,7 +111,11 @@ export function InsightDetailPage() {
         }}
       />
 
-      <HistoryCard history={history.data} error={history.error} loading={history.loading} />
+      <HistoryCard
+        history={history.data}
+        error={history.error}
+        loading={history.loading}
+      />
     </>
   );
 }
@@ -113,6 +127,7 @@ function CurateCard({
   insightId: string;
   onDone: () => void;
 }) {
+  const t = useT();
   const [type, setType] = useState<'CONFIRMATION' | 'DISMISSAL' | 'CORRECTION'>(
     'CONFIRMATION',
   );
@@ -121,12 +136,8 @@ function CurateCard({
   const [done, setDone] = useState(false);
 
   return (
-    <Card title="Tu decisión">
-      <p className="mb-3 text-xs text-gray-500">
-        Lo que decidas tiene prioridad sobre cualquier recálculo automático
-        posterior, hasta que lo revoques. Descartarla la retira de la lectura
-        habitual, sin borrar nada.
-      </p>
+    <Card title={t('insight.decide.title')}>
+      <p className="mb-3 text-xs text-gray-500">{t('insight.decide.explain')}</p>
 
       <form
         className="flex flex-wrap items-end gap-2"
@@ -141,22 +152,20 @@ function CurateCard({
         })}
       >
         <div className="min-w-40">
-          <Field label="Decisión">
+          <Field label={t('insight.decide.field')}>
             <select
               className={inputClass}
               value={type}
-              onChange={(e) =>
-                setType(e.target.value as typeof type)
-              }
+              onChange={(e) => setType(e.target.value as typeof type)}
             >
-              <option value="CONFIRMATION">La confirmo</option>
-              <option value="CORRECTION">La corrijo</option>
-              <option value="DISMISSAL">La descarto</option>
+              <option value="CONFIRMATION">{t('insight.decide.confirm')}</option>
+              <option value="CORRECTION">{t('insight.decide.correct')}</option>
+              <option value="DISMISSAL">{t('insight.decide.dismiss')}</option>
             </select>
           </Field>
         </div>
         <div className="min-w-56 flex-1">
-          <Field label="Comentario (opcional)">
+          <Field label={t('insight.decide.comment')}>
             <input
               className={inputClass}
               value={comment}
@@ -165,13 +174,13 @@ function CurateCard({
           </Field>
         </div>
         <Button type="submit" disabled={action.busy}>
-          Registrar
+          {t('insight.decide.submit')}
         </Button>
       </form>
 
       <ErrorNote error={action.error} />
       {done && !action.error && (
-        <p className="mt-2 text-xs text-green-700">Decisión registrada.</p>
+        <p className="mt-2 text-xs text-green-700">{t('insight.decide.done')}</p>
       )}
     </Card>
   );
@@ -194,12 +203,15 @@ function HistoryCard({
   error: unknown;
   loading: boolean;
 }) {
+  const t = useT();
+  const formatDate = useFormatDate();
+
   return (
-    <Card title="Cómo ha cambiado esta creencia">
+    <Card title={t('insight.history.title')}>
       <ErrorNote error={error} />
-      {loading && <Empty>Cargando…</Empty>}
+      {loading && <Empty>{t('common.loading')}</Empty>}
       {history && history.versions.length === 0 && (
-        <Empty>No hay ninguna versión visible dentro de tu alcance.</Empty>
+        <Empty>{t('insight.history.empty')}</Empty>
       )}
 
       {history && history.versions.length > 0 && (
@@ -212,10 +224,20 @@ function HistoryCard({
                   <p className="text-sm">{version.summary}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
                     <Badge tone={version.status === 'ACTIVE' ? 'good' : 'neutral'}>
-                      {version.status === 'ACTIVE' ? 'versión actual' : 'superada'}
+                      {version.status === 'ACTIVE'
+                        ? t('insight.history.current')
+                        : t('insight.history.superseded')}
                     </Badge>
-                    <span>confianza {version.confidence.toFixed(2)}</span>
-                    <span>{version.evidenceCount} evidencia(s)</span>
+                    <span>
+                      {t('common.confidence', {
+                        value: version.confidence.toFixed(2),
+                      })}
+                    </span>
+                    <span>
+                      {t('insight.history.evidenceCount', {
+                        count: version.evidenceCount,
+                      })}
+                    </span>
                     <span className="text-gray-400">
                       {formatDate(version.createdAt)}
                     </span>
@@ -223,22 +245,32 @@ function HistoryCard({
 
                   {transition && (
                     <div className="mt-2 rounded bg-gray-50 px-2 py-1.5 text-xs text-gray-700">
+                      {/* Dos frases enteras y no una con "subió"/"bajó" incrustado: en otro
+                          idioma el verbo puede no ir en ese hueco. */}
                       <p>
-                        La confianza{' '}
-                        {transition.confidenceDelta >= 0 ? 'subió' : 'bajó'}{' '}
-                        {Math.abs(transition.confidenceDelta).toFixed(2)} porque:
+                        {t(
+                          transition.confidenceDelta >= 0
+                            ? 'insight.history.confidenceRose'
+                            : 'insight.history.confidenceFell',
+                          {
+                            delta: Math.abs(
+                              transition.confidenceDelta,
+                            ).toFixed(2),
+                          },
+                        )}
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {transition.changes.map((change, i) => (
                           <li key={`${change.ref.refId}-${i}`}>
-                            {describeChange(change.kind)} · {change.ref.refId}
+                            {describeChange(t, change.kind)} · {change.ref.refId}
                           </li>
                         ))}
                       </ul>
                       {transition.changesOutOfScope > 0 && (
                         <p className="mt-1 text-gray-500">
-                          Y {transition.changesOutOfScope} cambio(s) más fuera de
-                          tu alcance, que no podemos detallarte.
+                          {t('insight.history.outOfScope', {
+                            count: transition.changesOutOfScope,
+                          })}
                         </p>
                       )}
                     </div>
@@ -250,8 +282,9 @@ function HistoryCard({
 
           {history.hiddenVersionCount > 0 && (
             <p className="mt-3 text-xs text-gray-500">
-              Hay {history.hiddenVersionCount} versión(es) de esta creencia que
-              no puedes ver con tu alcance actual.
+              {t('insight.history.hiddenVersions', {
+                count: history.hiddenVersionCount,
+              })}
             </p>
           )}
         </>
@@ -260,17 +293,17 @@ function HistoryCard({
   );
 }
 
-function describeChange(kind: string): string {
-  switch (kind) {
-    case 'ENTERED':
-      return 'entró evidencia nueva';
-    case 'LEFT':
-      return 'dejó de sostenerla';
-    case 'CONTRADICTED':
-      return 'la contradijo';
-    case 'SUPERSEDED_EVIDENCE':
-      return 'su fuente fue reemplazada';
-    default:
-      return kind;
-  }
+/**
+ * Qué movió la creencia, en palabras.
+ *
+ * Un tipo desconocido se devuelve tal cual: es feo y visible, que es justo lo que hace que
+ * alguien lo arregle. La alternativa —una cadena vacía— desaparecería sin que nadie lo notara.
+ */
+function describeChange(
+  t: (key: TranslationKey) => string,
+  kind: string,
+): string {
+  const clave = `insight.change.${kind}` as TranslationKey;
+  const texto = t(clave);
+  return texto === clave ? kind : texto;
 }

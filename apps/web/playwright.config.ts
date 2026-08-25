@@ -70,6 +70,18 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
+    /**
+     * El navegador de las pruebas habla castellano, siempre.
+     *
+     * Desde que la interfaz elige idioma según el navegador, no fijarlo haría que la suite
+     * pasara o fallara según en qué idioma esté configurada la máquina que la ejecuta: en un
+     * portátil en inglés, todas las pruebas que buscan "Conocimiento" dejarían de encontrarlo.
+     * Una suite que depende de la máquina no dice nada sobre el producto.
+     *
+     * La prueba del navegador en inglés lo sobreescribe con `test.use`, que es justo lo que
+     * hay que comprobar ahí.
+     */
+    locale: 'es-ES',
   },
   webServer: [
     {

@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { renderLocalized } from '../test/render';
 import { CurationBadge, FreshnessBadge } from './InsightsPage';
 import type { Insight } from '../api/types';
 
@@ -27,7 +28,7 @@ const insight = (overrides: Partial<Insight> = {}): Insight => ({
 describe('cómo se presenta una conclusión', () => {
   it('una validación HEREDADA no se presenta como propia', () => {
     // Heredada significa que la persona validó una versión ANTERIOR de la creencia.
-    render(
+    renderLocalized(
       <CurationBadge
         insight={insight({
           curation: {
@@ -47,7 +48,7 @@ describe('cómo se presenta una conclusión', () => {
   });
 
   it('una validación en disputa se marca como tal', () => {
-    render(
+    renderLocalized(
       <CurationBadge
         insight={insight({
           curation: {
@@ -66,7 +67,7 @@ describe('cómo se presenta una conclusión', () => {
   });
 
   it('una validación propia se presenta como tal', () => {
-    render(
+    renderLocalized(
       <CurationBadge
         insight={insight({
           curation: {
@@ -85,21 +86,24 @@ describe('cómo se presenta una conclusión', () => {
   });
 
   it('sin curación no se inventa ninguna insignia', () => {
-    const { container } = render(<CurationBadge insight={insight()} />);
+    const { container } = renderLocalized(<CurationBadge insight={insight()} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('una conclusión cuya evidencia cambió NO se presenta como vigente', () => {
     // §3.4: "la frescura se entrega, no se oculta".
-    render(<FreshnessBadge insight={insight({ freshness: 'STALE' })} />);
+    renderLocalized(<FreshnessBadge insight={insight({ freshness: 'STALE' })} />);
     expect(screen.getByText(/su evidencia cambió/i)).toBeInTheDocument();
   });
 
   it('la evidencia intacta se distingue de la irresoluble', () => {
-    const { rerender } = render(<FreshnessBadge insight={insight()} />);
+    const { unmount } = renderLocalized(<FreshnessBadge insight={insight()} />);
     expect(screen.getByText(/intacta/i)).toBeInTheDocument();
 
-    rerender(
+    // Se desmonta y se vuelve a montar en vez de usar `rerender`: el proveedor de idioma
+    // envuelve al componente, y `rerender` sustituiría el árbol entero dejándolo fuera.
+    unmount();
+    renderLocalized(
       <FreshnessBadge insight={insight({ freshness: 'UNRESOLVABLE' })} />,
     );
     expect(screen.getByText(/irresoluble/i)).toBeInTheDocument();

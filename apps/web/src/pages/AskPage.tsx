@@ -1,4 +1,3 @@
-import { freshnessLabel } from '../api/labels';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -15,11 +14,13 @@ import {
   Card,
   Empty,
   ErrorNote,
-  formatDate,
   inputClass,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Preguntarle a la empresa.
@@ -27,7 +28,7 @@ import {
  * ## Por qué esta pantalla es el producto
  *
  * Todo lo demás —conectar fuentes, versionar, clasificar, analizar— es infraestructura que una
- * PYME no puede evaluar. Esto sí: se escribe una pregunta en castellano y se obtiene una
+ * PYME no puede evaluar. Esto sí: se escribe una pregunta en su idioma y se obtiene una
  * respuesta **con las fuentes de las que sale**. Es la diferencia entre "tengo un sistema" y
  * "esto me sirve".
  *
@@ -41,6 +42,13 @@ import {
  * Cuando no hay material, BusinessBrain lo dice en vez de rellenar. Esta pantalla no lo
  * disimula: si la respuesta llega sin citas, se señala explícitamente.
  *
+ * ## El idioma de la respuesta y el de los documentos son cosas distintas
+ *
+ * Se responde en el idioma de quien pregunta. Los TÍTULOS de las fuentes, en cambio, se
+ * muestran tal y como están en el documento: una factura en inglés se cita en inglés, porque
+ * quien lee la respuesta tiene que poder ir al documento y encontrarlo con ese nombre.
+ * Traducir una cita la convierte en algo que no existe.
+ *
  * ## El alcance es de la PERSONA
  *
  * La conversación se crea sin agente, y ese camino prepara el turno con las colecciones
@@ -48,9 +56,8 @@ import {
  * y recibir respuestas distintas, y eso es correcto: cada una ve lo que tiene concedido.
  */
 export function AskPage() {
-  const conversations = useResource(() =>
-    api<Conversation[]>('/conversations'),
-  );
+  const t = useT();
+  const conversations = useResource(() => api<Conversation[]>('/conversations'));
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Al entrar se retoma la última conversación en vez de abrir una vacía: lo normal es
@@ -63,17 +70,17 @@ export function AskPage() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-      <Card title="Tus preguntas">
+      <Card title={t('ask.list.title')}>
         <ErrorNote error={conversations.error} />
         <Button
           className="mb-3 w-full"
           variant="secondary"
           onClick={() => setActiveId(null)}
         >
-          Nueva pregunta
+          {t('ask.new')}
         </Button>
 
-        {conversations.loading && <Empty>Cargando…</Empty>}
+        {conversations.loading && <Empty>{t('common.loading')}</Empty>}
         <ul className="space-y-1">
           {conversations.data?.map((conversation) => (
             <li key={conversation.id}>
@@ -86,7 +93,9 @@ export function AskPage() {
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {conversation.title ?? 'Sin título'}
+                {/* El título es la propia pregunta de la persona: contenido suyo, en su
+                    idioma. Solo se traduce el hueco cuando no hay ninguno. */}
+                {conversation.title ?? t('ask.untitled')}
               </button>
             </li>
           ))}
@@ -119,6 +128,7 @@ function Thread({
   conversationId: string | null;
   onStarted: (conversationId: string) => void;
 }) {
+  const t = useT();
   const [question, setQuestion] = useState('');
   const [pending, setPending] = useState<string | null>(null);
   const [answer, setAnswer] = useState<SentMessage | null>(null);
@@ -162,10 +172,10 @@ function Thread({
           })
         ).id;
 
-      const sent = await api<SentMessage>(
-        `/conversations/${target}/messages`,
-        { method: 'POST', body: { content } },
-      );
+      const sent = await api<SentMessage>(`/conversations/${target}/messages`, {
+        method: 'POST',
+        body: { content },
+      });
 
       setAnswer(sent);
       setPending(null);
@@ -180,22 +190,18 @@ function Thread({
   };
 
   return (
-    <Card title="Pregúntale a tu empresa">
+    <Card title={t('ask.title')}>
       <ErrorNote error={history.error ?? action.error} />
 
       {!conversationId && !pending && !answer && (
         <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          <p className="font-medium text-gray-800">
-            Pregunta con tus palabras. Responderá con lo que sabe de tu empresa.
-          </p>
+          <p className="font-medium text-gray-800">{t('ask.intro')}</p>
           <ul className="mt-2 list-inside list-disc space-y-1 text-xs">
-            <li>¿Qué acordamos con nuestro principal proveedor?</li>
-            <li>¿Cuál es nuestra política de descuentos?</li>
-            <li>¿Qué hemos decidido sobre las devoluciones?</li>
+            <li>{t('ask.example1')}</li>
+            <li>{t('ask.example2')}</li>
+            <li>{t('ask.example3')}</li>
           </ul>
-          <p className="mt-2 text-xs">
-            Si no tiene información suficiente, lo dirá en lugar de inventarla.
-          </p>
+          <p className="mt-2 text-xs">{t('ask.noInvent')}</p>
         </div>
       )}
 
@@ -213,7 +219,11 @@ function Thread({
 
         {answer && (
           <>
-            <Turn role="USER" content={pendingOrAnswerQuestion(messages, answer)} citations={[]} />
+            <Turn
+              role="USER"
+              content={pendingOrAnswerQuestion(messages, answer)}
+              citations={[]}
+            />
             <Turn
               role="ASSISTANT"
               content={answer.content}
@@ -226,7 +236,7 @@ function Thread({
         {pending && (
           <>
             <Turn role="USER" content={pending} citations={[]} />
-            <p className="text-sm text-gray-500">Buscando en tu conocimiento…</p>
+            <p className="text-sm text-gray-500">{t('ask.thinking')}</p>
           </>
         )}
 
@@ -238,15 +248,15 @@ function Thread({
         onSubmit={action.onSubmit(ask)}
       >
         <input
-          aria-label="Tu pregunta"
+          aria-label={t('ask.input.label')}
           className={`${inputClass} min-w-48 flex-1`}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="¿Qué quieres saber de tu empresa?"
+          placeholder={t('ask.input.placeholder')}
           required
         />
         <Button type="submit" disabled={action.busy || pending !== null}>
-          {action.busy || pending ? 'Preguntando…' : 'Preguntar'}
+          {action.busy || pending ? t('ask.sending') : t('ask.send')}
         </Button>
       </form>
     </Card>
@@ -280,6 +290,8 @@ function Turn({
   citations: MessageCitation[];
   insightsUsed?: SentMessage['insightsUsed'];
 }) {
+  const t = useT();
+  const labels = useLabels();
   const mine = role === 'USER';
 
   return (
@@ -297,9 +309,7 @@ function Turn({
       {/* Sin citas NO se disimula: una respuesta que no se apoya en nada no vale para tomar
           una decisión, y quien lee tiene derecho a saberlo. */}
       {!mine && citations.length === 0 && (
-        <p className="mt-1 text-xs text-amber-700">
-          Sin fuentes: esta respuesta no se apoya en ningún documento tuyo.
-        </p>
+        <p className="mt-1 text-xs text-amber-700">{t('ask.noSources')}</p>
       )}
 
       {!mine && insightsUsed && insightsUsed.length > 0 && (
@@ -310,7 +320,7 @@ function Turn({
                 {insight.summary}
               </Link>{' '}
               <Badge tone={insight.freshness === 'FRESH' ? 'good' : 'warn'}>
-                {freshnessLabel(insight.freshness)}
+                {labels.freshness(insight.freshness)}
               </Badge>
             </li>
           ))}
@@ -323,12 +333,15 @@ function Turn({
 /**
  * De qué documentos salió la respuesta.
  *
- * Cada cita enlaza al documento real. El nombre se resuelve contra `/knowledge-items`, que ya
- * está acotado por alcance: si una cita apuntara a algo fuera del alcance del lector —no debería
- * ocurrir, porque el turno se preparó con su alcance— aquí no aparecería un título, y eso es lo
- * correcto.
+ * Cada cita enlaza al documento real y muestra su título ORIGINAL, sin traducir: es el nombre
+ * con el que la persona lo va a encontrar. El nombre se resuelve contra `/knowledge-items`, que
+ * ya está acotado por alcance: si una cita apuntara a algo fuera del alcance del lector —no
+ * debería ocurrir, porque el turno se preparó con su alcance— aquí no aparecería un título, y
+ * eso es lo correcto.
  */
 function Sources({ citations }: { citations: MessageCitation[] }) {
+  const t = useT();
+  const formatDate = useFormatDate();
   const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'), []);
 
   const titleOf = (knowledgeItemId: string) =>
@@ -336,7 +349,7 @@ function Sources({ citations }: { citations: MessageCitation[] }) {
 
   return (
     <div className="mt-2">
-      <p className="text-xs font-medium text-gray-600">Fuentes</p>
+      <p className="text-xs font-medium text-gray-600">{t('ask.sources')}</p>
       <ol className="mt-1 space-y-1 text-xs text-gray-600">
         {citations.map((citation) => {
           const item = items.data?.find(
@@ -349,13 +362,13 @@ function Sources({ citations }: { citations: MessageCitation[] }) {
               {item?.sourceMissingSince && (
                 <>
                   {' '}
-                  <Badge tone="warn">ya no está en su origen</Badge>
+                  <Badge tone="warn">{t('ask.sourceMissing')}</Badge>
                 </>
               )}
               {item && (
                 <span className="text-gray-400">
-                  {' '}
-                  · indexado {formatDate(item.indexedAt)}
+                  {' · '}
+                  {t('ask.indexedAt', { date: formatDate(item.indexedAt) })}
                 </span>
               )}
             </li>

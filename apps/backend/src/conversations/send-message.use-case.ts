@@ -7,6 +7,7 @@ import {
   type MessageCitation,
   type PreparedTurn,
 } from './conversation-turn.service';
+import type { Locale } from '../common/i18n/locales';
 
 /**
  * Respuesta síncrona del chat — BUSINESSBRAIN_MIGRATION_PLAN.md §7.2, Fase 4.
@@ -21,6 +22,13 @@ export interface SendMessageParams {
   userId: string;
   conversationId: string;
   content: string;
+  /**
+   * Idioma de QUIEN PREGUNTA, no de los documentos.
+   *
+   * Viaja desde el controlador porque lo sabe la sesion: leerlo aqui seria una consulta mas
+   * por cada turno para un dato que ya venia en el token.
+   */
+  locale: Locale;
 }
 
 export interface SendMessageResult {
@@ -53,7 +61,11 @@ export class SendMessageUseCase {
 
   async execute(params: SendMessageParams): Promise<SendMessageResult> {
     const prepared = await this.turn.prepare(params);
-    const answered = await this.generateAnswer(prepared, params.organizationId);
+    const answered = await this.generateAnswer(
+      prepared,
+      params.organizationId,
+      params.locale,
+    );
     const { parsed, toolInvocations } = answered;
 
     // Anotar va después de responder: la respuesta ya está decidida y ningún fallo al
@@ -91,6 +103,7 @@ export class SendMessageUseCase {
   private async generateAnswer(
     prepared: PreparedTurn,
     organizationId: string,
+    locale: Locale,
   ): Promise<{
     parsed: ReturnType<typeof parseAgentDirectives>;
     toolInvocations: ToolInvocationTrace[];
@@ -98,7 +111,7 @@ export class SendMessageUseCase {
     // Sin conocimiento ni comprensión no se inventa una respuesta: se dice que no se sabe.
     if (!prepared.request) {
       return {
-        parsed: parseAgentDirectives(this.turn.noKnowledgeAnswer()),
+        parsed: parseAgentDirectives(this.turn.noKnowledgeAnswer(locale)),
         toolInvocations: [],
       };
     }

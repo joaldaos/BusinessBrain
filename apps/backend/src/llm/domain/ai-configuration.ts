@@ -60,6 +60,17 @@ export function providerCatalogEntry(
  */
 export type AiConfigurationOrigin = 'PROPIA' | 'PLATAFORMA' | 'SIN_CONFIGURAR';
 
+/**
+ * Qué situación es esta, sin depender de un idioma.
+ *
+ * La API no puede decidir en qué lengua se le habla a una persona: eso lo sabe la interfaz,
+ * que conoce la preferencia de quien mira. Así que se manda un CÓDIGO y la interfaz escribe la
+ * frase. `explanation` se sigue devolviendo para cualquier consumidor que no sea la interfaz
+ * —un guion de operación, un volcado de estado— pero no es lo que se pinta en pantalla.
+ */
+export type AiConfigurationExplanation =
+  'OWN_KEY' | 'OWN_PROFILE_PLATFORM_KEY' | 'PLATFORM' | 'NOT_CONFIGURED';
+
 export interface AiConfigurationStatus {
   origin: AiConfigurationOrigin;
   /** `true` cuando BusinessBrain puede leer documentos y responder preguntas. */
@@ -68,7 +79,9 @@ export interface AiConfigurationStatus {
   modelName: string | null;
   /** Nunca la clave: solo si existe una propia. */
   hasOwnKey: boolean;
-  /** Qué significa el estado, en una frase, para quien no es técnico. */
+  /** Qué significa el estado, para que la interfaz lo diga en el idioma de quien mira. */
+  explanationCode: AiConfigurationExplanation;
+  /** La misma frase en castellano, para consumidores que no son la interfaz. */
   explanation: string;
 }
 
@@ -85,6 +98,9 @@ export function describeConfiguration(params: {
       provider: params.own.provider,
       modelName: params.own.modelName,
       hasOwnKey: params.own.hasKey,
+      explanationCode: params.own.hasKey
+        ? 'OWN_KEY'
+        : 'OWN_PROFILE_PLATFORM_KEY',
       explanation: params.own.hasKey
         ? 'BusinessBrain usa la clave de tu empresa. El consumo se factura en tu cuenta del ' +
           'proveedor.'
@@ -99,6 +115,7 @@ export function describeConfiguration(params: {
       provider: params.platformProvider ?? null,
       modelName: params.platformModel ?? null,
       hasOwnKey: false,
+      explanationCode: 'PLATFORM',
       explanation:
         'BusinessBrain está usando la inteligencia artificial incluida en el servicio. ' +
         'Puedes poner la clave de tu empresa si prefieres usar tu propia cuenta.',
@@ -111,6 +128,7 @@ export function describeConfiguration(params: {
     provider: null,
     modelName: null,
     hasOwnKey: false,
+    explanationCode: 'NOT_CONFIGURED',
     explanation:
       'Falta configurar la inteligencia artificial. Sin ella BusinessBrain no puede leer tus ' +
       'documentos ni responder preguntas.',

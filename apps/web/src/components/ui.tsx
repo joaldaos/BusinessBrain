@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useState,
   type ButtonHTMLAttributes,
@@ -6,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { ApiError } from '../api/client';
+import { useI18n } from '../i18n';
 
 /**
  * Piezas de interfaz compartidas.
@@ -226,10 +228,30 @@ export function useAction(): {
   };
 }
 
-export function formatDate(value: string | null | undefined): string {
+/**
+ * Fechas en el formato del idioma activo.
+ *
+ * No es un detalle: `04/09/2026` es el 4 de septiembre para una PYME española y el 9 de abril
+ * para una inglesa. Una fecha ambigua en un informe de conocimiento es peor que no ponerla.
+ *
+ * Es un hook porque el idioma vive en el contexto. `formatDateIn` queda expuesta aparte para
+ * los pocos sitios que formatean fuera de un componente.
+ */
+export function formatDateIn(
+  value: string | null | undefined,
+  locale: string,
+): string {
   if (!value) return '—';
-  return new Date(value).toLocaleString('es-ES', {
+  return new Date(value).toLocaleString(locale, {
     dateStyle: 'short',
     timeStyle: 'short',
   });
+}
+
+export function useFormatDate(): (value: string | null | undefined) => string {
+  const { locale } = useI18n();
+  return useCallback(
+    (value: string | null | undefined) => formatDateIn(value, locale),
+    [locale],
+  );
 }

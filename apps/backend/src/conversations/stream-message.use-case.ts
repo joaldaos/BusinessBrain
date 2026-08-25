@@ -8,6 +8,7 @@ import {
   ConversationTurnService,
   type MessageCitation,
 } from './conversation-turn.service';
+import type { Locale } from '../common/i18n/locales';
 
 /**
  * Respuesta en streaming — BUSINESSBRAIN_MIGRATION_PLAN.md §7.2, Fase 4.
@@ -41,6 +42,13 @@ export interface StreamMessageParams {
   userId: string;
   conversationId: string;
   content: string;
+  /**
+   * Idioma de QUIEN PREGUNTA, no de los documentos.
+   *
+   * Viaja desde el controlador porque lo sabe la sesion: leerlo aqui seria una consulta mas
+   * por cada turno para un dato que ya venia en el token.
+   */
+  locale: Locale;
 }
 
 @Injectable()
@@ -66,7 +74,7 @@ export class StreamMessageUseCase {
 
     // Sin conocimiento ni comprensión no se inventa nada: se dice y se cierra el turno.
     if (!prepared.request) {
-      const content = this.turn.noKnowledgeAnswer();
+      const content = this.turn.noKnowledgeAnswer(params.locale);
       yield { type: 'token', text: content };
       yield {
         type: 'done',

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth';
 import type { Organization } from '../api/types';
 import { Button, ErrorNote, Field, inputClass, useAction } from '../components/ui';
+import { useT } from '../i18n';
 
 /**
  * Crear la empresa: el primer paso real de una PYME dentro de BusinessBrain.
@@ -17,18 +18,21 @@ import { Button, ErrorNote, Field, inputClass, useAction } from '../components/u
  */
 export function OnboardingPage() {
   const { user, refreshUser, selectOrganization, logout } = useAuth();
+  const t = useT();
   const [name, setName] = useState('');
   const action = useAction();
 
   return (
     <main className="mx-auto max-w-lg p-8">
       <h1 className="text-xl font-semibold tracking-tight">
-        Bienvenido a BusinessBrain
+        {t('onboarding.title')}
       </h1>
       <p className="mt-2 text-sm text-gray-600">
-        {user?.name ? `${user.name}, ` : ''}lo primero es dar de alta tu empresa.
-        Todo lo que BusinessBrain aprenda —documentos, correo, conclusiones— vivirá
-        dentro de ella y no se mezclará nunca con la de nadie más.
+        {/* Dos frases y no una con un trozo pegado delante: en otro idioma el nombre puede no
+            ir al principio, y una frase partida por concatenación no se puede traducir bien. */}
+        {user?.name
+          ? t('onboarding.introNamed', { name: user.name })
+          : t('onboarding.intro')}
       </p>
 
       <form
@@ -47,14 +51,14 @@ export function OnboardingPage() {
         })}
       >
         <Field
-          label="Nombre de tu empresa"
-          hint="Podrás cambiarlo después en Configuración."
+          label={t('onboarding.companyName')}
+          hint={t('onboarding.companyHint')}
         >
           <input
             className={inputClass}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Panadería Ruiz S.L."
+            placeholder={t('onboarding.companyPlaceholder')}
             minLength={2}
             required
             autoFocus
@@ -65,17 +69,16 @@ export function OnboardingPage() {
 
         <div className="flex items-center gap-2">
           <Button type="submit" disabled={action.busy}>
-            {action.busy ? 'Creando…' : 'Crear mi empresa'}
+            {action.busy ? t('onboarding.creating') : t('onboarding.create')}
           </Button>
           <Button variant="secondary" onClick={logout}>
-            Salir
+            {t('shell.logout')}
           </Button>
         </div>
       </form>
 
       <p className="mt-6 text-xs text-gray-500">
-        Si alguien de tu empresa ya usa BusinessBrain, pídele que te invite en vez
-        de crear una segunda: así compartiréis el mismo conocimiento.
+        {t('onboarding.alreadyInside')}
       </p>
     </main>
   );

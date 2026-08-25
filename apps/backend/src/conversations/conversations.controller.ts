@@ -139,6 +139,8 @@ export class ConversationsController {
       userId: user.id,
       conversationId,
       content: dto.content,
+      // El idioma de QUIEN PREGUNTA, no el de los documentos. Viene de la sesion.
+      locale: user.locale,
     });
   }
 
@@ -162,6 +164,7 @@ export class ConversationsController {
       userId: user.id,
       conversationId,
       content,
+      locale: user.locale,
     });
 
     return from(events).pipe(

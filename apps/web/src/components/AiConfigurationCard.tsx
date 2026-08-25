@@ -11,6 +11,7 @@ import {
   useAction,
   useResource,
 } from './ui';
+import { useT, type TranslationKey } from '../i18n';
 
 /**
  * La inteligencia artificial de la empresa.
@@ -41,6 +42,7 @@ export function AiConfigurationCard({
     api<AiProviderOption[]>('/ai-configuration/providers'),
   );
 
+  const t = useT();
   const [apiKey, setApiKey] = useState('');
   const [provider, setProvider] = useState('');
   const action = useAction();
@@ -49,24 +51,26 @@ export function AiConfigurationCard({
   const chosen = options.find((option) => option.provider === provider) ?? options[0];
 
   return (
-    <Card title="Inteligencia artificial">
+    <Card title={t('ai.title')}>
       <ErrorNote error={status.error ?? action.error} />
 
       {status.data && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge tone={status.data.ready ? 'good' : 'bad'}>
-            {status.data.ready ? 'lista' : 'sin configurar'}
+            {status.data.ready ? t('ai.ready') : t('ai.notConfigured')}
           </Badge>
           {status.data.modelName && (
             <span className="text-xs text-gray-600">{status.data.modelName}</span>
           )}
-          <p className="w-full text-xs text-gray-600">{status.data.explanation}</p>
+          <p className="w-full text-xs text-gray-600">
+            {t((`ai.explanation.${status.data.explanationCode}`) as TranslationKey)}
+          </p>
         </div>
       )}
 
       {!canAdmin && (
         <p className="text-xs text-gray-500">
-          Solo un administrador puede cambiar esta configuración.
+          {t('ai.adminOnly')}
         </p>
       )}
 
@@ -90,9 +94,9 @@ export function AiConfigurationCard({
         >
           {options.length > 1 && (
             <div className="min-w-40">
-              <Field label="Proveedor">
+              <Field label={t('ai.provider')}>
                 <select
-                  aria-label="Proveedor"
+                  aria-label={t('ai.provider')}
                   className={inputClass}
                   value={chosen?.provider ?? ''}
                   onChange={(event) => setProvider(event.target.value)}
@@ -111,12 +115,14 @@ export function AiConfigurationCard({
             <Field
               label={
                 status.data?.hasOwnKey
-                  ? 'Sustituir la clave'
-                  : `Clave de ${chosen?.label ?? 'tu proveedor'}`
+                  ? t('ai.replaceKey')
+                  : t('ai.keyFor', {
+                      provider: chosen?.label ?? t('ai.yourProvider'),
+                    })
               }
               hint={
                 chosen
-                  ? `Empieza por "${chosen.keyPrefixHint}". La comprobamos antes de guardarla y no se muestra nunca más.`
+                  ? t('ai.keyHint', { prefix: chosen.keyPrefixHint })
                   : undefined
               }
             >
@@ -133,7 +139,7 @@ export function AiConfigurationCard({
           </div>
 
           <Button type="submit" disabled={action.busy || !chosen}>
-            {action.busy ? 'Comprobando…' : 'Guardar y comprobar'}
+            {action.busy ? t('ai.checking') : t('ai.saveAndCheck')}
           </Button>
 
           {status.data?.hasOwnKey && (
@@ -149,7 +155,7 @@ export function AiConfigurationCard({
                   })
               }
             >
-              Quitar mi clave
+              {t('ai.removeKey')}
             </Button>
           )}
         </form>
@@ -157,16 +163,16 @@ export function AiConfigurationCard({
 
       {canAdmin && chosen && (
         <p className="mt-2 text-xs text-gray-500">
-          ¿No tienes clave?{' '}
+          {t('ai.noKey')}{' '}
           <a
             className="underline"
             href={chosen.helpUrl}
             target="_blank"
             rel="noreferrer noopener"
           >
-            Créala en tu cuenta de {chosen.label}
+            {t('ai.createKey', { provider: chosen.label })}
           </a>
-          . El consumo se factura en tu cuenta, no en BusinessBrain.
+          . {t('ai.billedToYou')}
         </p>
       )}
     </Card>

@@ -9,10 +9,12 @@ import {
   Card,
   Empty,
   ErrorNote,
-  formatDate,
   useAction,
+  useFormatDate,
   useResource,
 } from '../components/ui';
+import { useT } from '../i18n';
+import { useLabels } from '../i18n/labels';
 
 /**
  * Lo que BusinessBrain propone, y lo que la empresa decide.
@@ -34,9 +36,17 @@ import {
  *
  * Una propuesta del sistema y una redactada por un compañero no se leen igual. Se distinguen
  * siempre: presentar ambas como "recomendación" a secas ocultaría de quién es el criterio.
+ *
+ * ## El texto de la propuesta no se traduce
+ *
+ * Lo redactó el análisis a partir de los documentos de esta empresa, o lo escribió una persona
+ * de dentro. Es contenido suyo. Lo que cambia de idioma son los rótulos que lo enmarcan.
  */
 export function RecommendationsPage() {
   const { role } = useAuth();
+  const t = useT();
+  const labels = useLabels();
+  const formatDate = useFormatDate();
   const canDecide = hasRole(role, 'MEMBER');
   const [showResolved, setShowResolved] = useState(false);
 
@@ -57,20 +67,17 @@ export function RecommendationsPage() {
 
   return (
     <>
-      <Card title={`Pendientes de tu decisión (${pending.data?.length ?? 0})`}>
+      <Card
+        title={t('recs.pending.title', { count: pending.data?.length ?? 0 })}
+      >
         <p className="mb-3 text-xs text-gray-500">
-          BusinessBrain te propone; decides tú. Aceptar deja constancia de la
-          decisión — <strong>no ejecuta ninguna acción</strong> ni cambia nada
-          fuera de aquí.
+          {t('recs.pending.governance')}
         </p>
 
         <ErrorNote error={pending.error} />
-        {pending.loading && <Empty>Cargando…</Empty>}
+        {pending.loading && <Empty>{t('common.loading')}</Empty>}
         {!pending.loading && (pending.data?.length ?? 0) === 0 && (
-          <Empty>
-            No hay nada pendiente. Cuando un análisis encuentre algo que merezca
-            una acción, aparecerá aquí.
-          </Empty>
+          <Empty>{t('recs.pending.empty')}</Empty>
         )}
 
         <ul className="space-y-3">
@@ -88,12 +95,12 @@ export function RecommendationsPage() {
         </ul>
       </Card>
 
-      <Card title="Decisiones anteriores">
+      <Card title={t('recs.history.title')}>
         <Button
           variant="secondary"
           onClick={() => setShowResolved(!showResolved)}
         >
-          {showResolved ? 'Ocultar' : 'Ver decisiones anteriores'}
+          {showResolved ? t('recs.history.hide') : t('recs.history.show')}
         </Button>
 
         {showResolved && (
@@ -101,7 +108,7 @@ export function RecommendationsPage() {
             <ErrorNote error={resolved.error} />
             {decided.length === 0 && !resolved.loading && (
               // Descartar no borra: si no hay nada es que aún no se ha decidido nada.
-              <Empty>Todavía no has aceptado ni descartado ninguna.</Empty>
+              <Empty>{t('recs.history.empty')}</Empty>
             )}
             <ul className="mt-3 space-y-2">
               {decided.map((recommendation) => (
@@ -114,13 +121,11 @@ export function RecommendationsPage() {
                       recommendation.status === 'ACCEPTED' ? 'good' : 'neutral'
                     }
                   >
-                    {recommendation.status === 'ACCEPTED'
-                      ? 'aceptada'
-                      : 'descartada'}
+                    {labels.recommendationStatus(recommendation.status)}
                   </Badge>
                   <span>{recommendation.title}</span>
                   <span className="text-xs text-gray-500">
-                    {recommendation.resolvedBy?.name ?? 'alguien'} ·{' '}
+                    {recommendation.resolvedBy?.name ?? t('recs.someone')} ·{' '}
                     {formatDate(recommendation.resolvedAt)}
                   </span>
                 </li>
@@ -142,6 +147,8 @@ function RecommendationCard({
   canDecide: boolean;
   onDecided: () => void;
 }) {
+  const t = useT();
+  const formatDate = useFormatDate();
   const [showEvidence, setShowEvidence] = useState(false);
   const action = useAction();
 
@@ -162,8 +169,8 @@ function RecommendationCard({
             leen igual. */}
         <Badge tone={recommendation.createdById ? 'neutral' : 'good'}>
           {recommendation.createdById
-            ? 'propuesta por una persona'
-            : 'propuesta por BusinessBrain'}
+            ? t('recs.author.person')
+            : t('recs.author.system')}
         </Badge>
         <span className="text-xs text-gray-500">
           {formatDate(recommendation.createdAt)}
@@ -171,40 +178,59 @@ function RecommendationCard({
       </div>
 
       <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <Field label="Qué hemos detectado" value={recommendation.detected} />
-        <Field label="Por qué importa" value={recommendation.justification} />
-        <Field label="Impacto esperado" value={recommendation.estimatedImpact} />
-        <Field label="Áreas afectadas" value={recommendation.affectedAreas} />
-        <Field label="A favor" value={recommendation.advantages} />
-        <Field label="En contra" value={recommendation.drawbacks} />
+        <Field
+          label={t('recs.field.detected')}
+          value={recommendation.detected}
+        />
+        <Field
+          label={t('recs.field.justification')}
+          value={recommendation.justification}
+        />
+        <Field
+          label={t('recs.field.impact')}
+          value={recommendation.estimatedImpact}
+        />
+        <Field
+          label={t('recs.field.areas')}
+          value={recommendation.affectedAreas}
+        />
+        <Field
+          label={t('recs.field.advantages')}
+          value={recommendation.advantages}
+        />
+        <Field
+          label={t('recs.field.drawbacks')}
+          value={recommendation.drawbacks}
+        />
         <div className="sm:col-span-2">
-          <Field label="Por dónde empezar" value={recommendation.migrationPlan} />
+          <Field
+            label={t('recs.field.plan')}
+            value={recommendation.migrationPlan}
+          />
         </div>
       </dl>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button variant="secondary" onClick={() => setShowEvidence(!showEvidence)}>
-          {showEvidence ? 'Ocultar evidencia' : 'Ver evidencia'}
+          {showEvidence ? t('recs.evidence.hide') : t('recs.evidence.show')}
         </Button>
 
         {canDecide && (
           <>
             <Button disabled={action.busy} onClick={() => decide('accept')}>
-              {action.busy ? 'Guardando…' : 'Aceptar'}
+              {action.busy ? t('common.saving') : t('recs.accept')}
             </Button>
             <Button
               variant="secondary"
               disabled={action.busy}
               onClick={() => decide('dismiss')}
             >
-              Descartar
+              {t('recs.dismiss')}
             </Button>
           </>
         )}
         {!canDecide && (
-          <span className="text-xs text-gray-500">
-            Solo lectura: pide a un compañero con permisos que decida.
-          </span>
+          <span className="text-xs text-gray-500">{t('recs.readOnly')}</span>
         )}
       </div>
 
@@ -212,12 +238,10 @@ function RecommendationCard({
 
       {showEvidence && (
         <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3 text-xs">
-          <p className="font-medium text-gray-700">
-            ¿Por qué me propones esto?
-          </p>
+          <p className="font-medium text-gray-700">{t('recs.evidence.why')}</p>
           {recommendation.sourceInsight ? (
             <p className="mt-1 text-gray-600">
-              Sale de esta conclusión:{' '}
+              {t('recs.evidence.from')}{' '}
               <Link
                 className="underline"
                 to={`/insights/${recommendation.sourceInsight.id}`}
@@ -225,15 +249,14 @@ function RecommendationCard({
                 {recommendation.sourceInsight.summary}
               </Link>{' '}
               <span className="text-gray-500">
-                (confianza{' '}
-                {recommendation.sourceInsight.confidence.toFixed(2)}) — ábrela
-                para ver los documentos en los que se apoya.
+                {t('recs.evidence.openIt', {
+                  confidence:
+                    recommendation.sourceInsight.confidence.toFixed(2),
+                })}
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-amber-700">
-              La conclusión que la originó ya no está disponible.
-            </p>
+            <p className="mt-1 text-amber-700">{t('recs.evidence.gone')}</p>
           )}
         </div>
       )}

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Button, ErrorNote, Field, inputClass, useAction } from '../components/ui';
+import { LanguagePicker } from '../components/LanguagePicker';
+import { useT } from '../i18n';
 
 /**
  * Volver a entrar cuando se ha olvidado la contraseña.
@@ -25,11 +27,15 @@ function Marco({ children }: { children: React.ReactNode }) {
         <h1 className="text-xl font-semibold tracking-tight">BusinessBrain</h1>
       </div>
       {children}
+      {/* También aquí: se llega sin haber entrado, y quien no entiende la pantalla necesita
+          poder cambiarla. */}
+      <LanguagePicker />
     </main>
   );
 }
 
 export function PasswordRecoveryPage() {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [enviado, setEnviado] = useState(false);
   const action = useAction();
@@ -38,20 +44,14 @@ export function PasswordRecoveryPage() {
     return (
       <Marco>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
-          <p className="font-medium">Mira tu correo.</p>
-          <p className="mt-2 text-gray-600">
-            Si hay una cuenta con esa dirección, acabas de recibir un enlace para
-            elegir una contraseña nueva. Caduca en una hora.
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            ¿No te ha llegado? Comprueba la carpeta de correo no deseado, o
-            revisa si la dirección era otra.
-          </p>
+          <p className="font-medium">{t('recovery.sentTitle')}</p>
+          <p className="mt-2 text-gray-600">{t('recovery.sentBody')}</p>
+          <p className="mt-2 text-xs text-gray-500">{t('recovery.sentHint')}</p>
           <Link
             className="mt-3 inline-block text-xs text-blue-700 underline"
             to="/login"
           >
-            Volver a la entrada
+            {t('recovery.backToLogin')}
           </Link>
         </div>
       </Marco>
@@ -72,13 +72,11 @@ export function PasswordRecoveryPage() {
         })}
       >
         <div>
-          <p className="text-sm font-medium">¿Has olvidado tu contraseña?</p>
-          <p className="mt-1 text-xs text-gray-600">
-            Escribe tu correo y te mandamos un enlace para elegir una nueva.
-          </p>
+          <p className="text-sm font-medium">{t('recovery.title')}</p>
+          <p className="mt-1 text-xs text-gray-600">{t('recovery.explain')}</p>
         </div>
 
-        <Field label="Correo">
+        <Field label={t('login.email')}>
           <input
             type="email"
             autoComplete="username"
@@ -92,14 +90,14 @@ export function PasswordRecoveryPage() {
         <ErrorNote error={action.error} />
 
         <Button type="submit" disabled={action.busy} className="w-full">
-          {action.busy ? 'Enviando…' : 'Enviarme el enlace'}
+          {action.busy ? t('recovery.sending') : t('recovery.submit')}
         </Button>
 
         <Link
           className="block text-center text-xs text-gray-500 underline"
           to="/login"
         >
-          Volver a la entrada
+          {t('recovery.backToLogin')}
         </Link>
       </form>
     </Marco>
@@ -114,6 +112,7 @@ export function PasswordRecoveryPage() {
  * contraseña nueva se le quede — una sesión regalada aquí y mañana no se acuerda.
  */
 export function PasswordResetPage() {
+  const t = useT();
   const [params] = useSearchParams();
   const token = params.get('token');
   const [password, setPassword] = useState('');
@@ -126,15 +125,13 @@ export function PasswordResetPage() {
     return (
       <Marco>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
-          <p className="font-medium">Este enlace está incompleto.</p>
-          <p className="mt-2 text-gray-600">
-            Copia el enlace entero desde el correo, o pide uno nuevo.
-          </p>
+          <p className="font-medium">{t('recovery.incompleteTitle')}</p>
+          <p className="mt-2 text-gray-600">{t('recovery.incompleteBody')}</p>
           <Link
             className="mt-3 inline-block text-xs text-blue-700 underline"
             to="/recuperar"
           >
-            Pedir un enlace nuevo
+            {t('recovery.askNew')}
           </Link>
         </div>
       </Marco>
@@ -145,16 +142,10 @@ export function PasswordResetPage() {
     return (
       <Marco>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
-          <p className="font-medium">Ya tienes contraseña nueva.</p>
-          <p className="mt-2 text-gray-600">
-            Por seguridad hemos cerrado las sesiones que estuvieran abiertas en
-            otros dispositivos.
-          </p>
-          <Link
-            className="mt-3 inline-block text-blue-700 underline"
-            to="/login"
-          >
-            Entrar
+          <p className="font-medium">{t('recovery.doneTitle')}</p>
+          <p className="mt-2 text-gray-600">{t('recovery.doneBody')}</p>
+          <Link className="mt-3 inline-block text-blue-700 underline" to="/login">
+            {t('login.signIn')}
           </Link>
         </div>
       </Marco>
@@ -183,9 +174,9 @@ export function PasswordResetPage() {
           setListo(true);
         })}
       >
-        <p className="text-sm font-medium">Elige tu contraseña nueva</p>
+        <p className="text-sm font-medium">{t('recovery.chooseTitle')}</p>
 
-        <Field label="Contraseña" hint="Al menos 8 caracteres.">
+        <Field label={t('login.password')} hint={t('recovery.passwordHint')}>
           <input
             type="password"
             autoComplete="new-password"
@@ -197,7 +188,7 @@ export function PasswordResetPage() {
           />
         </Field>
 
-        <Field label="Repítela">
+        <Field label={t('recovery.repeat')}>
           <input
             type="password"
             autoComplete="new-password"
@@ -209,14 +200,12 @@ export function PasswordResetPage() {
         </Field>
 
         {noCoincide && (
-          <p className="text-xs text-amber-700">
-            Las dos contraseñas no son iguales.
-          </p>
+          <p className="text-xs text-amber-700">{t('recovery.mismatch')}</p>
         )}
         <ErrorNote error={action.error} />
 
         <Button type="submit" disabled={action.busy} className="w-full">
-          {action.busy ? 'Guardando…' : 'Guardar y entrar'}
+          {action.busy ? t('common.saving') : t('recovery.submitNew')}
         </Button>
       </form>
     </Marco>

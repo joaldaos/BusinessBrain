@@ -3,21 +3,31 @@ import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth';
 import { Button, ErrorNote, Field, inputClass, useAction } from '../components/ui';
+import { useT } from '../i18n';
+import { LanguagePicker } from '../components/LanguagePicker';
 
 /**
  * Entrar, crear cuenta y ACEPTAR una invitación.
  *
- * La invitación llega como `?invitacion=<token>` porque no hay envío de correo: el enlace se
- * copia y se pega. Se acepta DESPUÉS de autenticarse, que es el único momento en que el
- * servidor puede comprobar que quien acepta es la persona invitada — el backend exige que el
- * correo coincida, así que reenviar el enlace a un tercero no le da acceso.
+ * La invitación llega como `?invitacion=<token>` porque el correo solo se usa hoy para
+ * recuperar la contraseña: el enlace se copia y se pega. Se acepta DESPUÉS de autenticarse,
+ * que es el único momento en que el servidor puede comprobar que quien acepta es la persona
+ * invitada — el backend exige que el correo coincida, así que reenviar el enlace a un tercero
+ * no le da acceso.
  *
  * Si la aceptación falla —caducada, ya usada, o de otro correo— la sesión NO se rompe: se entra
  * igualmente y se explica. Dejar a alguien fuera de su cuenta por una invitación vieja sería
  * peor que el problema que resuelve.
+ *
+ * ## Por qué el selector de idioma está aquí
+ *
+ * Es la primera pantalla que ve nadie, y la única a la que se llega sin haber entrado. Si el
+ * idioma solo se pudiera cambiar en Configuración, alguien cuyo navegador está en un idioma
+ * que no entiende tendría que atravesar el registro a ciegas para poder cambiarlo.
  */
 export function LoginPage() {
   const { user, loading, login, register, refreshUser } = useAuth();
+  const t = useT();
   const [params] = useSearchParams();
   const invitation = params.get('invitacion');
   const [invitationError, setInvitationError] = useState<string | null>(null);
@@ -30,7 +40,7 @@ export function LoginPage() {
   const [name, setName] = useState('');
   const action = useAction();
 
-  if (loading) return <p className="p-8 text-sm text-gray-500">Cargando…</p>;
+  if (loading) return <p className="p-8 text-sm text-gray-500">{t('common.loading')}</p>;
   // `!action.busy` no es cosmético: al entrar con invitación, la sesión queda lista ANTES de
   // aceptarla, y navegar en ese instante llevaría a la pantalla de "crea tu empresa" a alguien
   // que acaba de ser invitado a una. Se retiene aquí hasta que el turno entero termina.
@@ -51,9 +61,7 @@ export function LoginPage() {
         await refreshUser();
       } catch (error) {
         setInvitationError(
-          error instanceof Error
-            ? error.message
-            : 'No se pudo aceptar la invitación',
+          error instanceof Error ? error.message : t('common.retry'),
         );
       }
     }
@@ -63,20 +71,15 @@ export function LoginPage() {
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-4 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">BusinessBrain</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          La capa de inteligencia de tu empresa.
-        </p>
+        <p className="mt-1 text-sm text-gray-600">{t('login.tagline')}</p>
         {invitation && (
-          <p className="mt-2 text-sm text-blue-800">
-            Te han invitado a una empresa en BusinessBrain. Entra o crea tu cuenta
-            con el correo al que te invitaron y quedarás dentro.
-          </p>
+          <p className="mt-2 text-sm text-blue-800">{t('login.invited')}</p>
         )}
       </div>
 
       <form onSubmit={submit} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
         {mode === 'register' && (
-          <Field label="Nombre">
+          <Field label={t('login.name')}>
             <input
               className={inputClass}
               value={name}
@@ -86,7 +89,7 @@ export function LoginPage() {
           </Field>
         )}
 
-        <Field label="Correo">
+        <Field label={t('login.email')}>
           <input
             type="email"
             autoComplete="username"
@@ -97,7 +100,7 @@ export function LoginPage() {
           />
         </Field>
 
-        <Field label="Contraseña">
+        <Field label={t('login.password')}>
           <input
             type="password"
             autoComplete={
@@ -113,16 +116,16 @@ export function LoginPage() {
         <ErrorNote error={action.error} />
         {invitationError && (
           <p className="text-xs text-amber-700">
-            Has entrado, pero la invitación no se pudo aceptar: {invitationError}
+            {t('login.invitationFailed', { reason: invitationError })}
           </p>
         )}
 
         <Button type="submit" disabled={action.busy} className="w-full">
           {action.busy
-            ? 'Un momento…'
+            ? t('common.moment')
             : mode === 'login'
-              ? 'Entrar'
-              : 'Crear cuenta'}
+              ? t('login.signIn')
+              : t('login.createAccount')}
         </Button>
 
         <button
@@ -130,9 +133,7 @@ export function LoginPage() {
           className="w-full text-center text-xs text-gray-500 underline"
           onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
         >
-          {mode === 'login'
-            ? '¿No tienes cuenta? Crear una'
-            : 'Ya tengo cuenta'}
+          {mode === 'login' ? t('login.toRegister') : t('login.toLogin')}
         </button>
 
         {/* Solo al entrar: ofrecérselo a quien está creando una cuenta no tiene sentido. */}
@@ -141,10 +142,12 @@ export function LoginPage() {
             to="/recuperar"
             className="block text-center text-xs text-gray-500 underline"
           >
-            ¿Has olvidado tu contraseña?
+            {t('login.forgot')}
           </Link>
         )}
       </form>
+
+      <LanguagePicker />
     </main>
   );
 }

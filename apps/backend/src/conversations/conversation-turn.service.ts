@@ -29,6 +29,7 @@ import {
   PromptBuilderService,
   type PromptInsight,
 } from './prompt-builder.service';
+import type { Locale } from '../common/i18n/locales';
 
 /**
  * Un turno de conversación — BUSINESSBRAIN_MIGRATION_PLAN.md §7.2, Fase 4.
@@ -134,6 +135,8 @@ export class ConversationTurnService {
     userId: string;
     conversationId: string;
     content: string;
+    /** Idioma de QUIEN PREGUNTA. No tiene por que ser el de los documentos. */
+    locale: Locale;
   }): Promise<PreparedTurn> {
     const conversation = await this.conversations.findOne({
       organizationId: params.organizationId,
@@ -210,6 +213,7 @@ export class ConversationTurnService {
       // El historial excluye la pregunta que se acaba de persistir: va aparte, como turno
       // actual, y duplicarla confundiría al modelo.
       history: conversation.messages,
+      locale: params.locale,
     };
 
     return {
@@ -340,6 +344,7 @@ export class ConversationTurnService {
    * y el alcance, nunca cómo se trata el historial.
    */
   private async prepareWithAgent(params: {
+    locale: Locale;
     organizationId: string;
     userId: string;
     conversationId: string;
@@ -380,13 +385,14 @@ export class ConversationTurnService {
               context: EMPTY_CONTEXT,
               insights: [],
               history: params.history,
+              locale: params.locale,
             })
           : null,
     };
   }
 
-  noKnowledgeAnswer(): string {
-    return this.promptBuilder.noKnowledgeAnswer();
+  noKnowledgeAnswer(locale: Locale): string {
+    return this.promptBuilder.noKnowledgeAnswer(locale);
   }
 
   /**

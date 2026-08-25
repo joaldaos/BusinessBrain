@@ -221,7 +221,10 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
   await expect(page.getByText('Barrido semanal')).toBeVisible();
   await expect(
-    page.getByText(/SYNC_KNOWLEDGE_SOURCE.*RUN_ANALYSIS/),
+    // Lo que hará la automatización, dicho en castellano. Antes esta prueba afirmaba
+    // `SYNC_KNOWLEDGE_SOURCE → RUN_ANALYSIS`: estaba comprobando que se le enseñaban
+    // constantes del modelo de datos a una PYME.
+    page.getByText(/volver a leer la fuente.*analizar/i),
   ).toBeVisible();
 
   // Y se ejecuta: conocimiento, comprensión e informe, sin intervención.

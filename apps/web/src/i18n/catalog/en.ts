@@ -618,4 +618,26 @@ export const en: Catalog = {
     'The data processing agreement with the AI provider depends on which one each company works with and on legal review. It is not provided from here yet.',
   'privacy.pending.RETENTION':
     'The retention period after leaving is not fixed: today, if you ask for deletion, it is deleted there and then.',
+
+  // ── Platform audit ───────────────────────────────────────────────────────
+  'audit.action.platform.users.listed': 'Viewed the list of people',
+  'audit.action.platform.user.banned': 'Blocked an account',
+  'audit.action.platform.user.unbanned': 'Unblocked an account',
+  'audit.action.platform.organization.plan_changed': "Changed a company's plan",
+
+  'audit.target.User': 'account',
+  'audit.target.Organization': 'company',
+
+  'audit.detail.previousStatus': 'previous state',
+  'audit.detail.newStatus': 'new state',
+  'audit.detail.from': 'before',
+  'audit.detail.to': 'after',
+  'audit.detail.page': 'page',
+  'audit.detail.returned': 'people shown',
+
+  'audit.value.ACTIVE': 'active',
+  'audit.value.BANNED': 'blocked',
+  'audit.value.FREE': 'Free',
+  'audit.value.PRO': 'Professional',
+  'audit.value.ENTERPRISE': 'Enterprise',
 };

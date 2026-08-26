@@ -127,10 +127,10 @@ export const AUDIT_ACTIONS = {
   //
   // Ya se aprendió una vez: el borrado de datos de una organización se registra así desde que
   // se construyó, por este mismo motivo.
-  USER_BANNED: 'user.banned',
+  USER_BANNED: 'platform.user.banned',
   /** Desbanear NO es "banear con otro estado": es la acción contraria y se nombra aparte. */
-  USER_UNBANNED: 'user.unbanned',
-  ORGANIZATION_PLAN_CHANGED: 'organization.plan_changed',
+  USER_UNBANNED: 'platform.user.unbanned',
+  ORGANIZATION_PLAN_CHANGED: 'platform.organization.plan_changed',
 
   /**
    * Alguien de la plataforma ha leído la lista de personas de los clientes.

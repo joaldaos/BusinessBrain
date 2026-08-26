@@ -9,6 +9,7 @@ import {
   localeFromBrowser,
 } from './locales';
 import { SUPPORTED_LOCALES as BACKEND_LOCALES } from '../../../backend/src/common/i18n/locales';
+import { PLATFORM_AUDIT_ACTIONS } from '../../../backend/src/audit/domain/platform-actions';
 import { I18nProvider, useI18n } from './index';
 import { LanguagePicker } from '../components/LanguagePicker';
 import { renderLocalized } from '../test/render';
@@ -71,6 +72,22 @@ describe('idiomas', () => {
 
         expect(sucias, `catálogo ${catalogo}`).toEqual([]);
       }
+    });
+
+    it('CRÍTICO: toda acción de auditoría de plataforma tiene nombre para una persona', () => {
+      // La API manda códigos —`platform.user.banned` es vocabulario de un catálogo interno— y
+      // la pantalla nunca puede enseñarlos. Si alguien añade una acción administrativa y no la
+      // traduce, esta prueba lo dice antes de que un código aparezca delante de nadie.
+      const sinTraducir = PLATFORM_AUDIT_ACTIONS.flatMap((accion) =>
+        (['es', 'en'] as const)
+          .filter(
+            (idioma) =>
+              !(`audit.action.${accion}` in (idioma === 'es' ? es : en)),
+          )
+          .map((idioma) => `${idioma}:${accion}`),
+      );
+
+      expect(sinTraducir).toEqual([]);
     });
 
     it('las claves de estado cubren el vocabulario que manda el backend', () => {

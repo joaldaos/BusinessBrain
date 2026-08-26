@@ -243,7 +243,7 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
 
       const traza = await prisma.auditLog.findFirst({
         where: {
-          action: 'organization.plan_changed',
+          action: 'platform.organization.plan_changed',
           targetId: efimera.organizationId,
         },
       });

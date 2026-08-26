@@ -634,6 +634,33 @@ export const es = {
     'El contrato de encargado de tratamiento con el proveedor de IA depende de con cuál trabaje cada empresa y de una revisión jurídica. Todavía no se entrega desde aquí.',
   'privacy.pending.RETENTION':
     'El plazo de conservación de los datos tras una baja no está fijado: hoy, si pides el borrado, se borra en ese momento.',
+
+  // ── Auditoría de plataforma ──────────────────────────────────────────────
+  //
+  // Lo que ha hecho quien administra BusinessBrain. La API manda CÓDIGOS —`platform.user.banned`
+  // es vocabulario de un catálogo interno— y aquí se dicen en la lengua de quien mira. Ningún
+  // código puede llegar nunca a la pantalla: hay una prueba que comprueba que todos tienen
+  // traducción, en los dos idiomas.
+  'audit.action.platform.users.listed': 'Consultó la lista de personas',
+  'audit.action.platform.user.banned': 'Bloqueó una cuenta',
+  'audit.action.platform.user.unbanned': 'Desbloqueó una cuenta',
+  'audit.action.platform.organization.plan_changed': 'Cambió el plan de una empresa',
+
+  'audit.target.User': 'cuenta',
+  'audit.target.Organization': 'empresa',
+
+  'audit.detail.previousStatus': 'estado anterior',
+  'audit.detail.newStatus': 'estado nuevo',
+  'audit.detail.from': 'antes',
+  'audit.detail.to': 'después',
+  'audit.detail.page': 'página',
+  'audit.detail.returned': 'personas mostradas',
+
+  'audit.value.ACTIVE': 'activa',
+  'audit.value.BANNED': 'bloqueada',
+  'audit.value.FREE': 'Gratuito',
+  'audit.value.PRO': 'Profesional',
+  'audit.value.ENTERPRISE': 'Empresa',
 } as const;
 
 /** Las claves que existen. Una pantalla que pida otra cosa no compila. */

@@ -75,7 +75,7 @@ describe('AdminService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            action: 'user.banned',
+            action: 'platform.user.banned',
             actorId: 'actor-1',
             targetId: 'usr-1',
           }),
@@ -95,7 +95,7 @@ describe('AdminService', () => {
       expect(result.status).toBe('ACTIVE');
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'user.unbanned' }),
+          data: expect.objectContaining({ action: 'platform.user.unbanned' }),
         }),
       );
     });

@@ -196,6 +196,27 @@ export async function registerActor(prefix: string): Promise<TestActor> {
   };
 }
 
+/**
+ * Una cuenta de ADMINISTRACIÓN DE PLATAFORMA: sin ninguna organización.
+ *
+ * Se promociona en la base de datos porque no existe ruta para concederse el rol —y no debe
+ * existir—. El token no cambia: `JwtStrategy` resuelve el usuario en cada petición, así que el
+ * rol nuevo entra en vigor sin volver a iniciar sesión.
+ *
+ * Que no tenga membresías no es un descuido de la prueba: es la invariante. Un administrador
+ * de plataforma con membresía sería exactamente la confusión que la arquitectura impide.
+ */
+export async function registerPlatformAdmin(
+  prefix = 'plataforma',
+): Promise<TestActor> {
+  const actor = await registerActor(prefix);
+  await prisma.user.update({
+    where: { id: actor.userId },
+    data: { platformRole: 'SUPERADMIN' },
+  });
+  return actor;
+}
+
 /** Crea una organización por HTTP; quien la crea queda como OWNER. */
 export async function createTenant(prefix: string): Promise<TestTenant> {
   const owner = await registerActor(prefix);

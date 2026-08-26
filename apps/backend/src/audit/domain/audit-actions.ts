@@ -110,11 +110,36 @@ export const AUDIT_ACTIONS = {
    */
   ORGANIZATION_DATA_ERASED: 'organization.data_erased',
 
-  // ── Plataforma (super admin) ──────────────────────────────────────────────
+  // ── Plataforma: quien OPERA BusinessBrain, no quien lo usa ────────────────
+  //
+  // ## Por qué llevan su propio espacio de nombres
+  //
+  // Una acción de plataforma y una de cliente no se leen igual ni las mira la misma persona.
+  // El prefijo `platform.` permite consultar "qué ha hecho la administración" sin arrastrar la
+  // actividad de los clientes, que es justo lo que hay que poder auditar aparte.
+  //
+  // ## Y por qué TODAS se escriben con `organizationId: null`
+  //
+  // `AuditLog` cuelga de la organización en cascada. Una acción administrativa registrada con
+  // el identificador de la empresa afectada **desaparecería al borrar esa empresa** — y lo que
+  // hizo la plataforma sobre un cliente es precisamente lo que hay que conservar después de
+  // que el cliente se vaya. La organización afectada viaja en `metadata`.
+  //
+  // Ya se aprendió una vez: el borrado de datos de una organización se registra así desde que
+  // se construyó, por este mismo motivo.
   USER_BANNED: 'user.banned',
   /** Desbanear NO es "banear con otro estado": es la acción contraria y se nombra aparte. */
   USER_UNBANNED: 'user.unbanned',
   ORGANIZATION_PLAN_CHANGED: 'organization.plan_changed',
+
+  /**
+   * Alguien de la plataforma ha leído la lista de personas de los clientes.
+   *
+   * Es una LECTURA y aun así se audita, a diferencia del resto de listados: son nombres y
+   * correos de empleados de empresas clientes, es decir, datos personales de terceros. Que
+   * mirarlos no cambie nada no significa que no haya que poder responder quién los miró.
+   */
+  PLATFORM_USERS_LISTED: 'platform.users.listed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

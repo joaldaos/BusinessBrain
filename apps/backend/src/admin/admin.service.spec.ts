@@ -117,9 +117,76 @@ describe('AdminService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            metadata: { from: 'FREE', to: 'PRO' },
+            metadata: expect.objectContaining({ from: 'FREE', to: 'PRO' }),
           }),
         }),
+      );
+    });
+
+    it('CRÍTICO: la traza NO cuelga de la organización', async () => {
+      // `AuditLog` cae en cascada con la organización: registrar la acción con su
+      // identificador la haría desaparecer al borrar la empresa, que es justo cuando hay que
+      // poder demostrar qué se le hizo. La organización viaja en `metadata`.
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'org-1',
+        name: 'Panadería Ruiz',
+        planTier: 'FREE',
+      });
+      prisma.organization.update.mockResolvedValue({
+        id: 'org-1',
+        planTier: 'PRO',
+      });
+
+      await service.changeOrganizationPlan('org-1', 'PRO', 'actor-1');
+
+      const escrito = prisma.auditLog.create.mock.calls.at(-1)?.[0] as {
+        data: {
+          organizationId: string | null;
+          metadata: Record<string, unknown>;
+        };
+      };
+      expect(escrito.data.organizationId).toBeNull();
+      expect(escrito.data.metadata).toMatchObject({
+        organizationId: 'org-1',
+        organizationName: 'Panadería Ruiz',
+      });
+    });
+  });
+
+  describe('lo que la plataforma NO ve de sus clientes', () => {
+    it('CRÍTICO: el listado de organizaciones no devuelve su configuración', async () => {
+      // `settings` acumula configuración del cliente —techo de gasto, exigencia de
+      // fiabilidad— y un `findMany` sin `select` la entrega entera. El día que ahí se guarde
+      // algo sensible, la administración lo estaría leyendo sin que nadie lo decidiera.
+      prisma.organization.findMany.mockResolvedValue([]);
+      prisma.organization.count.mockResolvedValue(0);
+
+      await service.listOrganizations(1);
+
+      const consulta = prisma.organization.findMany.mock.calls.at(-1)?.[0] as {
+        select?: Record<string, unknown>;
+      };
+      expect(consulta.select).toBeDefined();
+      expect(consulta.select).not.toHaveProperty('settings');
+    });
+
+    it('CRÍTICO: leer la lista de personas deja rastro', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'u1', email: 'ana@cliente.es' },
+      ]);
+      prisma.user.count.mockResolvedValue(1);
+
+      await service.listUsers(1, 'actor-1');
+
+      const escrito = prisma.auditLog.create.mock.calls.at(-1)?.[0] as {
+        data: { action: string; actorId: string; metadata: unknown };
+      };
+      expect(escrito.data.action).toBe('platform.users.listed');
+      expect(escrito.data.actorId).toBe('actor-1');
+      // El recuento, no los correos: una auditoría que los copiara sería un segundo almacén
+      // de los mismos datos personales.
+      expect(JSON.stringify(escrito.data.metadata)).not.toContain(
+        'ana@cliente.es',
       );
     });
   });

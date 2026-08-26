@@ -29,9 +29,17 @@ export class AdminController {
     return this.adminService.listOrganizations(Number(page));
   }
 
+  /**
+   * Quién es quién. La lectura queda registrada: son datos personales de empleados de
+   * empresas clientes, y que mirarlos no cambie nada no quita que haya que poder responder
+   * quién los miró.
+   */
   @Get('users')
-  async listUsers(@Query('page') page?: string) {
-    return this.adminService.listUsers(Number(page));
+  async listUsers(
+    @CurrentUser() actor: RequestUser,
+    @Query('page') page?: string,
+  ) {
+    return this.adminService.listUsers(Number(page), actor.id);
   }
 
   @Post('users/:id/ban')

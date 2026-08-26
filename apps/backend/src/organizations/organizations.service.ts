@@ -10,6 +10,10 @@ import { MembershipRole, Prisma } from '@businessbrain/database';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
+import {
+  MEMBERSHIP_DENIED_TO_PLATFORM_ADMIN,
+  canHoldMembership,
+} from '../common/platform/tenant-separation';
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
 
@@ -18,6 +22,7 @@ export class OrganizationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(name: string, ownerId: string) {
+    await this.assertCanJoinAnOrganization(ownerId);
     const slug = await this.generateUniqueSlug(name);
 
     return this.prisma.organization.create({
@@ -111,6 +116,8 @@ export class OrganizationsService {
   }
 
   async acceptInvitation(token: string, userId: string, userEmail: string) {
+    await this.assertCanJoinAnOrganization(userId);
+
     const invitation = await this.prisma.invitation.findUnique({
       where: { token },
     });
@@ -150,6 +157,29 @@ export class OrganizationsService {
     ]);
 
     return membership;
+  }
+
+  /**
+   * La frontera entre quien opera BusinessBrain y quien lo usa.
+   *
+   * Se comprueba en los DOS puntos donde nace una membresía —crear empresa y aceptar
+   * invitación— y no en el controlador: una comprobación en la superficie se salta con
+   * cualquier llamada interna, y esta es la invariante que hace que el administrador de
+   * plataforma reciba 403 en toda la API de cliente por el camino normal.
+   *
+   * Se lee el usuario en vez de confiar en lo que traiga quien llama. Es una consulta más en
+   * una operación que ocurre una vez por empresa, y a cambio no hay forma de eludirla.
+   */
+  private async assertCanJoinAnOrganization(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { platformRole: true },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    if (!canHoldMembership(user.platformRole)) {
+      throw new ForbiddenException(MEMBERSHIP_DENIED_TO_PLATFORM_ADMIN);
+    }
   }
 
   private async generateUniqueSlug(name: string): Promise<string> {

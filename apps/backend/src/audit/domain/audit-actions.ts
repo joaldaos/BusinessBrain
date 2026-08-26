@@ -140,6 +140,19 @@ export const AUDIT_ACTIONS = {
    * mirarlos no cambie nada no significa que no haya que poder responder quién los miró.
    */
   PLATFORM_USERS_LISTED: 'platform.users.listed',
+  // ── Acceso administrativo a los datos de UN cliente ───────────────────────
+  //
+  // Las cuatro etapas del ciclo, y las cuatro se registran: pedirlo, que el propietario lo
+  // apruebe, usarlo y retirarlo. Sin la de USO, la traza diria que hubo permiso y no cuantas
+  // veces se ejercio — que es justo lo que hay que poder responderle a un cliente.
+  //
+  // La aprobacion la hace el PROPIETARIO de la empresa y aun asi vive en el espacio de
+  // plataforma: lo que se registra no es actividad de su negocio, es una decision sobre el
+  // acceso de la plataforma a sus datos.
+  PLATFORM_ACCESS_REQUESTED: 'platform.access.requested',
+  PLATFORM_ACCESS_APPROVED: 'platform.access.approved',
+  PLATFORM_ACCESS_USED: 'platform.access.used',
+  PLATFORM_ACCESS_REVOKED: 'platform.access.revoked',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -161,6 +174,7 @@ export const AUDIT_TARGET_TYPES = {
   RECOMMENDATION: 'Recommendation',
   USER: 'User',
   ORGANIZATION: 'Organization',
+  PLATFORM_ACCESS_GRANT: 'PlatformAccessGrant',
 } as const;
 
 export type AuditTargetType =

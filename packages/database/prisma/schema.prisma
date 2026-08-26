@@ -267,6 +267,12 @@ model User {
   refreshTokens    RefreshToken[]
   passwordResets   PasswordResetToken[]
 
+  // Accesos administrativos a datos de clientes: pedidos, aprobados o retirados por esta
+  // persona. Nunca son membresias — ver PlatformAccessGrant.
+  platformGrantsRequested PlatformAccessGrant[] @relation("PlatformGrantRequester")
+  platformGrantsApproved  PlatformAccessGrant[] @relation("PlatformGrantApprover")
+  platformGrantsRevoked   PlatformAccessGrant[] @relation("PlatformGrantRevoker")
+
   // Decisiones humanas sobre propuestas (subfase 5.8) y concesiones de acceso otorgadas.
   resolvedRecommendations Recommendation[]            @relation("RecommendationResolver")
   authoredRecommendations Recommendation[]            @relation("RecommendationAuthor")
@@ -308,6 +314,84 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+/// Que puede ver la administracion de BusinessBrain de una empresa concreta.
+///
+/// Los tres alcances son INDEPENDIENTES: ninguno arrastra a otro. Tener METADATA no abre
+/// DIAGNOSTICS ni CONTENT, y CONTENT tampoco arrastra los otros dos. Cada concesion lleva su
+/// propio motivo, su propia caducidad y su propia traza.
+enum PlatformAccessScope {
+  /// Nombres, contadores y estados. Nunca contenido.
+  METADATA
+  /// Errores de ingesta y trazas de fallo, para poder investigar una incidencia.
+  DIAGNOSTICS
+  /// Titulos y texto de documentos. Exige aprobacion explicita del propietario.
+  CONTENT
+}
+
+/// Ciclo de vida de una concesion.
+///
+/// NO existe un estado CADUCADA: la caducidad se deriva de `expiresAt` en cada comprobacion.
+/// Un estado almacenado exigiria un proceso que lo actualizara, y entre que caduca y ese
+/// proceso pasa habria una ventana en la que el acceso seguiria abierto. Derivarla del reloj
+/// no tiene ventana.
+enum PlatformAccessStatus {
+  /// Pedida y esperando al propietario. Solo CONTENT nace asi.
+  PENDING
+  /// Utilizable, mientras no caduque ni se revoque.
+  ACTIVE
+  /// Retirada antes de tiempo, por quien la pidio o por quien la aprobo.
+  REVOKED
+}
+
+/// Acceso administrativo a los datos de UNA empresa, motivado, acotado y caducable.
+///
+/// ## Por que NO cuelga de una Membership
+///
+/// `KnowledgeCollectionAccess` —la otra concesion del sistema— cuelga de la membresia, para
+/// que salir de la organizacion revoque en cascada lo concedido. Aqui seria imposible: quien
+/// administra la plataforma **no tiene ni puede tener membresia**. Colgar de `User` y
+/// `Organization` por separado es lo que hace que una concesion no pueda convertirse nunca en
+/// pertenencia: son dos tablas de forma distinta y no hay manera de confundirlas.
+///
+/// ## Por que la caducidad es obligatoria y no admite nulo
+///
+/// Un permiso sin fecha de fin es un permiso permanente con otro nombre. La columna es NOT
+/// NULL a proposito: no existe forma de escribir una concesion indefinida, ni por error ni a
+/// proposito.
+model PlatformAccessGrant {
+  id             String               @id @default(cuid())
+  organizationId String
+  scope          PlatformAccessScope
+  status         PlatformAccessStatus @default(ACTIVE)
+
+  /// Por que se pide. Obligatorio: un acceso sin motivo no se puede auditar despues.
+  reason String
+
+  /// Quien pide el acceso. La concesion es SUYA: otra cuenta de plataforma no la hereda, y
+  /// eso es lo que impide que un futuro asistente reutilice una concesion ajena.
+  requestedById String
+  createdAt     DateTime @default(now())
+
+  /// Quien la aprobo. Solo CONTENT lo exige; en los demas alcances queda nulo.
+  approvedById String?
+  approvedAt   DateTime?
+
+  /// Quien la retiro antes de tiempo, y cuando.
+  revokedById String?
+  revokedAt   DateTime?
+
+  /// Cuando deja de servir. Siempre presente.
+  expiresAt DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation("PlatformGrantRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  approvedBy   User?        @relation("PlatformGrantApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  revokedBy    User?        @relation("PlatformGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, scope, status])
+  @@index([requestedById])
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -342,6 +426,7 @@ model Organization {
   analysisRuns              AnalysisRun[]
   insights                  Insight[]
   usageRecords              UsageRecord[]
+  platformAccessGrants      PlatformAccessGrant[]
 
   @@index([slug])
 }

@@ -625,8 +625,24 @@ export const en: Catalog = {
   'audit.action.platform.user.unbanned': 'Unblocked an account',
   'audit.action.platform.organization.plan_changed': "Changed a company's plan",
 
+  'audit.action.platform.access.requested': "Requested access to a company's data",
+  'audit.action.platform.access.approved': "Approved access to their company's data",
+  'audit.action.platform.access.used': "Viewed a company's data",
+  'audit.action.platform.access.revoked': "Withdrew access to a company's data",
+
   'audit.target.User': 'account',
   'audit.target.Organization': 'company',
+  'audit.target.PlatformAccessGrant': 'authorised access',
+
+  'audit.detail.scope': 'scope',
+  'audit.detail.reason': 'reason',
+  'audit.detail.what': 'what was viewed',
+  'audit.detail.expiresAt': 'expires',
+  'audit.detail.requiresApproval': 'needs approval',
+
+  'audit.value.METADATA': 'general data',
+  'audit.value.DIAGNOSTICS': 'diagnostics',
+  'audit.value.CONTENT': 'content',
 
   'audit.detail.previousStatus': 'previous state',
   'audit.detail.newStatus': 'new state',

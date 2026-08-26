@@ -646,8 +646,24 @@ export const es = {
   'audit.action.platform.user.unbanned': 'Desbloqueó una cuenta',
   'audit.action.platform.organization.plan_changed': 'Cambió el plan de una empresa',
 
+  'audit.action.platform.access.requested': 'Pidió acceso a los datos de una empresa',
+  'audit.action.platform.access.approved': 'Aprobó el acceso a los datos de su empresa',
+  'audit.action.platform.access.used': 'Consultó datos de una empresa',
+  'audit.action.platform.access.revoked': 'Retiró el acceso a los datos de una empresa',
+
   'audit.target.User': 'cuenta',
   'audit.target.Organization': 'empresa',
+  'audit.target.PlatformAccessGrant': 'acceso autorizado',
+
+  'audit.detail.scope': 'alcance',
+  'audit.detail.reason': 'motivo',
+  'audit.detail.what': 'qué se consultó',
+  'audit.detail.expiresAt': 'caduca',
+  'audit.detail.requiresApproval': 'necesita aprobación',
+
+  'audit.value.METADATA': 'datos generales',
+  'audit.value.DIAGNOSTICS': 'diagnóstico',
+  'audit.value.CONTENT': 'contenido',
 
   'audit.detail.previousStatus': 'estado anterior',
   'audit.detail.newStatus': 'estado nuevo',

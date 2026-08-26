@@ -20,6 +20,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { PrivacyModule } from './privacy/privacy.module';
+import { PlatformAccessModule } from './platform-access/platform-access.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -55,6 +56,7 @@ import type { AppConfig } from './config/configuration';
     AuthModule,
     OrganizationsModule,
     PrivacyModule,
+    PlatformAccessModule,
     AdminModule,
     LlmModule,
     KnowledgeEngineModule,

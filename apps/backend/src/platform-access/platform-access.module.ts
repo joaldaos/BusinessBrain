@@ -1,0 +1,18 @@
+import { Module } from '@nestjs/common';
+import { PlatformAccessController } from './api/platform-access.controller';
+import { OrganizationAccessController } from './api/organization-access.controller';
+import { PlatformAccessService } from './application/platform-access.service';
+import { OrganizationInspectionService } from './application/organization-inspection.service';
+
+/**
+ * El acceso administrativo a los datos de un cliente.
+ *
+ * Dos superficies y un solo servicio: la de plataforma —pedir, usar, retirar— y la del cliente
+ * —consultar, aprobar, retirar—. Que compartan servicio no es economía de código: es lo que
+ * hace imposible que las dos caras del mismo permiso lleguen a discrepar sobre si está vigente.
+ */
+@Module({
+  controllers: [PlatformAccessController, OrganizationAccessController],
+  providers: [PlatformAccessService, OrganizationInspectionService],
+})
+export class PlatformAccessModule {}

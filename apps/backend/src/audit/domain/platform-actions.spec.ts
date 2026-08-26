@@ -51,9 +51,14 @@ describe('qué auditoría ve la administración de plataforma', () => {
   });
 
   it('las acciones administrativas que existen hoy están todas', () => {
-    // Banear, desbanear, cambiar de plan y listar personas. Si mañana hay una más y no se
-    // añade, la primera prueba de este fichero falla.
+    // La lista literal, a propósito: añadir una acción administrativa obliga a tocar esta
+    // prueba, y tocarla obliga a mirar si de verdad debe verla el administrador. Un `expect`
+    // que se adaptara solo no protegería de nada.
     expect([...PLATFORM_AUDIT_ACTIONS].sort()).toEqual([
+      'platform.access.approved',
+      'platform.access.requested',
+      'platform.access.revoked',
+      'platform.access.used',
       'platform.organization.plan_changed',
       'platform.user.banned',
       'platform.user.unbanned',

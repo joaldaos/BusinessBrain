@@ -4,6 +4,7 @@ import {
   destroyTenant,
   http,
   prisma,
+  reauthenticate,
   registerPlatformAdmin,
   startTestApp,
   stopTestApp,
@@ -37,6 +38,18 @@ describe('Auditoría de plataforma (E2E)', () => {
     await startTestApp();
     admin = await registerPlatformAdmin('auditoria');
     tenant = await createTenant('auditoria-cliente');
+  });
+
+  /**
+   * El administrador confirma quién es antes de cada prueba.
+   *
+   * Banear y cambiar de plan son acciones sensibles desde la Fase 4, y esta suite las usa para
+   * GENERAR las entradas que luego lee. Que el guard esté puesto de verdad lo comprueba
+   * `plataforma-mfa.e2e-spec.ts`; aquí lo que se verifica es qué queda registrado y quién
+   * puede verlo.
+   */
+  beforeEach(async () => {
+    await reauthenticate(admin);
   });
 
   afterAll(async () => {
@@ -188,6 +201,7 @@ describe('Auditoría de plataforma (E2E)', () => {
         where: { id: efimera.organizationId },
       });
 
+      await reauthenticate(efimera.owner);
       await as(efimera.owner, efimera)
         .post(`/organizations/${efimera.organizationId}/erase`)
         .send({ confirmationName: empresa.name })

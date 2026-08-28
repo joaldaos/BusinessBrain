@@ -61,9 +61,38 @@ describe('qué auditoría ve la administración de plataforma', () => {
       'platform.access.used',
       'platform.organization.plan_changed',
       'platform.user.banned',
+      // Sí debe verla: retirar el segundo factor de una cuenta de cliente es lo más cerca que
+      // la plataforma llega de esa cuenta, y es exactamente lo que hay que poder revisar.
+      'platform.user.mfa_removed',
       'platform.user.unbanned',
       'platform.users.listed',
     ]);
+  });
+
+  /**
+   * Lo que la Fase 4 añadió y NO entra aquí.
+   *
+   * Activar la verificación en dos pasos, cambiar la contraseña o reautenticarse son hechos de
+   * la cuenta de una persona, no acciones de la administración. Que se escriban sin
+   * organización —porque son de una SESIÓN, no de una empresa— no los convierte en acciones de
+   * plataforma, y si el filtro fuera "no tiene organización" acabarían todos en este listado:
+   * la administración vería quién cambió su contraseña y cuándo en cada empresa cliente.
+   */
+  it('CRÍTICO: la seguridad de la cuenta de un cliente NO es auditoría de plataforma', () => {
+    for (const deLaCuenta of [
+      'mfa.enabled',
+      'mfa.disabled',
+      'mfa.code_verified',
+      'mfa.code_failed',
+      'mfa.recovery_code_used',
+      'mfa.recovery_codes_regenerated',
+      'mfa.removed_by_owner',
+      'password.changed',
+      'auth.reauthenticated',
+      'auth.sensitive_action_denied',
+    ]) {
+      expect(isPlatformAction(deLaCuenta)).toBe(false);
+    }
   });
 
   it('falla cerrado ante lo desconocido', () => {

@@ -4,6 +4,7 @@ import {
   destroyTenant,
   http,
   prisma,
+  reauthenticate,
   registerActor,
   registerPlatformAdmin,
   startTestApp,
@@ -231,6 +232,9 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
       // identificador, desaparecería justo cuando hay que poder demostrar qué se hizo.
       const efimera = await createTenant('plataforma-efimera');
       extranos.push(efimera.owner.userId);
+
+      // Cambiar el plan de una empresa es una acción sensible desde la Fase 4.
+      await reauthenticate(admin);
 
       await comoAdmin()
         .post(`/admin/organizations/${efimera.organizationId}/plan`)

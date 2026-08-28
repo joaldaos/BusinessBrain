@@ -255,10 +255,30 @@ model User {
   /// `common/i18n/locales.ts`. Nulo = no ha elegido, y se usa el idioma del navegador.
   locale       String?
   lastActiveAt DateTime?
+
+  /// Verificacion en dos pasos.
+  ///
+  /// El secreto va CIFRADO, no con hash: para comprobar un codigo TOTP hay que recalcularlo, y
+  /// eso exige el secreto original. Se usa el `EncryptionService` que ya cifra las claves de
+  /// los proveedores de IA (AES-256-GCM con `ENCRYPTION_KEY`). Nunca sale de aqui salvo en el
+  /// alta, y solo hacia el QR.
+  ///
+  /// El secreto puede existir SIN `mfaEnabledAt`: es el alta a medias, entre pedir el QR y
+  /// confirmar el primer codigo. Lo que activa la verificacion es la FECHA, no el secreto —
+  /// asi un alta abandonada no deja a nadie con un segundo factor que no sabe que tiene.
+  mfaSecretEnc      String?
+  mfaEnabledAt      DateTime?
+  /// Intentos de codigo fallidos seguidos. Por CUENTA: el limite por IP no ve un ataque
+  /// repartido entre mil direcciones, que es como se ataca un codigo de seis digitos.
+  mfaFailedAttempts Int       @default(0)
+  mfaLockedUntil    DateTime?
+
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   memberships      Membership[]
+  authSessions     AuthSession[]
+  mfaRecoveryCodes MfaRecoveryCode[]
   conversations    Conversation[]
   agentMemories    AgentMemory[]
   notifications    Notification[]
@@ -281,16 +301,67 @@ model User {
   @@index([email])
 }
 
+/// La SESION: lo que sigue siendo la misma sesion aunque el token rote.
+///
+/// `RefreshToken` no sirve como identidad de sesion: rota en cada refresco y deja una fila
+/// nueva cada quince minutos. Atar cualquier cosa a el —una reautenticacion, por ejemplo—
+/// significaria perderla en el siguiente refresco, y una garantia que se evapora sola es peor
+/// que no tenerla, porque nadie se entera de cuando dejo de aplicar.
+///
+/// Esta fila nace al entrar y muere al salir. Su identificador viaja dentro del token de
+/// acceso (`sid`), asi que cada peticion sabe DE QUE SESION viene, no solo de que persona.
+///
+/// `reauthenticatedAt` es la ventana de "recien autenticado" (ver
+/// common/security/sensitive-actions.ts). Vive AQUI y no en `User` a proposito: si viviera en
+/// la persona, reautenticarse en el portatil abriria tambien la ventana del movil que alguien
+/// dejo abierto en otro sitio, que es justo el escenario del que esto protege.
+model AuthSession {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Cuando se demostro la identidad por ultima vez. Nulo = nunca desde que empezo la sesion.
+  reauthenticatedAt DateTime?
+  revokedAt         DateTime?
+  lastUsedAt        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+
+  refreshTokens RefreshToken[]
+
+  @@index([userId])
+}
+
 model RefreshToken {
-  id        String    @id @default(cuid())
+  id        String      @id @default(cuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// A que sesion pertenece. Obligatorio: un token sin sesion no se puede revocar al cerrarla.
+  sessionId String
+  session   AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime    @default(now())
 
   @@index([userId])
+  @@index([sessionId])
+}
+
+/// Un codigo de recuperacion sin usar, o ya usado.
+///
+/// Del codigo se guarda su HMAC, nunca el codigo: se enseñan una vez al activarlo y no existe
+/// ninguna ruta que los devuelva, porque no estan. `usedAt` los convierte en de un solo uso.
+///
+/// Se quedan como fila usada en vez de borrarse: poder responder "este codigo se gasto el
+/// martes" es parte de investigar un acceso raro, y una fila borrada no responde nada.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, codeHash])
 }
 
 /// Recuperación de contraseña.

@@ -1,7 +1,9 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { createDecipheriv } from 'node:crypto';
 import { PrismaClient, type MembershipRole } from '@businessbrain/database';
+import { totp } from '../../src/auth/domain/totp';
 import { AppModule } from '../../src/app.module';
 import { configureApp, type AppSurfaceOptions } from '../../src/bootstrap';
 import { ProviderRegistry } from '../../src/llm/application/provider-registry.service';
@@ -163,7 +165,14 @@ export interface TestActor {
   userId: string;
   email: string;
   accessToken: string;
+  /** La contraseña con la que se registró: hace falta para reautenticarse. */
+  password: string;
+  /** El secreto TOTP, si esta cuenta activó la verificación en dos pasos. */
+  mfaSecret?: string;
 }
+
+/** La contraseña de todas las cuentas de prueba. */
+export const TEST_PASSWORD = 'contrasena-de-prueba';
 
 export interface TestTenant {
   organizationId: string;
@@ -177,7 +186,7 @@ const unique = () =>
 /** Registra un usuario y devuelve su token, atravesando el flujo HTTP real de auth. */
 export async function registerActor(prefix: string): Promise<TestActor> {
   const email = `${prefix}-${unique()}@e2e.local`;
-  const password = 'contrasena-de-prueba';
+  const password = TEST_PASSWORD;
 
   const registered = await http()
     .post('/auth/register')
@@ -192,8 +201,129 @@ export async function registerActor(prefix: string): Promise<TestActor> {
   return {
     userId: registered.body.data.user?.id ?? login.body.data.user.id,
     email,
+    password,
     accessToken: login.body.data.accessToken,
   };
+}
+
+/**
+ * Activa la verificación en dos pasos ATRAVESANDO EL FLUJO REAL.
+ *
+ * El secreto se obtiene descifrándolo de la base de datos porque es lo único que la API no
+ * devuelve en claro — y no debe devolverlo. Todo lo demás es HTTP de verdad: pedir el QR,
+ * calcular el código con el mismo TOTP que usará la aplicación del móvil, y confirmarlo. Si
+ * el alta estuviera rota, esta función fallaría en vez de simular que funcionó.
+ */
+export async function enableMfa(actor: TestActor): Promise<TestActor> {
+  await as(actor).post('/auth/mfa/setup').expect(200);
+
+  const secret = await readMfaSecret(actor.userId);
+  const confirmed = await as(actor)
+    .post('/auth/mfa/confirm')
+    .send({ code: totp(secret) })
+    .expect(200);
+
+  // El token de acceso NO cambia al activar: la sesión sigue siendo la misma. `JwtStrategy`
+  // relee la cuenta en cada petición, así que el estado nuevo entra en vigor solo.
+  return {
+    ...actor,
+    mfaSecret: secret,
+    recoveryCodes: confirmed.body.data.recoveryCodes as string[],
+  } as TestActor & { recoveryCodes: string[] };
+}
+
+/** El secreto tal y como lo guarda el producto: cifrado, y se descifra igual que él. */
+export async function readMfaSecret(userId: string): Promise<string> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { mfaSecretEnc: true },
+  });
+  if (!user.mfaSecretEnc) throw new Error('La cuenta no tiene secreto TOTP');
+
+  return decryptWithAppKey(user.mfaSecretEnc);
+}
+
+/** El mismo AES-256-GCM del producto, con la misma clave del entorno. */
+function decryptWithAppKey(payload: string): string {
+  const key = Buffer.from(process.env.ENCRYPTION_KEY ?? '', 'base64');
+  const [iv, authTag, ciphertext] = payload.split(':');
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(iv, 'base64'),
+  );
+  decipher.setAuthTag(Buffer.from(authTag, 'base64'));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(ciphertext, 'base64')),
+    decipher.final(),
+  ]).toString('utf8');
+}
+
+/** El código que mostraría ahora mismo la aplicación del móvil de esta persona. */
+export function codeFor(actor: TestActor): string {
+  if (!actor.mfaSecret) throw new Error('La cuenta no tiene segundo factor');
+  return totp(actor.mfaSecret);
+}
+
+/**
+ * Abre la ventana de quince minutos de esta sesión, por HTTP.
+ *
+ * Con la credencial que corresponda a la cuenta: el código si tiene segundo factor, la
+ * contraseña si no. Es exactamente lo que hace la interfaz.
+ */
+export async function reauthenticate(actor: TestActor): Promise<void> {
+  await as(actor)
+    .post('/auth/reauthenticate')
+    .send(
+      actor.mfaSecret ? { code: codeFor(actor) } : { password: actor.password },
+    )
+    .expect(200);
+}
+
+/**
+ * Deja caducada la ventana de reautenticación de una sesión, sin esperar quince minutos.
+ *
+ * Se retrasa el reloj de LA FILA, no el del proceso. Congelar el tiempo del proceso afectaría
+ * a todo lo demás —tokens, caducidades, auditoría— y acabaría probando un sistema que no
+ * existe. Aquí lo único que cambia es el dato que la comprobación mira.
+ */
+export async function expireReauthentication(actor: TestActor): Promise<void> {
+  const session = await currentSession(actor);
+  await prisma.authSession.update({
+    where: { id: session.id },
+    data: { reauthenticatedAt: new Date(Date.now() - 16 * 60_000) },
+  });
+}
+
+/** La sesión viva de esta persona. */
+export async function currentSession(actor: TestActor) {
+  return prisma.authSession.findFirstOrThrow({
+    where: { userId: actor.userId, revokedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/** Entra otra vez y devuelve un actor con la sesión NUEVA. */
+export async function loginAgain(
+  actor: TestActor,
+  password = actor.password,
+): Promise<TestActor> {
+  const first = await http()
+    .post('/auth/login')
+    .send({ email: actor.email, password })
+    .expect(201);
+
+  if (!first.body.data.mfaRequired) {
+    return { ...actor, password, accessToken: first.body.data.accessToken };
+  }
+
+  const second = await http()
+    .post('/auth/login/mfa')
+    .send({ mfaToken: first.body.data.mfaToken, code: codeFor(actor) })
+    .expect(201);
+
+  return { ...actor, password, accessToken: second.body.data.accessToken };
 }
 
 /**
@@ -208,6 +338,22 @@ export async function registerActor(prefix: string): Promise<TestActor> {
  */
 export async function registerPlatformAdmin(
   prefix = 'plataforma',
+): Promise<TestActor> {
+  const actor = await registerActor(prefix);
+  await prisma.user.update({
+    where: { id: actor.userId },
+    data: { platformRole: 'SUPERADMIN' },
+  });
+
+  // El segundo factor es OBLIGATORIO para administrar: sin él, `SuperAdminGuard` cierra todo
+  // `/admin`. Se activa aquí atravesando el flujo real para que las suites de plataforma
+  // prueben lo que hace un administrador de verdad y no un caso que no existe.
+  return enableMfa(actor);
+}
+
+/** Un administrador de plataforma que TODAVÍA no ha activado el segundo factor. */
+export async function registerPlatformAdminWithoutMfa(
+  prefix = 'plataforma-sin-mfa',
 ): Promise<TestActor> {
   const actor = await registerActor(prefix);
   await prisma.user.update({
@@ -255,7 +401,7 @@ export async function addMember(
   // pertenencias al validar, y un token anterior no las llevaría.
   const login = await http()
     .post('/auth/login')
-    .send({ email: actor.email, password: 'contrasena-de-prueba' })
+    .send({ email: actor.email, password: TEST_PASSWORD })
     .expect(201);
 
   return { ...actor, accessToken: login.body.data.accessToken };

@@ -677,6 +677,80 @@ export const es = {
   'audit.value.FREE': 'Gratuito',
   'audit.value.PRO': 'Profesional',
   'audit.value.ENTERPRISE': 'Empresa',
+
+  // ── Verificación en dos pasos ─────────────────────────────────────────────
+  //
+  // Ni una palabra del vocabulario interno. Quien lee esto tiene una gestoría, no un equipo de
+  // seguridad: "TOTP", "secreto" y "recovery code" no le dicen nada, y "código de un solo uso"
+  // y "códigos de repuesto" le dicen exactamente lo que son.
+  'mfa.title': 'Verificación en dos pasos',
+  'mfa.explain':
+    'Además de tu contraseña, para entrar te pediremos un código que cambia cada pocos segundos en tu móvil. Si alguien consigue tu contraseña, sigue sin poder entrar.',
+  'mfa.status.on': 'Activada',
+  'mfa.status.off': 'Desactivada',
+  'mfa.status.since': 'Activada el {date}',
+  'mfa.status.pending':
+    'Empezaste a configurarla y quedó a medias. Vuelve a empezar para terminarla.',
+  'mfa.status.remaining':
+    'Te quedan {count} códigos de repuesto sin usar.',
+  'mfa.status.lowCodes':
+    'Te quedan {count} códigos de repuesto. Conviene generar unos nuevos.',
+  'mfa.activate': 'Activar',
+  'mfa.deactivate': 'Desactivar',
+  'mfa.setup.step1':
+    'Abre tu aplicación de autenticación en el móvil (Google Authenticator, Microsoft Authenticator, o la que ya uses) y escanea este código.',
+  'mfa.setup.qrAlt': 'Código para escanear con tu aplicación',
+  'mfa.setup.manual': '¿No puedes escanearlo? Escribe esta clave a mano:',
+  'mfa.setup.step2':
+    'Escribe el código de 6 dígitos que te muestra la aplicación:',
+  'mfa.setup.code': 'Código de 6 dígitos',
+  'mfa.setup.confirm': 'Confirmar y activar',
+  'mfa.setup.cancel': 'Dejarlo para luego',
+  'mfa.codes.title': 'Guarda estos códigos de repuesto',
+  'mfa.codes.explain':
+    'Si algún día pierdes el móvil, cada uno de estos códigos te deja entrar una vez. Imprímelos o guárdalos en un sitio seguro: no vamos a poder volver a enseñártelos.',
+  'mfa.codes.understood': 'Los he guardado',
+  'mfa.codes.regenerate': 'Generar códigos nuevos',
+  'mfa.codes.regenerateHint':
+    'Los códigos anteriores dejarán de funcionar.',
+  'mfa.login.title': 'Un paso más',
+  'mfa.login.explain':
+    'Escribe el código que te muestra tu aplicación de autenticación.',
+  'mfa.login.code': 'Código',
+  'mfa.login.hint':
+    '¿No tienes el móvil? Escribe aquí uno de tus códigos de repuesto.',
+  'mfa.login.submit': 'Entrar',
+  'mfa.remove.title': 'Retirar la verificación de un administrador',
+  'mfa.remove.explain':
+    'Si alguien de tu equipo ha perdido el móvil y sus códigos de repuesto, puedes retirarle la verificación en dos pasos. Seguirá necesitando su contraseña para entrar.',
+  'mfa.remove.submit': 'Retirar',
+  'mfa.remove.done':
+    'Listo. Le hemos avisado por correo y ya puede entrar solo con su contraseña.',
+
+  // ── Confirmar identidad antes de una acción delicada ──────────────────────
+  'reauth.title': 'Confirma que eres tú',
+  'reauth.explain':
+    'Vas a hacer algo importante y hace un rato que entraste. Confírmanos que sigues siendo tú.',
+  'reauth.code': 'Código de tu aplicación',
+  'reauth.password': 'Tu contraseña',
+  'reauth.submit': 'Confirmar',
+  'reauth.cancel': 'Cancelar',
+  'reauth.done': 'Confirmado. Puedes seguir.',
+
+  // ── Cambiar la contraseña desde dentro ────────────────────────────────────
+  'password.title': 'Contraseña',
+  'password.explain':
+    'Al cambiarla, se cerrarán las sesiones abiertas en otros dispositivos.',
+  'password.new': 'Contraseña nueva',
+  'password.repeat': 'Repítela',
+  'password.mismatch': 'Las dos contraseñas no coinciden.',
+  'password.submit': 'Cambiar contraseña',
+  'password.done': 'Contraseña cambiada.',
+
+  'audit.action.mfa.enabled': 'Activó la verificación en dos pasos',
+  'audit.action.mfa.disabled': 'Desactivó la verificación en dos pasos',
+  'audit.action.platform.user.mfa_removed':
+    'Retiró la verificación en dos pasos de una cuenta',
 } as const;
 
 /** Las claves que existen. Una pantalla que pida otra cosa no compila. */

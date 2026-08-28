@@ -91,6 +91,8 @@ async function main() {
   console.log(
     `Seed OK\n` +
       `  plataforma (sin empresa): ${superadminEmail}\n` +
+      `    → tiene que activar la verificación en dos pasos antes de administrar nada:\n` +
+      `      entra, ve a Configuración y actívala. Sin ella, todo /admin responde 403.\n` +
       `  cliente demo (${demoOrg.slug}): ${demoOwnerEmail}` +
       (retiradas.count > 0
         ? `\n  se retiraron ${retiradas.count} membresía(s) heredadas de la cuenta de plataforma`

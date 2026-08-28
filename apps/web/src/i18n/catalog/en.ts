@@ -656,4 +656,70 @@ export const en: Catalog = {
   'audit.value.FREE': 'Free',
   'audit.value.PRO': 'Professional',
   'audit.value.ENTERPRISE': 'Enterprise',
+
+  // ── Two-step verification ─────────────────────────────────────────────────
+  'mfa.title': 'Two-step verification',
+  'mfa.explain':
+    'On top of your password, we ask for a code that changes every few seconds on your phone. If someone gets hold of your password, they still cannot get in.',
+  'mfa.status.on': 'On',
+  'mfa.status.off': 'Off',
+  'mfa.status.since': 'Turned on {date}',
+  'mfa.status.pending':
+    'You started setting this up and did not finish. Start again to complete it.',
+  'mfa.status.remaining': 'You have {count} unused backup codes left.',
+  'mfa.status.lowCodes':
+    'You have {count} backup codes left. It is a good moment to generate new ones.',
+  'mfa.activate': 'Turn on',
+  'mfa.deactivate': 'Turn off',
+  'mfa.setup.step1':
+    'Open your authentication app on your phone (Google Authenticator, Microsoft Authenticator, or whichever you already use) and scan this code.',
+  'mfa.setup.qrAlt': 'Code to scan with your app',
+  'mfa.setup.manual': 'Cannot scan it? Type this key by hand:',
+  'mfa.setup.step2': 'Type the 6-digit code your app is showing:',
+  'mfa.setup.code': '6-digit code',
+  'mfa.setup.confirm': 'Confirm and turn on',
+  'mfa.setup.cancel': 'Leave it for later',
+  'mfa.codes.title': 'Save these backup codes',
+  'mfa.codes.explain':
+    'If you ever lose your phone, each of these codes lets you in once. Print them or keep them somewhere safe: we will not be able to show them to you again.',
+  'mfa.codes.understood': 'I have saved them',
+  'mfa.codes.regenerate': 'Generate new codes',
+  'mfa.codes.regenerateHint': 'Your previous codes will stop working.',
+  'mfa.login.title': 'One more step',
+  'mfa.login.explain': 'Type the code your authentication app is showing.',
+  'mfa.login.code': 'Code',
+  'mfa.login.hint':
+    'Do not have your phone? Type one of your backup codes here.',
+  'mfa.login.submit': 'Sign in',
+  'mfa.remove.title': 'Remove verification from an administrator',
+  'mfa.remove.explain':
+    'If someone on your team has lost their phone and their backup codes, you can remove two-step verification for them. They will still need their password to sign in.',
+  'mfa.remove.submit': 'Remove',
+  'mfa.remove.done':
+    'Done. We have emailed them, and they can now sign in with their password alone.',
+
+  // ── Confirming identity before a sensitive action ─────────────────────────
+  'reauth.title': 'Confirm it is you',
+  'reauth.explain':
+    'You are about to do something important and it has been a while since you signed in. Confirm it is still you.',
+  'reauth.code': 'Code from your app',
+  'reauth.password': 'Your password',
+  'reauth.submit': 'Confirm',
+  'reauth.cancel': 'Cancel',
+  'reauth.done': 'Confirmed. You can carry on.',
+
+  // ── Changing your password from inside ────────────────────────────────────
+  'password.title': 'Password',
+  'password.explain':
+    'Changing it will sign you out on your other devices.',
+  'password.new': 'New password',
+  'password.repeat': 'Repeat it',
+  'password.mismatch': 'The two passwords do not match.',
+  'password.submit': 'Change password',
+  'password.done': 'Password changed.',
+
+  'audit.action.mfa.enabled': 'Turned on two-step verification',
+  'audit.action.mfa.disabled': 'Turned off two-step verification',
+  'audit.action.platform.user.mfa_removed':
+    'Removed two-step verification from an account',
 };

@@ -39,6 +39,7 @@ export const PLATFORM_AUDIT_ACTIONS: readonly AuditAction[] = [
   AUDIT_ACTIONS.PLATFORM_ACCESS_APPROVED,
   AUDIT_ACTIONS.PLATFORM_ACCESS_USED,
   AUDIT_ACTIONS.PLATFORM_ACCESS_REVOKED,
+  AUDIT_ACTIONS.PLATFORM_MFA_REMOVED,
 ] as const;
 
 /** El prefijo del espacio de nombres. Se usa para COMPROBAR la lista, no para filtrar. */

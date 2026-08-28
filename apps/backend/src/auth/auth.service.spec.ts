@@ -16,6 +16,13 @@ describe('AuthService', () => {
       update: jest.Mock;
       updateMany: jest.Mock;
     };
+    authSession: {
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+      findMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
   };
 
   const fakeConfig: Record<string, unknown> = {
@@ -34,6 +41,15 @@ describe('AuthService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      authSession: {
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      // `refresh` rota token y sesión en una transacción: aquí basta con dejar pasar las
+      // promesas que se le entregan.
+      $transaction: jest.fn((operations: unknown[]) => Promise.all(operations)),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -129,25 +145,87 @@ describe('AuthService', () => {
       );
     });
 
-    it('rota el token: revoca el usado y emite un par nuevo', async () => {
+    it('rota el token DENTRO de la misma sesión', async () => {
       const user = {
         id: 'usr-1',
         email: 'u@x.dev',
         name: 'U',
         platformRole: 'USER',
+        status: 'ACTIVE',
       };
-      prisma.refreshToken.findFirst.mockResolvedValue({ id: 'rt-1', user });
+      prisma.refreshToken.findFirst.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'usr-1',
+        sessionId: 'ses-1',
+        user,
+        session: { id: 'ses-1', revokedAt: null },
+      });
       prisma.refreshToken.create.mockResolvedValue({});
       prisma.user.update.mockResolvedValue({});
 
       const tokens = await service.refresh('some-valid-token');
 
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-        where: { id: 'rt-1' },
-        data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+      // La sesión NO cambia: es lo que permite que una reautenticación de hace tres minutos
+      // siga valiendo después de refrescar. Si el refresco abriera sesión nueva, la ventana
+      // se perdería cada quince minutos sin que nadie se enterara.
+      expect(tokens.sessionId).toBe('ses-1');
+      expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ sessionId: 'ses-1' }),
       });
       expect(tokens.accessToken).toEqual(expect.any(String));
       expect(tokens.refreshToken).toEqual(expect.any(String));
+    });
+
+    it('CRÍTICO: una sesión revocada no refresca', async () => {
+      // Cerrar sesión revoca la sesión. Si el refresco no lo mirara, el token de refresco
+      // seguiría emitiendo accesos nuevos y "he cerrado sesión" no significaría nada.
+      prisma.refreshToken.findFirst.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'usr-1',
+        sessionId: 'ses-1',
+        user: { id: 'usr-1', status: 'ACTIVE' },
+        session: { id: 'ses-1', revokedAt: new Date() },
+      });
+
+      await expect(
+        service.refresh('token-de-sesion-cerrada'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('el testigo del segundo paso', () => {
+    it('CRÍTICO: no lleva identificador de sesión, así que no vale como token de acceso', () => {
+      // `JwtStrategy` exige `sid` y rechaza cualquier cosa con `purpose`. Si este testigo
+      // pasara por ahí, presentarlo saltaría el segundo factor entero: la contraseña volvería
+      // a ser suficiente y todo lo demás sería decorado.
+      const testigo = service.issueMfaChallenge('usr-1');
+      const [, cuerpo] = testigo.split('.');
+      const payload = JSON.parse(
+        Buffer.from(cuerpo, 'base64url').toString('utf8'),
+      ) as Record<string, unknown>;
+
+      expect(payload.sid).toBeUndefined();
+      expect(payload.purpose).toBe('mfa_challenge');
+      expect(payload.sub).toBe('usr-1');
+    });
+
+    it('devuelve de quién es', () => {
+      expect(
+        service.verifyMfaChallenge(service.issueMfaChallenge('usr-7')),
+      ).toBe('usr-7');
+    });
+
+    it('CRÍTICO: un token de acceso normal no sirve como testigo del segundo paso', () => {
+      // La comprobación va en los dos sentidos. Sin esto, quien consiguiera un token de
+      // acceso de quince minutos podría usarlo para completar el segundo paso de otra sesión.
+      const accesoNormal = new JwtService({}).sign(
+        { sub: 'usr-1', sid: 'ses-1' },
+        { secret: fakeConfig['jwt.accessSecret'] as string },
+      );
+
+      expect(() => service.verifyMfaChallenge(accesoNormal)).toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });

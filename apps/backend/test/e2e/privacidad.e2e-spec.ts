@@ -5,6 +5,7 @@ import {
   destroyTenant,
   http,
   prisma,
+  reauthenticate,
   registerActor,
   startTestApp,
   stopTestApp,
@@ -27,6 +28,18 @@ describe('Privacidad y datos de la empresa (E2E)', () => {
     tenant = await createTenant('privacidad');
     const admin = await addMember(tenant, 'ADMIN', 'admin-privacidad');
     adminId = admin.userId;
+  });
+
+  /**
+   * El propietario confirma su identidad antes de cada prueba.
+   *
+   * Exportar y borrar los datos de la empresa son acciones sensibles desde la Fase 4: no basta
+   * con que la sesión siga viva. Que el guard esté puesto de verdad lo comprueba
+   * `verificacion-dos-pasos.e2e-spec.ts`; aquí lo que se verifica es lo que estas rutas hacen
+   * cuando la persona SÍ ha demostrado quién es.
+   */
+  beforeEach(async () => {
+    await reauthenticate(tenant.owner);
   });
 
   afterAll(async () => {
@@ -160,6 +173,8 @@ describe('Privacidad y datos de la empresa (E2E)', () => {
   describe('borrar los datos', () => {
     it('CRÍTICO: no se borra sin escribir el nombre de la empresa', async () => {
       const efimera = await createTenant('para-borrar-mal');
+      // Borrar los datos de la empresa exige credencial reciente desde la Fase 4.
+      await reauthenticate(efimera.owner);
 
       const respuesta = await as(efimera.owner, efimera)
         .post(`/organizations/${efimera.organizationId}/erase`)
@@ -190,6 +205,8 @@ describe('Privacidad y datos de la empresa (E2E)', () => {
 
     it('con el nombre correcto se borra de verdad, y arrastra el contenido', async () => {
       const efimera = await createTenant('para-borrar-bien');
+      // Borrar los datos de la empresa exige credencial reciente desde la Fase 4.
+      await reauthenticate(efimera.owner);
       const empresa = await prisma.organization.findUniqueOrThrow({
         where: { id: efimera.organizationId },
       });

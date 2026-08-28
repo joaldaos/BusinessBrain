@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common';
 import { MembershipRole } from '@businessbrain/database';
 import { OrgRoleGuard } from '../../common/guards/org-role.guard';
+import { RecentAuthGuard } from '../../common/guards/recent-auth.guard';
 import { OrgRoles } from '../../common/decorators/roles.decorator';
+import { RequiresRecentAuth } from '../../common/decorators/requires-recent-auth.decorator';
+import { SENSITIVE_ACTIONS } from '../../common/security/sensitive-actions';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { OrganizationExportService } from '../application/organization-export.service';
@@ -66,8 +69,9 @@ export class PrivacyController {
    * Solo el PROPIETARIO. No es leer conocimiento —eso va acotado por colección— sino un acto
    * administrativo sobre los datos de la empresa entera. Ver el servicio.
    */
-  @UseGuards(OrgRoleGuard)
+  @UseGuards(OrgRoleGuard, RecentAuthGuard)
   @OrgRoles(MembershipRole.OWNER)
+  @RequiresRecentAuth(SENSITIVE_ACTIONS.ORGANIZATION_EXPORT)
   @Get('organizations/:id/export')
   async exportData(
     @CurrentOrg() org: RequestOrganization,
@@ -83,8 +87,9 @@ export class PrivacyController {
    * `DELETE` con cuerpo obligatorio es un contrato que algunos clientes y proxies tratan mal.
    * Aquí lo que importa es que la confirmación llegue siempre, no la elegancia del verbo.
    */
-  @UseGuards(OrgRoleGuard)
+  @UseGuards(OrgRoleGuard, RecentAuthGuard)
   @OrgRoles(MembershipRole.OWNER)
+  @RequiresRecentAuth(SENSITIVE_ACTIONS.ORGANIZATION_ERASE)
   @HttpCode(HttpStatus.OK)
   @Post('organizations/:id/erase')
   async erase(

@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MAILER, type MailerPort } from '../../mail/domain/mailer.port';
+import { BCRYPT_ROUNDS } from '../auth.service';
 import {
   PASSWORD_RESET_LIFETIME_MS,
   generateResetToken,
@@ -17,7 +18,9 @@ import {
 } from '../domain/password-reset';
 import type { AppConfig } from '../../config/configuration';
 
-const BCRYPT_ROUNDS = 10;
+// El coste vive en `AuthService` y se importa de allí. Estaba duplicado en los dos ficheros, y
+// dos constantes iguales en dos sitios son una que alguien sube y otra que se queda atrás — con
+// el resultado de que la misma contraseña se protege distinto según por dónde se cambie.
 
 /**
  * Recuperar el acceso sin que nadie toque la base de datos.
@@ -43,6 +46,19 @@ const BCRYPT_ROUNDS = 10;
  * Alguien recupera su contraseña justamente cuando sospecha que otro entró. Si las sesiones
  * abiertas siguieran vivas, el intruso conservaría el acceso y la recuperación no habría
  * servido de nada.
+ *
+ * ## Y por qué NO desactiva la verificación en dos pasos
+ *
+ * Es la puerta trasera evidente: si el enlace del correo quitara el segundo factor, quien
+ * controlara el buzón de una persona entraría en su cuenta con una sola prueba, y el segundo
+ * factor no protegería exactamente del escenario para el que se instala.
+ *
+ * La consecuencia es deliberada y hay que asumirla: quien pierde a la vez la contraseña, el
+ * móvil y los códigos de papel NO se rescata con este flujo. Se rescata con los códigos de
+ * recuperación, o pidiendo que alguien le retire el segundo factor —el propietario de su
+ * empresa, o la administración— que son caminos motivados y auditados. Que la recuperación
+ * por correo sea insuficiente en ese caso es el precio de que sea insuficiente también para
+ * quien no debería entrar.
  */
 @Injectable()
 export class PasswordResetService {
@@ -129,9 +145,17 @@ export class PasswordResetService {
       }),
       this.prisma.user.update({
         where: { id: stored.userId },
+        // La verificación en dos pasos NO se toca. Ver la cabecera de la clase.
         data: { passwordHash },
       }),
-      // Todas las sesiones abiertas caen. Ver la cabecera de la clase.
+      // Todas las SESIONES caen, no solo sus tokens de refresco. Revocar únicamente los
+      // refrescos dejaría vivo el token de acceso ya emitido hasta quince minutos después —
+      // y quien recupera su contraseña porque sospecha que otro entró necesita que ese otro
+      // salga ahora, no en un rato.
+      this.prisma.authSession.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
       this.prisma.refreshToken.updateMany({
         where: { userId: stored.userId, revokedAt: null },
         data: { revokedAt: new Date() },

@@ -5,6 +5,7 @@ import {
   destroyTenant,
   http,
   prisma,
+  reauthenticate,
   registerPlatformAdmin,
   startTestApp,
   stopTestApp,
@@ -116,7 +117,21 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
     });
   };
 
-  beforeEach(retirarTodas);
+  /**
+   * Antes de cada prueba, los tres actores demuestran quiénes son.
+   *
+   * Pedir una concesión, aprobarla y retirarla son acciones sensibles desde la Fase 4: exigen
+   * credencial reciente. Reautenticar aquí no es esconder ese guard —tiene su propia suite, y
+   * `plataforma-mfa.e2e-spec.ts` comprueba que sin esto se deniega— sino poner a estos actores
+   * en el estado en el que estaría una persona real: quien va a conceder acceso a los datos de
+   * un cliente acaba de confirmar su identidad.
+   */
+  beforeEach(async () => {
+    await retirarTodas();
+    await reauthenticate(admin);
+    await reauthenticate(otroAdmin);
+    await reauthenticate(tenant.owner);
+  });
 
   describe('sin concesión no hay nada', () => {
     it('CRÍTICO: el rol de plataforma NO da acceso a los datos de una empresa', async () => {
@@ -327,6 +342,10 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
       const concesion = await pedir('CONTENT', 'Revisión de una incidencia');
       const ajena = await createTenant('concesiones-ajena');
       extranos.push(ajena.owner.userId);
+      // Se reautentica a propósito: así lo que deniega no es la falta de credencial reciente
+      // —que se comprueba aparte— sino que la concesión no es suya. Sin esto, la prueba
+      // pasaría por el motivo equivocado y dejaría de vigilar lo que dice vigilar.
+      await reauthenticate(ajena.owner);
 
       // Con su propia organización activa, la concesión no existe para él.
       await as(ajena.owner, ajena)

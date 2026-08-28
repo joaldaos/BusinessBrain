@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
 import { AiUsageCard } from '../components/AiUsageCard';
 import { PrivacyCard } from '../components/PrivacyCard';
+import { SecurityCard } from '../components/SecurityCard';
 import { LanguagePicker } from '../components/LanguagePicker';
 import { useAuth } from '../auth';
 import {
@@ -67,6 +68,10 @@ export function SettingsPage() {
         <p className="mb-3 text-xs text-gray-500">{t('settings.languageHint')}</p>
         <LanguagePicker compact />
       </Card>
+
+      {/* La seguridad de la CUENTA, antes que nada de la empresa: es lo único de esta
+          pantalla que protege a la persona aunque cambie de empresa. */}
+      <SecurityCard />
 
       {/* Sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
       <AiConfigurationCard canAdmin={canAdmin} />

@@ -19,6 +19,17 @@ export interface RequestUser {
    */
   locale: Locale;
   memberships: Array<{ organizationId: string; role: MembershipRole }>;
+  /**
+   * La sesión de la que viene esta petición.
+   *
+   * No es el token: el token rota cada quince minutos y la sesión no. Es lo que permite que
+   * "esta sesión se reautenticó hace tres minutos" siga siendo cierto después de un refresco.
+   */
+  sessionId: string;
+  /** Cuándo demostró la identidad esta SESIÓN. Nulo = nunca desde que empezó. */
+  reauthenticatedAt: Date | null;
+  /** Si la cuenta tiene la verificación en dos pasos activa (no solo empezada). */
+  mfaEnabled: boolean;
 }
 
 /** Lo que OrgRoleGuard adjunta a req.organization tras resolver la organización activa. */

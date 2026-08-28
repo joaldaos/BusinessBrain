@@ -110,6 +110,40 @@ export const AUDIT_ACTIONS = {
    */
   ORGANIZATION_DATA_ERASED: 'organization.data_erased',
 
+  // ── Seguridad de la cuenta: la verificación en dos pasos y la contraseña ──
+  //
+  // ## Por qué se auditan también los INTENTOS
+  //
+  // El resto del catálogo registra hechos consumados. Aquí hay dos excepciones deliberadas
+  // —`mfa.code_failed` y `sensitive_action.denied`— porque en seguridad el patrón de lo que
+  // NO salió es la señal: cuarenta códigos fallidos seguidos es una información que no existe
+  // en ninguna parte si solo se registran los aciertos.
+  //
+  // Ninguna de estas entradas lleva jamás el secreto, el código ni la contraseña. Lo que se
+  // registra es que ocurrió, cuándo y desde qué sesión — nunca con qué.
+  MFA_ENABLED: 'mfa.enabled',
+  MFA_DISABLED: 'mfa.disabled',
+  /** Un código correcto: al entrar o al reautenticarse. */
+  MFA_CODE_VERIFIED: 'mfa.code_verified',
+  /** Un código rechazado. Ver arriba por qué se registra un intento fallido. */
+  MFA_CODE_FAILED: 'mfa.code_failed',
+  /** Se gastó un código de papel. Nunca CUÁL: solo que quedan n-1. */
+  MFA_RECOVERY_CODE_USED: 'mfa.recovery_code_used',
+  MFA_RECOVERY_CODES_REGENERATED: 'mfa.recovery_codes_regenerated',
+  /**
+   * El propietario le retiró el segundo factor a un administrador de SU empresa.
+   *
+   * Es una acción de TENANT —lleva `organizationId`— porque la decide quien responde por esa
+   * empresa sobre alguien de esa empresa. La de plataforma es otra, y vive abajo.
+   */
+  MFA_REMOVED_BY_OWNER: 'mfa.removed_by_owner',
+
+  PASSWORD_CHANGED: 'password.changed',
+  /** Alguien demostró su identidad para poder hacer algo sensible. */
+  REAUTHENTICATED: 'auth.reauthenticated',
+  /** Se intentó algo sensible sin poder demostrar la identidad. */
+  SENSITIVE_ACTION_DENIED: 'auth.sensitive_action_denied',
+
   // ── Plataforma: quien OPERA BusinessBrain, no quien lo usa ────────────────
   //
   // ## Por qué llevan su propio espacio de nombres
@@ -153,6 +187,17 @@ export const AUDIT_ACTIONS = {
   PLATFORM_ACCESS_APPROVED: 'platform.access.approved',
   PLATFORM_ACCESS_USED: 'platform.access.used',
   PLATFORM_ACCESS_REVOKED: 'platform.access.revoked',
+
+  /**
+   * La administración retiró el segundo factor de una cuenta de cliente. Último recurso.
+   *
+   * Es lo más cerca que la plataforma llega de la cuenta de una persona, y por eso lleva
+   * motivo obligatorio y avisa por correo al afectado y al propietario de su empresa. Lo que
+   * NO hace —y no puede hacer— es dar acceso: después sigue haciendo falta la contraseña de
+   * esa persona. Retirar el segundo factor es degradar una cuenta de dos pruebas a una, no
+   * entrar en ella.
+   */
+  PLATFORM_MFA_REMOVED: 'platform.user.mfa_removed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

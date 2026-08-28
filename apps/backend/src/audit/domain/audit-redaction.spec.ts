@@ -39,6 +39,38 @@ describe('isSecretKey', () => {
     expect(isSecretKey('APIKEYENC')).toBe(true);
     expect(isSecretKey('ApiKey')).toBe(true);
   });
+
+  /**
+   * Los códigos de recuperación y el secreto TOTP.
+   *
+   * Este bloque nace de un agujero real: cuando se construyó la verificación en dos pasos,
+   * `recoveryCodes` NO estaba cubierto por ninguna regla. `recovery` no era una palabra
+   * secreta y `codes` tampoco, así que una lista de diez credenciales de un solo uso habría
+   * entrado entera y en claro en el almacén que menos rota del sistema.
+   */
+  describe('verificación en dos pasos', () => {
+    it.each([
+      'recoveryCodes',
+      'recoveryCode',
+      'recovery_codes',
+      'backupCodes',
+      'totpCode',
+      'mfaCode',
+      'totpSecret',
+      'mfaSecretEnc',
+    ])('reconoce "%s" como secreto', (key) => {
+      expect(isSecretKey(key)).toBe(true);
+    });
+
+    it.each(['statusCode', 'errorCode', 'postalCode', 'remainingCodes'])(
+      'no marca "%s" como secreto',
+      (key) => {
+        // Un registro que tacha códigos de error se vuelve inservible tan rápido como uno que
+        // filtra credenciales: los códigos de error son justo lo que se mira al investigar.
+        expect(isSecretKey(key)).toBe(false);
+      },
+    );
+  });
 });
 
 describe('redactAuditMetadata', () => {

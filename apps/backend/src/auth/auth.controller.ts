@@ -22,6 +22,19 @@ import {
   RequestPasswordResetDto,
 } from './dto/password-reset.dto';
 import { PasswordResetService } from './application/password-reset.service';
+import { MfaService } from './application/mfa.service';
+import { ReauthenticationService } from './application/reauthentication.service';
+import {
+  ChangePasswordDto,
+  LoginMfaDto,
+  ReauthenticateDto,
+} from './dto/mfa.dto';
+import { RecentAuthGuard } from '../common/guards/recent-auth.guard';
+import { RequiresRecentAuth } from '../common/decorators/requires-recent-auth.decorator';
+import {
+  SENSITIVE_ACTIONS,
+  reauthenticatedUntil,
+} from '../common/security/sensitive-actions';
 import { RateLimited } from '../common/decorators/rate-limited.decorator';
 import { SetLanguageDto } from './dto/set-language.dto';
 import type { Locale } from '../common/i18n/locales';
@@ -55,6 +68,8 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly passwordReset: PasswordResetService,
+    private readonly mfa: MfaService,
+    private readonly reauthentication: ReauthenticationService,
     private readonly configService: ConfigService<AppConfig, true>,
   ) {}
 
@@ -82,13 +97,42 @@ export class AuthController {
     @Req() req: { user: User },
     @Res({ passthrough: true }) response: Response,
   ) {
-    const tokens = await this.authService.issueTokens(req.user);
+    // Con verificación en dos pasos, la contraseña correcta NO abre sesión: devuelve el
+    // testigo del segundo paso y ahí se queda. Ningún camino de aquí abajo se ejecuta hasta
+    // que llegue un código válido — que es lo que hace que el segundo factor sea un factor y
+    // no un aviso.
+    if (req.user.mfaEnabledAt) {
+      return {
+        mfaRequired: true,
+        mfaToken: this.authService.issueMfaChallenge(req.user.id),
+      };
+    }
 
-    return {
-      accessToken: tokens.accessToken,
-      csrfToken: this.startSession(response, tokens),
-      user: this.authService.toPublicUser(req.user),
-    };
+    return this.completeLogin(response, req.user);
+  }
+
+  /**
+   * El segundo paso: el código de la aplicación, o uno de papel.
+   *
+   * `@Public` porque todavía no hay sesión — lo que autentica es el testigo del paso anterior
+   * junto con el código. Un testigo sin código no sirve, y un código sin testigo tampoco.
+   *
+   * Que el mismo campo acepte las dos cosas es deliberado: quien ha perdido el móvil está
+   * agobiado, y obligarle a elegir en un desplegable qué tipo de código está escribiendo es
+   * fricción justo donde peor cae.
+   */
+  @Public()
+  @RateLimited('mfa')
+  @Post('login/mfa')
+  async loginMfa(
+    @Body() dto: LoginMfaDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const userId = this.authService.verifyMfaChallenge(dto.mfaToken);
+    await this.mfa.verifyCode(userId, dto.code);
+
+    const user = await this.authService.requireActiveUser(userId);
+    return this.completeLogin(response, user);
   }
 
   /**
@@ -105,6 +149,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
+    // Rota el token DENTRO de la misma sesión: `sessionId` no cambia, así que una
+    // reautenticación de hace tres minutos sigue valiendo después de refrescar.
     const tokens = await this.authService.refresh(
       readCookie(req, REFRESH_COOKIE) ?? '',
     );
@@ -133,9 +179,58 @@ export class AuthController {
     return { success: true };
   }
 
+  /**
+   * Quién soy y en qué estado está mi sesión.
+   *
+   * Devuelve también si la cuenta tiene segundo factor y hasta cuándo vale la última
+   * reautenticación. Lo necesita la interfaz para saber QUÉ pedir antes de una acción sensible
+   * —código o contraseña— sin tener que provocar un error primero para averiguarlo.
+   *
+   * Nada de esto es autorización: quien decide sigue siendo `RecentAuthGuard`. Es cortesía de
+   * pantalla, igual que ocultar un botón.
+   */
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
-    return user;
+    return {
+      ...user,
+      reauthenticatedUntil: user.reauthenticatedAt
+        ? reauthenticatedUntil(user.reauthenticatedAt)
+        : null,
+    };
+  }
+
+  /**
+   * Volver a demostrar quién soy: abre la ventana de quince minutos para ESTA sesión.
+   *
+   * Con segundo factor se pide el código y la contraseña no vale. Ver
+   * `ReauthenticationService` para el porqué.
+   */
+  @Post('reauthenticate')
+  @HttpCode(HttpStatus.OK)
+  @RateLimited('mfa')
+  async reauthenticate(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ReauthenticateDto,
+  ) {
+    return this.reauthentication.reauthenticate(user, dto);
+  }
+
+  /**
+   * Cambiar la contraseña desde dentro.
+   *
+   * No basta con que el token esté vivo: exige haber demostrado la identidad hace menos de
+   * quince minutos, con el código si la cuenta tiene segundo factor. Una sesión de hace tres
+   * semanas no puede cambiar la contraseña de nadie.
+   */
+  @Post('password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RecentAuthGuard)
+  @RequiresRecentAuth(SENSITIVE_ACTIONS.PASSWORD_CHANGE)
+  async changePassword(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.reauthentication.changePassword(user, dto.newPassword);
   }
 
   /**
@@ -191,6 +286,22 @@ export class AuthController {
   async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
     await this.passwordReset.confirm(dto.token, dto.password);
     return { success: true };
+  }
+
+  /**
+   * Abre la sesión de verdad: cookies, testigo CSRF y token de acceso.
+   *
+   * Un solo sitio para los dos caminos —con segundo factor y sin él— para que no haya forma de
+   * que uno de ellos se quede sin algo que el otro sí hace.
+   */
+  private async completeLogin(response: Response, user: User) {
+    const session = await this.authService.startSession(user);
+
+    return {
+      accessToken: session.accessToken,
+      csrfToken: this.startSession(response, session),
+      user: this.authService.toPublicUser(user),
+    };
   }
 
   /**

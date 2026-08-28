@@ -37,6 +37,16 @@ export interface CurrentUser {
    */
   locale: string;
   memberships: { organizationId: string; role: MembershipRole }[];
+  /**
+   * Si la cuenta tiene verificación en dos pasos activa.
+   *
+   * La interfaz lo usa para saber QUÉ pedir al confirmar la identidad —el código o la
+   * contraseña— sin tener que provocar un error primero. Nunca para autorizar: quien decide es
+   * `RecentAuthGuard`, igual que con los roles.
+   */
+  mfaEnabled: boolean;
+  /** Hasta cuándo vale la última confirmación de identidad. Nulo si no hay ninguna. */
+  reauthenticatedUntil: string | null;
 }
 
 export interface Organization {

@@ -26,11 +26,20 @@ import { LanguagePicker } from '../components/LanguagePicker';
  * que no entiende tendría que atravesar el registro a ciegas para poder cambiarlo.
  */
 export function LoginPage() {
-  const { user, loading, login, register, refreshUser } = useAuth();
+  const { user, loading, login, completeMfaLogin, register, refreshUser } =
+    useAuth();
   const t = useT();
   const [params] = useSearchParams();
   const invitation = params.get('invitacion');
   const [invitationError, setInvitationError] = useState<string | null>(null);
+  /**
+   * El testigo del segundo paso.
+   *
+   * Mientras vale algo, esta pantalla enseña el campo del código en lugar del formulario. No
+   * es una sesión: hasta que el código no llegue, aquí no hay nadie dentro.
+   */
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>(
     // Con una invitación en la mano, lo normal es que la persona todavía no tenga cuenta.
     invitation ? 'register' : 'login',
@@ -46,10 +55,7 @@ export function LoginPage() {
   // que acaba de ser invitado a una. Se retiene aquí hasta que el turno entero termina.
   if (user && !action.busy) return <Navigate to="/" replace />;
 
-  const submit = action.onSubmit(async () => {
-    if (mode === 'login') await login(email, password);
-    else await register({ email, password, name });
-
+  const acceptInvitationIfAny = async () => {
     if (invitation) {
       try {
         await api(`/invitations/${invitation}/accept`, {
@@ -65,6 +71,32 @@ export function LoginPage() {
         );
       }
     }
+  };
+
+  const submit = action.onSubmit(async () => {
+    if (mode === 'register') {
+      await register({ email, password, name });
+      await acceptInvitationIfAny();
+      return;
+    }
+
+    const challenge = await login(email, password);
+    // Con verificación en dos pasos hay que parar aquí: la invitación se acepta DESPUÉS del
+    // código, porque hasta entonces no hay sesión con la que aceptarla.
+    if (challenge) {
+      setMfaToken(challenge.mfaToken);
+      return;
+    }
+
+    await acceptInvitationIfAny();
+  });
+
+  const submitMfa = action.onSubmit(async () => {
+    if (!mfaToken) return;
+    await completeMfaLogin(mfaToken, mfaCode);
+    setMfaToken(null);
+    setMfaCode('');
+    await acceptInvitationIfAny();
   });
 
   return (
@@ -77,6 +109,45 @@ export function LoginPage() {
         )}
       </div>
 
+      {/*
+        El segundo paso sustituye al formulario en lugar de añadirse debajo. Dejar los campos
+        de correo y contraseña visibles invitaría a reescribirlos, y ya no sirven de nada: lo
+        que autentica a partir de aquí es el testigo más el código.
+      */}
+      {mfaToken ? (
+        <form
+          onSubmit={submitMfa}
+          className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
+        >
+          <div>
+            <h2 className="text-sm font-semibold">{t('mfa.login.title')}</h2>
+            <p className="mt-1 text-xs text-gray-600">
+              {t('mfa.login.explain')}
+            </p>
+          </div>
+
+          <Field label={t('mfa.login.code')}>
+            <input
+              className={inputClass}
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value)}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              required
+              autoFocus
+            />
+          </Field>
+
+          {/* Quien ha perdido el móvil no debería tener que buscar dónde meter su código. */}
+          <p className="text-xs text-gray-500">{t('mfa.login.hint')}</p>
+
+          <ErrorNote error={action.error} />
+
+          <Button type="submit" disabled={action.busy} className="w-full">
+            {action.busy ? t('common.moment') : t('mfa.login.submit')}
+          </Button>
+        </form>
+      ) : (
       <form onSubmit={submit} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
         {mode === 'register' && (
           <Field label={t('login.name')}>
@@ -146,6 +217,7 @@ export function LoginPage() {
           </Link>
         )}
       </form>
+      )}
 
       <LanguagePicker />
     </main>

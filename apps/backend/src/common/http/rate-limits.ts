@@ -55,6 +55,17 @@ export const RATE_LIMITS = {
   passwordResetConfirm: { ttl: HORA, limit: 20 },
   /** Preguntar. Generoso: protege del bucle accidental, no de una persona. */
   ask: { ttl: MINUTO, limit: 30 },
+  /**
+   * Códigos de verificación en dos pasos.
+   *
+   * Este límite NO es la defensa principal, y decirlo importa: contar por dirección IP no ve
+   * un ataque repartido entre mil direcciones, que es exactamente como se ataca un número de
+   * seis dígitos. Quien defiende de verdad es el contador POR CUENTA de `mfa-policy.ts`.
+   *
+   * Este otro cubre lo que aquel no puede: un script que prueba códigos contra muchas cuentas
+   * distintas desde el mismo sitio, donde cada cuenta ve un solo intento y ninguna se bloquea.
+   */
+  mfa: { ttl: 5 * MINUTO, limit: 20 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { PlatformAccessScope } from '@businessbrain/database';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
+import { RecentAuthGuard } from '../../common/guards/recent-auth.guard';
+import { RequiresRecentAuth } from '../../common/decorators/requires-recent-auth.decorator';
+import { SENSITIVE_ACTIONS } from '../../common/security/sensitive-actions';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../../common/types/authenticated-request';
 import { PlatformAccessService } from '../application/platform-access.service';
@@ -23,6 +26,14 @@ import { RequestAccessDto } from './request-access.dto';
  * devolver el texto de un documento: la consulta que la sirve no lo selecciona. Un único
  * endpoint con condicionales habría sido más corto y habría dejado la garantía a merced de un
  * `if` bien puesto.
+ *
+ * ## Pedir acceso exige reautenticarse; usarlo, no
+ *
+ * La decisión de abrir una puerta a los datos de un cliente se toma una vez y hay que
+ * demostrar quién la toma. Lo que viene después —abrir el panorama, leer un documento dentro
+ * de una concesión ya vigente— no vuelve a preguntar: convertir una investigación en un
+ * teclado de códigos empujaría a pedir concesiones más largas para no tener que repetir, que
+ * es exactamente el resultado contrario al que se busca.
  */
 @UseGuards(SuperAdminGuard)
 @Controller('admin/organizations/:organizationId')
@@ -34,6 +45,8 @@ export class PlatformAccessController {
 
   /** Pedir acceso. Metadatos y diagnóstico nacen utilizables; el contenido, pendiente. */
   @Post('access')
+  @UseGuards(RecentAuthGuard)
+  @RequiresRecentAuth(SENSITIVE_ACTIONS.PLATFORM_ACCESS_REQUEST)
   async request(
     @Param('organizationId') organizationId: string,
     @CurrentUser() admin: RequestUser,
@@ -56,6 +69,8 @@ export class PlatformAccessController {
 
   /** Retirar un acceso propio antes de que caduque. */
   @Post('access/:grantId/revoke')
+  @UseGuards(RecentAuthGuard)
+  @RequiresRecentAuth(SENSITIVE_ACTIONS.PLATFORM_ACCESS_REVOKE)
   async revoke(
     @Param('grantId') grantId: string,
     @CurrentUser() admin: RequestUser,

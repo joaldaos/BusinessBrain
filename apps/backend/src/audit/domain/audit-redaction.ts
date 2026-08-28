@@ -52,8 +52,21 @@ const SECRET_KEY_QUALIFIERS = new Set([
   'secret',
 ]);
 
+/**
+ * Palabras que convierten un `code`/`codes` contiguo en secreto.
+ *
+ * `recoveryCode` y `backupCodes` son credenciales; `statusCode`, `errorCode` y `postalCode` no
+ * lo son. Sin esta lista habría que elegir entre tachar códigos de error legítimos —que son
+ * justo lo que se mira al investigar— o dejar pasar los códigos de papel de una cuenta.
+ *
+ * No es teórico: cuando se construyó la verificación en dos pasos, `recoveryCodes` NO estaba
+ * cubierto por ninguna regla. `recovery` no es secreta y `codes` tampoco, así que una lista de
+ * diez credenciales habría entrado entera y en claro en el almacén que menos rota del sistema.
+ */
+const SECRET_CODE_QUALIFIERS = new Set(['recovery', 'backup', 'totp', 'mfa']);
+
 /** Formas compuestas que no se resuelven por palabras sueltas. */
-const SECRET_JOINED_FRAGMENTS = ['configenc', 'keyenc'] as const;
+const SECRET_JOINED_FRAGMENTS = ['configenc', 'keyenc', 'secretenc'] as const;
 
 export const REDACTED = '[REDACTADO]';
 
@@ -74,6 +87,13 @@ export function isSecretKey(key: string): boolean {
     if (word !== 'key' && word !== 'keys') continue;
     const qualifier = words[index - 1];
     if (qualifier && SECRET_KEY_QUALIFIERS.has(qualifier)) return true;
+  }
+
+  // `recovery` + `code`, `backup` + `codes`… pero no `status` + `code`.
+  for (const [index, word] of words.entries()) {
+    if (word !== 'code' && word !== 'codes') continue;
+    const qualifier = words[index - 1];
+    if (qualifier && SECRET_CODE_QUALIFIERS.has(qualifier)) return true;
   }
 
   const joined = words.join('');

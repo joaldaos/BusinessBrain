@@ -32,7 +32,19 @@ interface AuthState {
   organizationId: string | null;
   role: MembershipRole | undefined;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /**
+   * Entra, o devuelve el testigo del segundo paso si la cuenta lleva verificación en dos pasos.
+   *
+   * Devolverlo en vez de guardarlo aquí es deliberado: quien decide qué hacer con él es la
+   * pantalla de entrada, que es la única que puede enseñar el campo del código. Guardarlo en el
+   * contexto convertiría "he puesto la contraseña" en un estado global de media sesión.
+   */
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ mfaToken: string } | null>;
+  /** El segundo paso: el código de la aplicación, o uno de repuesto. */
+  completeMfaLogin: (mfaToken: string, code: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -106,15 +118,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const result = await api<{
-        accessToken: string;
-        csrfToken: string;
+        accessToken?: string;
+        csrfToken?: string;
+        mfaRequired?: boolean;
+        mfaToken?: string;
       }>('/auth/login', {
         method: 'POST',
         body: { email, password },
         withoutOrganization: true,
       });
+
+      // Con verificación en dos pasos, la contraseña correcta NO abre sesión: aquí no hay
+      // token de acceso todavía y no lo habrá hasta que llegue un código válido.
+      if (result.mfaRequired && result.mfaToken) {
+        return { mfaToken: result.mfaToken };
+      }
+
       // La respuesta ya no trae el token de refresco: viaja en una cookie que este código no
       // puede leer. Lo único que se guarda es el token de acceso y el testigo CSRF.
+      session.start(result as { accessToken: string; csrfToken: string });
+      await loadUser();
+      return null;
+    },
+    [loadUser],
+  );
+
+  const completeMfaLogin = useCallback(
+    async (mfaToken: string, code: string) => {
+      const result = await api<{ accessToken: string; csrfToken: string }>(
+        '/auth/login/mfa',
+        {
+          method: 'POST',
+          body: { mfaToken, code },
+          withoutOrganization: true,
+        },
+      );
       session.start(result);
       await loadUser();
     },
@@ -128,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: input,
         withoutOrganization: true,
       });
+      // Una cuenta recién creada no puede tener verificación en dos pasos, así que aquí nunca
+      // hay segundo paso que atender.
       await login(input.email, input.password);
     },
     [login],
@@ -168,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       loading,
       login,
+      completeMfaLogin,
       register,
       selectOrganization,
       logout,
@@ -180,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       loading,
       login,
+      completeMfaLogin,
       register,
       selectOrganization,
       logout,

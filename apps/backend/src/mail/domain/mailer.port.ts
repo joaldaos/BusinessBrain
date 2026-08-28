@@ -33,7 +33,7 @@ export interface OutboundEmail {
    * sin registrar QUÉ se mandó, que es justo lo que hay que evitar con un enlace de
    * recuperación.
    */
-  kind: 'password-reset';
+  kind: 'password-reset' | 'mfa-removed';
 }
 
 export interface MailerPort {

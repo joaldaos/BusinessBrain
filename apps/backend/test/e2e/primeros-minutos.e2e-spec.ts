@@ -86,6 +86,7 @@ describe('Los primeros minutos de una PYME (E2E)', () => {
     const owner: TestActor = {
       userId: login.body.data.user.id,
       email,
+      password,
       accessToken: login.body.data.accessToken,
     };
 

@@ -18,6 +18,17 @@ import { AnalysisPage } from './pages/AnalysisPage';
 import { AutomationsPage } from './pages/AutomationsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PlatformShell } from './platform/PlatformShell';
+import { PlatformOverviewPage } from './platform/OverviewPage';
+import { PlatformOrganizationsPage } from './platform/OrganizationsPage';
+import { PlatformOrganizationDetailPage } from './platform/OrganizationDetailPage';
+import {
+  PlatformUserDetailPage,
+  PlatformUsersPage,
+} from './platform/UsersPage';
+import { PlatformMyAccessPage } from './platform/MyAccessPage';
+import { PlatformAuditPage } from './platform/AuditPage';
+import { PlatformAccountPage } from './platform/AccountPage';
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -28,7 +39,40 @@ function Protected() {
   }
   if (!user) return <Navigate to="/login" replace />;
 
+  /**
+   * Quien administra la plataforma no tiene sitio aquí, y hay que llevarle al suyo.
+   *
+   * Sin esto, `Shell` veía cero organizaciones y le enseñaba la pantalla de "crea tu empresa" —
+   * que además es una acción que el backend le va a rechazar por la invariante de la Fase 1.
+   * El administrador quedaba atrapado en un callejón sin salida que además le proponía romper
+   * la regla que sostiene el aislamiento.
+   */
+  if (user.platformRole === 'SUPERADMIN') {
+    return <Navigate to="/platform" replace />;
+  }
+
   return <Shell />;
+}
+
+/**
+ * La puerta del panel de operación.
+ *
+ * Es cortesía de pantalla, no autorización: quien decide sigue siendo `SuperAdminGuard` en el
+ * backend, y la misma llamada hecha a mano seguiría respondiendo 403. Lo que esto evita es que
+ * alguien de una empresa cliente que teclee `/platform` vea una pantalla rota llena de errores
+ * en vez de un no claro.
+ */
+function PlatformProtected() {
+  const { user, loading } = useAuth();
+  const t = useT();
+
+  if (loading) {
+    return <p className="p-8 text-sm text-gray-500">{t('common.sessionLoading')}</p>;
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.platformRole !== 'SUPERADMIN') return <Navigate to="/" replace />;
+
+  return <PlatformShell />;
 }
 
 /**
@@ -57,6 +101,34 @@ export function App() {
               que esté dentro. */}
           <Route path="/recuperar" element={<PasswordRecoveryPage />} />
           <Route path="/restablecer" element={<PasswordResetPage />} />
+          {/*
+            El panel de operación va ANTES del grupo de cliente y con su propio marco. No
+            comparte nada de la superficie de tenant: ni shell, ni organización activa, ni
+            navegación. Es la separación de la arquitectura, puesta donde se ve.
+          */}
+          <Route element={<PlatformProtected />}>
+            <Route path="/platform" element={<PlatformOverviewPage />} />
+            <Route
+              path="/platform/organizations"
+              element={<PlatformOrganizationsPage />}
+            />
+            <Route
+              path="/platform/organizations/:organizationId"
+              element={<PlatformOrganizationDetailPage />}
+            />
+            <Route path="/platform/users" element={<PlatformUsersPage />} />
+            <Route
+              path="/platform/users/:userId"
+              element={<PlatformUserDetailPage />}
+            />
+            <Route path="/platform/access" element={<PlatformMyAccessPage />} />
+            <Route path="/platform/audit" element={<PlatformAuditPage />} />
+            <Route
+              path="/platform/account"
+              element={<PlatformAccountPage />}
+            />
+          </Route>
+
           <Route element={<Protected />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/preguntar" element={<AskPage />} />

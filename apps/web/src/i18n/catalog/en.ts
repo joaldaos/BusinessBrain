@@ -722,4 +722,251 @@ export const en: Catalog = {
   'audit.action.mfa.disabled': 'Turned off two-step verification',
   'audit.action.platform.user.mfa_removed':
     'Removed two-step verification from an account',
+  'audit.detail.targetName': 'on',
+  'audit.detail.organizations': 'companies affected',
+  'audit.detail.recoveryCodesIssued': 'backup codes issued',
+  'audit.detail.method': 'using',
+  'audit.detail.sensitiveAction': 'attempted action',
+  'audit.detail.otherSessionsRevoked': 'signed out other devices',
+  'audit.detail.remainingCodes': 'codes left',
+  'audit.detail.requestedById': 'requested by',
+
+  // ══ OPERATIONS PANEL ═══════════════════════════════════════════════════════
+  'platform.chrome.badge': 'Operations',
+  'platform.chrome.boundary':
+    'You administer BusinessBrain. Each company’s data stays theirs: reading it takes an access grant with a stated reason, an end date, and a record the client can see.',
+
+  'platform.nav.account': 'My account',
+  'platform.account.title': 'My account',
+  'platform.account.subtitle': 'Two-step verification is required to administer BusinessBrain: without it you will not be able to use the rest of the panel.',
+  'platform.nav.overview': 'Home',
+  'platform.nav.organizations': 'Companies',
+  'platform.nav.users': 'People',
+  'platform.nav.access': 'My access',
+  'platform.nav.audit': 'Log',
+
+  'platform.state.loading': 'Loading…',
+  'platform.state.empty': 'Nothing to show yet.',
+  'platform.state.error': 'This information could not be loaded.',
+  'platform.state.errorHint':
+    'It may be a passing connection problem. Try again; if it keeps failing, check the service status.',
+  'platform.state.retry': 'Try again',
+
+  'platform.pagination.label': 'Pagination',
+  'platform.pagination.previous': 'Previous',
+  'platform.pagination.next': 'Next',
+  'platform.pagination.position': 'Page {page} of {pages}',
+
+  'platform.overview.title': 'Platform status',
+  'platform.overview.subtitle':
+    'What is open right now, and how big the product is. None of this comes from any client’s documents.',
+  'platform.overview.openAccess': 'Open access to client data',
+  'platform.overview.openAccessHint':
+    'The first thing worth checking each day: what is still open and no longer needed.',
+  'platform.overview.noOpenAccess':
+    'You have no open access to any company’s data.',
+  'platform.overview.seeAll': 'See all',
+  'platform.overview.organizations': 'Companies',
+  'platform.overview.people': 'People',
+  'platform.overview.blocked': 'Blocked accounts',
+  'platform.overview.blockedHint': 'Cannot sign in',
+  'platform.overview.byPlan': 'Companies by plan',
+
+  'platform.organizations.title': 'Companies',
+  'platform.organizations.subtitle':
+    'Your client base. The counts say how much material each one handles; seeing what it contains takes an access grant.',
+  'platform.organizations.search': 'Search',
+  'platform.organizations.searchPlaceholder': 'Name or identifier',
+  'platform.organizations.searchScope':
+    'Search only covers the companies on this page. Change page to search the rest.',
+  'platform.organizations.plan': 'Plan',
+  'platform.organizations.allPlans': 'All',
+  'platform.organizations.none': 'There are no companies yet.',
+  'platform.organizations.noMatches': 'No company matches your search.',
+  'platform.organizations.column.name': 'Company',
+  'platform.organizations.column.plan': 'Plan',
+  'platform.organizations.column.people': 'People',
+  'platform.organizations.column.documents': 'Documents',
+  'platform.organizations.column.sources': 'Sources',
+  'platform.organizations.column.since': 'Client since',
+
+  'platform.plan.FREE': 'Free',
+  'platform.plan.PRO': 'Professional',
+  'platform.plan.ENTERPRISE': 'Enterprise',
+  'platform.plan.change': 'Change plan',
+  'platform.plan.apply': 'Apply',
+  'platform.plan.confirmTitle': 'Change this company’s plan',
+  'platform.plan.confirmBody':
+    'The plan will go from “{from}” to “{to}”. The change is immediate and affects the client’s account.',
+
+  'platform.organization.back': '← Companies',
+  'platform.organization.subtitle': 'Identifier: {slug}',
+  'platform.organization.plan': 'Plan',
+  'platform.organization.since': 'Client since',
+  'platform.organization.theirData': 'Their data',
+  'platform.organization.theirDataHint':
+    'From here on, everything belongs to the company. Each section needs its own access grant, with a reason and an end date, and the client can see who came in and when.',
+
+  'platform.scope.METADATA.name': 'General data',
+  'platform.scope.METADATA.explains':
+    'How many documents and collections they have, which sources they connected and whether those are syncing. Not one line of what their documents say.',
+  'platform.scope.METADATA.request': 'Request access to general data',
+  'platform.scope.METADATA.confirmTitle': 'Request access to general data',
+  'platform.scope.METADATA.confirmBody':
+    'You will be able to see how many documents and sources this company has and what state they are in. You will not see the content of any document. Access lasts 24 hours and you ({who}) are requesting it; the company will see it in their log with the reason you write.',
+
+  'platform.scope.DIAGNOSTICS.name': 'Diagnostics',
+  'platform.scope.DIAGNOSTICS.explains':
+    'The technical errors: which sync failed and why. It may name a file so it can be identified, never its content.',
+  'platform.scope.DIAGNOSTICS.request': 'Request access to diagnostics',
+  'platform.scope.DIAGNOSTICS.confirmTitle': 'Request access to diagnostics',
+  'platform.scope.DIAGNOSTICS.confirmBody':
+    'You will be able to see this company’s technical errors, including the name of the file that failed when that is needed to identify it. You will not see the content of any document. Access lasts 24 hours and you ({who}) are requesting it; the company will see it in their log with the reason you write.',
+
+  'platform.scope.CONTENT.name': 'Content',
+  'platform.scope.CONTENT.explains':
+    'The text of the company’s documents. It is what they wrote, which is why whoever answers for the company has to approve it.',
+  'platform.scope.CONTENT.request': 'Request access to content',
+  'platform.scope.CONTENT.confirmTitle':
+    'Request access to this company’s content',
+  'platform.scope.CONTENT.confirmBody':
+    'You are about to request permission to READ this company’s documents: contracts, reports, emails, whatever they uploaded. The request stays pending and nothing opens until whoever answers for the company approves it. If they do, access lasts at most 72 hours, every document you open is logged one by one, and the client can see it. You ({who}) are requesting it with the reason you write.',
+
+  'platform.scope.open': 'Access active',
+  'platform.scope.closed': 'No access',
+  'platform.scope.awaitingOwner': 'Waiting on the company',
+  'platform.scope.expires': 'Expires {when}',
+  'platform.scope.reasonGiven': 'Reason: {reason}',
+  'platform.scope.revoke': 'Withdraw this access',
+  'platform.scope.revokeTitle': 'Withdraw access',
+  'platform.scope.revokeConsequence':
+    'You will stop being able to consult “{scope}” for this company immediately. You can request it again when needed.',
+  'platform.scope.pendingExplain':
+    'You requested this access and {organization} has not approved it yet. Until they do, you cannot consult anything.',
+  'platform.scope.pendingExpires':
+    'The request expires {when} if nobody answers.',
+  'platform.scope.reasonLabel': 'Why you need it',
+  'platform.scope.reasonHint':
+    'The company will read this in their log. Explain it the way you would explain it to them.',
+
+  'platform.grant.status.PENDING': 'Awaiting approval',
+  'platform.grant.status.ACTIVE': 'Active',
+  'platform.grant.status.REVOKED': 'Withdrawn',
+  'platform.grant.status.EXPIRED': 'Expired',
+  'platform.grant.expiredAlready': 'already expired',
+
+  'platform.metadata.collections': 'Collections',
+  'platform.metadata.insights': 'Findings',
+  'platform.metadata.source': 'Source',
+  'platform.metadata.state': 'State',
+  'platform.metadata.lastSync': 'Last sync',
+
+  'platform.diagnostics.failingSources': 'Sources with errors',
+  'platform.diagnostics.recentJobs': 'Recent syncs',
+  'platform.diagnostics.failedAnalyses': 'Failed analyses',
+  'platform.diagnostics.state': 'State',
+  'platform.diagnostics.detail': 'Technical detail',
+  'platform.diagnostics.when': 'When',
+
+  'platform.content.title': 'Document',
+  'platform.content.state': 'State',
+  'platform.content.indexed': 'Indexed',
+  'platform.content.read': 'Open',
+  'platform.content.close': 'Close',
+  'platform.content.readLogged':
+    'Opening this document has been logged, and the company can see it.',
+
+  'platform.grantHistory.title': 'Access history for this company',
+  'platform.grantHistory.hint':
+    'The same thing the client sees from their account. Includes expired and withdrawn ones.',
+  'platform.grantHistory.none':
+    'Access to this company has never been requested.',
+  'platform.grantHistory.scope': 'Scope',
+  'platform.grantHistory.state': 'State',
+  'platform.grantHistory.reason': 'Reason',
+  'platform.grantHistory.requestedBy': 'Requested by',
+  'platform.grantHistory.requestedAt': 'Requested',
+  'platform.grantHistory.expires': 'Expires',
+
+  'platform.users.title': 'People',
+  'platform.users.subtitle':
+    'Accounts across all client companies. It exists to answer “I can’t sign in”, not for anything else.',
+  'platform.users.readLogged':
+    'Consulting this list is logged: these are personal details of client companies’ employees.',
+  'platform.users.search': 'Search by name or email',
+  'platform.users.none': 'There are no accounts to show.',
+  'platform.users.isAdmin': 'Operations',
+  'platform.users.column.name': 'Name',
+  'platform.users.column.email': 'Email',
+  'platform.users.column.state': 'State',
+  'platform.users.column.mfa': 'Two-step verification',
+  'platform.users.column.lastSeen': 'Last activity',
+  'platform.users.status.ACTIVE': 'Active',
+  'platform.users.status.BANNED': 'Blocked',
+  'platform.users.mfaOn': 'On',
+  'platform.users.mfaOff': 'Off',
+
+  'platform.user.back': '← People',
+  'platform.user.account': 'The account',
+  'platform.user.since': 'Registered',
+  'platform.user.organizations': 'Companies they belong to',
+  'platform.user.noOrganizations': 'They do not belong to any company.',
+  'platform.user.noOrganizationsAdmin':
+    'None, and they cannot belong to any: this is a BusinessBrain operations account.',
+  'platform.user.actions': 'Actions on this account',
+  'platform.user.actionsHint':
+    'All of them are logged, and some will ask you to confirm your identity.',
+  'platform.user.cannotActOnAdmin':
+    'This is a BusinessBrain operations account. It cannot be blocked from here: that would leave the product with nobody able to unblock it.',
+  'platform.user.ban': 'Block the account',
+  'platform.user.banTitle': 'Block this account',
+  'platform.user.banBody':
+    'This person will stop being able to sign in immediately, and their open sessions will be cut. Their company and their documents are untouched. You can unblock them later.',
+  'platform.user.unban': 'Unblock the account',
+  'platform.user.unbanTitle': 'Unblock this account',
+  'platform.user.unbanBody':
+    'This person will be able to sign in again with their usual password.',
+  'platform.user.removeMfa': 'Remove two-step verification',
+  'platform.user.removeMfaTitle': 'Remove two-step verification',
+  'platform.user.removeMfaBody':
+    'This person will no longer need the code from their phone to sign in. It does NOT give you access to their account: their password is still required, and it is neither read nor changed here. We will email them, and whoever answers for their company too.',
+  'platform.user.removeMfaReason': 'Why it needs removing',
+  'platform.user.removeMfaReasonHint':
+    'It will appear in the email that person receives and in the log. At least 10 characters.',
+
+  'platform.myAccess.title': 'My access',
+  'platform.myAccess.subtitle':
+    'What you have open right now on other companies’ data, and what you have had before.',
+  'platform.myAccess.notMembership':
+    'Having access is not belonging to that company. These are temporary read permissions over data that is not yours, and they are best withdrawn as soon as they stop being needed.',
+  'platform.myAccess.open': 'Open now',
+  'platform.myAccess.noneOpen': 'You have no open access.',
+  'platform.myAccess.expires': 'Expires {when}',
+  'platform.myAccess.requestedAt': 'Requested on {when}',
+  'platform.myAccess.approvedBy': 'approved by {who}',
+  'platform.myAccess.finished': 'Finished',
+  'platform.myAccess.finishedHint':
+    'Access that expired or that you withdrew. Kept because it is part of the history the client can consult.',
+
+  'platform.audit.title': 'Operations log',
+  'platform.audit.subtitle':
+    'Everything done from BusinessBrain operations. Each company’s own activity does not appear here: it is theirs.',
+  'platform.audit.filterByAction': 'Filter by action',
+  'platform.audit.allActions': 'All actions',
+  'platform.audit.none': 'No action has been logged yet.',
+  'platform.audit.system': 'The system',
+
+  'platform.confirm.reason': 'Reason',
+  'platform.confirm.reasonHint':
+    'It will stay in the log. At least 10 characters.',
+  'platform.confirm.audited':
+    'This action will be logged with your name, the date and the reason.',
+  'platform.confirm.cancel': 'Cancel',
+  'platform.confirm.done': 'Done. It has been logged.',
+  'platform.confirm.denied':
+    'You do not have permission for this, or the action is no longer possible in this state.',
+  'platform.confirm.invalid':
+    'Something is missing or invalid. Check what you wrote.',
+  'platform.confirm.failed':
+    'It could not be completed. Try again in a moment.',
 };

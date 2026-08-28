@@ -751,6 +751,261 @@ export const es = {
   'audit.action.mfa.disabled': 'Desactivó la verificación en dos pasos',
   'audit.action.platform.user.mfa_removed':
     'Retiró la verificación en dos pasos de una cuenta',
+  'audit.detail.targetName': 'sobre',
+  'audit.detail.organizations': 'empresas afectadas',
+  'audit.detail.recoveryCodesIssued': 'códigos entregados',
+  'audit.detail.method': 'con qué',
+  'audit.detail.sensitiveAction': 'acción intentada',
+  'audit.detail.otherSessionsRevoked': 'cerró las demás sesiones',
+  'audit.detail.remainingCodes': 'códigos restantes',
+  'audit.detail.requestedById': 'lo pidió',
+
+  // ══ PANEL DE OPERACIÓN ═════════════════════════════════════════════════════
+  //
+  // Vocabulario deliberado: aquí no aparece "tenant", ni "grant", ni "scope", ni "SUPERADMIN".
+  // Quien lee esto opera un producto, y las palabras del esquema no le ayudan a decidir nada.
+  'platform.chrome.badge': 'Operación',
+  'platform.chrome.boundary':
+    'Administras BusinessBrain. Los datos de cada empresa siguen siendo suyos: para consultarlos hace falta un acceso motivado, con fecha de fin y visible para el cliente.',
+
+  'platform.nav.account': 'Mi cuenta',
+  'platform.account.title': 'Mi cuenta',
+  'platform.account.subtitle': 'La verificación en dos pasos es obligatoria para administrar BusinessBrain: sin ella no podrás usar el resto del panel.',
+  'platform.nav.overview': 'Inicio',
+  'platform.nav.organizations': 'Empresas',
+  'platform.nav.users': 'Personas',
+  'platform.nav.access': 'Mis accesos',
+  'platform.nav.audit': 'Registro',
+
+  // ── Estados de pantalla ───────────────────────────────────────────────────
+  'platform.state.loading': 'Cargando…',
+  'platform.state.empty': 'No hay nada que mostrar todavía.',
+  'platform.state.error': 'No se ha podido cargar esta información.',
+  'platform.state.errorHint':
+    'Puede ser un problema momentáneo de conexión. Vuelve a intentarlo; si sigue fallando, revisa el estado del servicio.',
+  'platform.state.retry': 'Reintentar',
+
+  'platform.pagination.label': 'Paginación',
+  'platform.pagination.previous': 'Anterior',
+  'platform.pagination.next': 'Siguiente',
+  'platform.pagination.position': 'Página {page} de {pages}',
+
+  // ── Inicio ────────────────────────────────────────────────────────────────
+  'platform.overview.title': 'Estado de la plataforma',
+  'platform.overview.subtitle':
+    'Lo que hay abierto ahora mismo y el tamaño del producto. Nada de aquí procede de los documentos de ningún cliente.',
+  'platform.overview.openAccess': 'Accesos abiertos a datos de clientes',
+  'platform.overview.openAccessHint':
+    'Lo primero que conviene mirar cada día: lo que sigue abierto y ya no hace falta.',
+  'platform.overview.noOpenAccess':
+    'No tienes ningún acceso abierto a los datos de ninguna empresa.',
+  'platform.overview.seeAll': 'Ver todos',
+  'platform.overview.organizations': 'Empresas',
+  'platform.overview.people': 'Personas',
+  'platform.overview.blocked': 'Cuentas bloqueadas',
+  'platform.overview.blockedHint': 'No pueden entrar',
+  'platform.overview.byPlan': 'Empresas por plan',
+
+  // ── Empresas ──────────────────────────────────────────────────────────────
+  'platform.organizations.title': 'Empresas',
+  'platform.organizations.subtitle':
+    'Tu cartera de clientes. Los recuentos dicen cuánto material maneja cada uno; para ver qué contiene hace falta pedir acceso.',
+  'platform.organizations.search': 'Buscar',
+  'platform.organizations.searchPlaceholder': 'Nombre o identificador',
+  'platform.organizations.searchScope':
+    'La búsqueda se aplica solo a las empresas de esta página. Cambia de página para buscar en el resto.',
+  'platform.organizations.plan': 'Plan',
+  'platform.organizations.allPlans': 'Todos',
+  'platform.organizations.none': 'Todavía no hay ninguna empresa.',
+  'platform.organizations.noMatches': 'Ninguna empresa coincide con la búsqueda.',
+  'platform.organizations.column.name': 'Empresa',
+  'platform.organizations.column.plan': 'Plan',
+  'platform.organizations.column.people': 'Personas',
+  'platform.organizations.column.documents': 'Documentos',
+  'platform.organizations.column.sources': 'Fuentes',
+  'platform.organizations.column.since': 'Cliente desde',
+
+  'platform.plan.FREE': 'Gratuito',
+  'platform.plan.PRO': 'Profesional',
+  'platform.plan.ENTERPRISE': 'Empresa',
+  'platform.plan.change': 'Cambiar de plan',
+  'platform.plan.apply': 'Aplicar',
+  'platform.plan.confirmTitle': 'Cambiar el plan de esta empresa',
+  'platform.plan.confirmBody':
+    'El plan pasará de «{from}» a «{to}». El cambio es inmediato y afecta a la cuenta del cliente.',
+
+  // ── Ficha de empresa ──────────────────────────────────────────────────────
+  'platform.organization.back': '← Empresas',
+  'platform.organization.subtitle': 'Identificador: {slug}',
+  'platform.organization.plan': 'Plan',
+  'platform.organization.since': 'Cliente desde',
+  'platform.organization.theirData': 'Sus datos',
+  'platform.organization.theirDataHint':
+    'A partir de aquí empieza lo que pertenece a la empresa. Cada apartado necesita su propio acceso, con motivo y fecha de fin, y el cliente puede ver quién entró y cuándo.',
+
+  // ── Los tres alcances ─────────────────────────────────────────────────────
+  'platform.scope.METADATA.name': 'Datos generales',
+  'platform.scope.METADATA.explains':
+    'Cuántos documentos y colecciones tiene, qué fuentes ha conectado y si están sincronizando. Ni una línea de lo que dicen sus documentos.',
+  'platform.scope.METADATA.request': 'Pedir acceso a los datos generales',
+  'platform.scope.METADATA.confirmTitle': 'Pedir acceso a los datos generales',
+  'platform.scope.METADATA.confirmBody':
+    'Vas a poder ver cuántos documentos y fuentes tiene esta empresa y en qué estado están. No verás el contenido de ningún documento. El acceso dura 24 horas y lo pides tú ({who}); la empresa lo verá en su registro con el motivo que escribas.',
+
+  'platform.scope.DIAGNOSTICS.name': 'Diagnóstico',
+  'platform.scope.DIAGNOSTICS.explains':
+    'Los errores técnicos: qué sincronización falló y por qué. Puede citar el nombre de un fichero para poder identificarlo, nunca su contenido.',
+  'platform.scope.DIAGNOSTICS.request': 'Pedir acceso al diagnóstico',
+  'platform.scope.DIAGNOSTICS.confirmTitle': 'Pedir acceso al diagnóstico',
+  'platform.scope.DIAGNOSTICS.confirmBody':
+    'Vas a poder ver los errores técnicos de esta empresa, incluido el nombre del fichero que falló cuando haga falta para identificarlo. No verás el contenido de ningún documento. El acceso dura 24 horas y lo pides tú ({who}); la empresa lo verá en su registro con el motivo que escribas.',
+
+  'platform.scope.CONTENT.name': 'Contenido',
+  'platform.scope.CONTENT.explains':
+    'El texto de los documentos de la empresa. Es lo que ellos escribieron, y por eso lo tiene que aprobar quien responde por la empresa.',
+  'platform.scope.CONTENT.request': 'Pedir acceso al contenido',
+  'platform.scope.CONTENT.confirmTitle': 'Pedir acceso al contenido de esta empresa',
+  'platform.scope.CONTENT.confirmBody':
+    'Vas a pedir poder LEER los documentos de esta empresa: contratos, informes, correos, lo que hayan subido. La petición queda pendiente y no se abre nada hasta que la apruebe quien responde por la empresa. Si la aprueba, el acceso dura como máximo 72 horas, cada documento que abras queda registrado uno a uno, y el cliente puede verlo. Lo pides tú ({who}) con el motivo que escribas.',
+
+  'platform.scope.open': 'Acceso activo',
+  'platform.scope.closed': 'Sin acceso',
+  'platform.scope.awaitingOwner': 'Esperando a la empresa',
+  'platform.scope.expires': 'Caduca {when}',
+  'platform.scope.reasonGiven': 'Motivo: {reason}',
+  'platform.scope.revoke': 'Retirar este acceso',
+  'platform.scope.revokeTitle': 'Retirar el acceso',
+  'platform.scope.revokeConsequence':
+    'Dejarás de poder consultar «{scope}» de esta empresa inmediatamente. Puedes volver a pedirlo cuando haga falta.',
+  'platform.scope.pendingExplain':
+    'Has pedido este acceso y {organization} todavía no lo ha aprobado. Hasta que lo haga, no puedes consultar nada.',
+  'platform.scope.pendingExpires': 'La petición caduca {when} si nadie responde.',
+  'platform.scope.reasonLabel': 'Por qué lo necesitas',
+  'platform.scope.reasonHint':
+    'Lo verá la empresa en su registro. Explícalo como se lo explicarías a ellos.',
+
+  'platform.grant.status.PENDING': 'Pendiente de aprobación',
+  'platform.grant.status.ACTIVE': 'Activo',
+  'platform.grant.status.REVOKED': 'Retirado',
+  'platform.grant.status.EXPIRED': 'Caducado',
+  'platform.grant.expiredAlready': 'ya caducado',
+
+  'platform.metadata.collections': 'Colecciones',
+  'platform.metadata.insights': 'Conclusiones',
+  'platform.metadata.source': 'Fuente',
+  'platform.metadata.state': 'Estado',
+  'platform.metadata.lastSync': 'Última sincronización',
+
+  'platform.diagnostics.failingSources': 'Fuentes con error',
+  'platform.diagnostics.recentJobs': 'Últimas sincronizaciones',
+  'platform.diagnostics.failedAnalyses': 'Análisis fallidos',
+  'platform.diagnostics.state': 'Estado',
+  'platform.diagnostics.detail': 'Detalle técnico',
+  'platform.diagnostics.when': 'Cuándo',
+
+  'platform.content.title': 'Documento',
+  'platform.content.state': 'Estado',
+  'platform.content.indexed': 'Indexado',
+  'platform.content.read': 'Abrir',
+  'platform.content.close': 'Cerrar',
+  'platform.content.readLogged':
+    'La apertura de este documento ha quedado registrada, y la empresa puede verla.',
+
+  'platform.grantHistory.title': 'Historial de accesos a esta empresa',
+  'platform.grantHistory.hint':
+    'Lo mismo que ve el cliente desde su cuenta. Incluye los caducados y los retirados.',
+  'platform.grantHistory.none': 'Nunca se ha pedido acceso a esta empresa.',
+  'platform.grantHistory.scope': 'Alcance',
+  'platform.grantHistory.state': 'Estado',
+  'platform.grantHistory.reason': 'Motivo',
+  'platform.grantHistory.requestedBy': 'Lo pidió',
+  'platform.grantHistory.requestedAt': 'Pedido',
+  'platform.grantHistory.expires': 'Caduca',
+
+  // ── Personas ──────────────────────────────────────────────────────────────
+  'platform.users.title': 'Personas',
+  'platform.users.subtitle':
+    'Las cuentas de todas las empresas clientes. Sirve para atender «no puedo entrar», no para otra cosa.',
+  'platform.users.readLogged':
+    'Consultar esta lista queda registrado: son datos personales de empleados de empresas clientes.',
+  'platform.users.search': 'Buscar por nombre o correo',
+  'platform.users.none': 'No hay ninguna cuenta que mostrar.',
+  'platform.users.isAdmin': 'Administración',
+  'platform.users.column.name': 'Nombre',
+  'platform.users.column.email': 'Correo',
+  'platform.users.column.state': 'Estado',
+  'platform.users.column.mfa': 'Verificación en dos pasos',
+  'platform.users.column.lastSeen': 'Última actividad',
+  'platform.users.status.ACTIVE': 'Activa',
+  'platform.users.status.BANNED': 'Bloqueada',
+  'platform.users.mfaOn': 'Activada',
+  'platform.users.mfaOff': 'Desactivada',
+
+  'platform.user.back': '← Personas',
+  'platform.user.account': 'La cuenta',
+  'platform.user.since': 'Se registró',
+  'platform.user.organizations': 'Empresas a las que pertenece',
+  'platform.user.noOrganizations': 'No pertenece a ninguna empresa.',
+  'platform.user.noOrganizationsAdmin':
+    'Ninguna, y no puede pertenecer a ninguna: es una cuenta de administración de BusinessBrain.',
+  'platform.user.actions': 'Acciones sobre esta cuenta',
+  'platform.user.actionsHint':
+    'Todas quedan registradas y algunas te pedirán confirmar tu identidad.',
+  'platform.user.cannotActOnAdmin':
+    'Es una cuenta de administración de BusinessBrain. No se puede bloquear desde aquí: dejaría el producto sin nadie que pudiera desbloquearla.',
+  'platform.user.ban': 'Bloquear la cuenta',
+  'platform.user.banTitle': 'Bloquear esta cuenta',
+  'platform.user.banBody':
+    'Esta persona dejará de poder entrar inmediatamente, y sus sesiones abiertas se cortarán. Su empresa y sus documentos no se tocan. Puedes desbloquearla después.',
+  'platform.user.unban': 'Desbloquear la cuenta',
+  'platform.user.unbanTitle': 'Desbloquear esta cuenta',
+  'platform.user.unbanBody':
+    'Esta persona podrá volver a entrar con su contraseña habitual.',
+  'platform.user.removeMfa': 'Retirar la verificación en dos pasos',
+  'platform.user.removeMfaTitle': 'Retirar la verificación en dos pasos',
+  'platform.user.removeMfaBody':
+    'Esta persona dejará de necesitar el código de su móvil para entrar. NO te da acceso a su cuenta: seguirá haciendo falta su contraseña, que ni se lee ni se cambia aquí. Le avisaremos por correo, y también a quien responde por su empresa.',
+  'platform.user.removeMfaReason': 'Por qué hace falta retirarla',
+  'platform.user.removeMfaReasonHint':
+    'Aparecerá en el correo que recibe esa persona y en el registro. Al menos 10 caracteres.',
+
+  // ── Mis accesos ───────────────────────────────────────────────────────────
+  'platform.myAccess.title': 'Mis accesos',
+  'platform.myAccess.subtitle':
+    'Lo que tienes abierto ahora mismo sobre los datos de otras empresas, y lo que has tenido antes.',
+  'platform.myAccess.notMembership':
+    'Tener un acceso no es pertenecer a esa empresa. Son permisos temporales de lectura sobre datos que no son tuyos, y conviene retirarlos en cuanto dejen de hacer falta.',
+  'platform.myAccess.open': 'Abiertos ahora',
+  'platform.myAccess.noneOpen': 'No tienes ningún acceso abierto.',
+  'platform.myAccess.expires': 'Caduca {when}',
+  'platform.myAccess.requestedAt': 'Pedido el {when}',
+  'platform.myAccess.approvedBy': 'aprobado por {who}',
+  'platform.myAccess.finished': 'Terminados',
+  'platform.myAccess.finishedHint':
+    'Accesos que ya caducaron o que retiraste. Se conservan porque son parte del historial que el cliente puede consultar.',
+
+  // ── Registro ──────────────────────────────────────────────────────────────
+  'platform.audit.title': 'Registro de administración',
+  'platform.audit.subtitle':
+    'Todo lo que se ha hecho desde la administración de BusinessBrain. La actividad de cada empresa no aparece aquí: es suya.',
+  'platform.audit.filterByAction': 'Filtrar por acción',
+  'platform.audit.allActions': 'Todas las acciones',
+  'platform.audit.none': 'Todavía no hay ninguna acción registrada.',
+  'platform.audit.system': 'El sistema',
+
+  // ── Confirmación de acciones sensibles ────────────────────────────────────
+  'platform.confirm.reason': 'Motivo',
+  'platform.confirm.reasonHint': 'Quedará en el registro. Al menos 10 caracteres.',
+  'platform.confirm.audited':
+    'Esta acción quedará registrada con tu nombre, la fecha y el motivo.',
+  'platform.confirm.cancel': 'Cancelar',
+  'platform.confirm.done': 'Hecho. Ha quedado registrado.',
+  'platform.confirm.denied':
+    'No tienes permiso para hacer esto, o la acción ya no es posible en este estado.',
+  'platform.confirm.invalid':
+    'Faltan datos o alguno no es válido. Revisa lo que has escrito.',
+  'platform.confirm.failed':
+    'No se ha podido completar. Vuelve a intentarlo en un momento.',
 } as const;
 
 /** Las claves que existen. Una pantalla que pida otra cosa no compila. */

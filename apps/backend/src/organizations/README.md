@@ -31,4 +31,4 @@ Gestión de organizaciones (tenants), membresías e invitaciones. Es el punto do
 ## Ampliaciones futuras
 - Revocar/reenviar invitaciones pendientes (hoy solo se pueden crear y aceptar).
 - Eliminar/cambiar el rol de un miembro existente (`DELETE /organizations/:id/members/:userId`, `PATCH .../members/:userId`) — no estaba en el alcance mínimo de la Fase 1.
-- Auditoría (`AuditLog`) de cambios de rol e invitaciones — se añadirá cuando el patrón se repita también en `AdminModule` (ver su README).
+- Auditoría (`AuditLog`) de cambios de rol e invitaciones — ya cubierta: `AuditService` es el escritor único de `AuditLog` desde la subfase 6.2.

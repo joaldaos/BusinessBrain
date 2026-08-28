@@ -36,7 +36,7 @@ import { RequestAccessDto } from './request-access.dto';
  * es exactamente el resultado contrario al que se busca.
  */
 @UseGuards(SuperAdminGuard)
-@Controller('admin/organizations/:organizationId')
+@Controller('platform/organizations/:organizationId')
 export class PlatformAccessController {
   constructor(
     private readonly access: PlatformAccessService,

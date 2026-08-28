@@ -300,6 +300,37 @@ export class PlatformAccessService {
     return grants.map((grant) => this.present(grant));
   }
 
+  /**
+   * Los accesos que ESTE administrador tiene o ha tenido, en todas las empresas.
+   *
+   * Existe para que quien administra pueda responderse "¿qué tengo abierto ahora mismo?" sin
+   * recorrer empresa por empresa — que es la pregunta que hay que poder contestar antes de
+   * pedir una concesión más, y la que lleva a retirar las que ya no hacen falta.
+   *
+   * Acotado a quien pregunta, y no a "todas las concesiones de la plataforma": ver los accesos
+   * ajenos no ayuda a nadie a operar y sí dibujaría el mapa de qué clientes está mirando cada
+   * cual. Cada concesión es de quien la pidió, también para leerla.
+   *
+   * Lleva el nombre de la empresa porque un listado de identificadores no se puede usar.
+   */
+  async listForAdmin(adminId: string) {
+    const grants = await this.prisma.platformAccessGrant.findMany({
+      where: { requestedById: adminId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        organization: { select: { id: true, name: true } },
+        requestedBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+        revokedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    return grants.map((grant) => ({
+      ...this.present(grant),
+      organization: grant.organization,
+    }));
+  }
+
   private async findInOrganization(grantId: string, organizationId: string) {
     const grant = await this.prisma.platformAccessGrant.findFirst({
       where: { id: grantId, organizationId },

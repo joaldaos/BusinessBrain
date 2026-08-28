@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { PLATFORM_AUDIT_ACTIONS } from '../audit/domain/platform-actions';
+import { PrismaService } from '../../prisma/prisma.service';
+import { PLATFORM_AUDIT_ACTIONS } from '../../audit/domain/platform-actions';
 
 const PAGE_SIZE = 50;
 

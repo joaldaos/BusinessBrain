@@ -57,10 +57,10 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       const sinMfa = await registerPlatformAdminWithoutMfa();
 
       const rutas = [
-        '/admin/stats',
-        '/admin/organizations',
-        '/admin/users',
-        '/admin/audit',
+        '/platform/overview',
+        '/platform/organizations',
+        '/platform/users',
+        '/platform/audit',
       ];
       const respuestas: Record<string, number> = {};
       for (const ruta of rutas) {
@@ -79,7 +79,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await reauthenticate(sinMfa);
 
       await as(sinMfa)
-        .post(`/admin/organizations/${tenant.organizationId}/access`)
+        .post(`/platform/organizations/${tenant.organizationId}/access`)
         .send({
           scope: 'METADATA',
           reason: 'Investigando una incidencia real.',
@@ -96,7 +96,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await as(sinMfa).post('/auth/mfa/setup').expect(200);
 
       const conMfa = await enableMfa(sinMfa);
-      await as(conMfa).get('/admin/stats').expect(200);
+      await as(conMfa).get('/platform/overview').expect(200);
 
       await prisma.user.deleteMany({ where: { id: sinMfa.userId } });
     });
@@ -118,7 +118,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
   describe('las acciones administrativas exigen credencial reciente', () => {
     it('CRÍTICO: pedir una concesión, sin reautenticarse, se deniega', async () => {
       await as(admin)
-        .post(`/admin/organizations/${tenant.organizationId}/access`)
+        .post(`/platform/organizations/${tenant.organizationId}/access`)
         .send({
           scope: 'METADATA',
           reason: 'Investigando una incidencia real.',
@@ -133,7 +133,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
         .expect(200);
 
       await as(admin)
-        .post(`/admin/organizations/${tenant.organizationId}/access`)
+        .post(`/platform/organizations/${tenant.organizationId}/access`)
         .send({
           scope: 'METADATA',
           reason: 'Investigando una incidencia real.',
@@ -143,11 +143,12 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
 
     it('CRÍTICO: banear y cambiar de plan también la exigen', async () => {
       const respuestas = {
-        ban: (await as(admin).post(`/admin/users/${tenant.owner.userId}/ban`))
-          .status,
+        ban: (
+          await as(admin).post(`/platform/users/${tenant.owner.userId}/ban`)
+        ).status,
         plan: (
           await as(admin)
-            .post(`/admin/organizations/${tenant.organizationId}/plan`)
+            .post(`/platform/organizations/${tenant.organizationId}/plan`)
             .send({ planTier: 'PRO' })
         ).status,
       };
@@ -160,7 +161,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await expireReauthentication(admin);
 
       await as(admin)
-        .post(`/admin/organizations/${tenant.organizationId}/access`)
+        .post(`/platform/organizations/${tenant.organizationId}/access`)
         .send({
           scope: 'METADATA',
           reason: 'Investigando una incidencia real.',
@@ -173,7 +174,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       // pedir concesiones más largas para no tener que repetir, que es el resultado contrario.
       await reauthenticate(admin);
       await as(admin)
-        .post(`/admin/organizations/${tenant.organizationId}/access`)
+        .post(`/platform/organizations/${tenant.organizationId}/access`)
         .send({
           scope: 'METADATA',
           reason: 'Investigando una incidencia real.',
@@ -183,7 +184,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await expireReauthentication(admin);
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(200);
     });
   });
@@ -235,7 +236,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       for (const ruta of ['overview', 'diagnostics', 'documents']) {
         respuestas[ruta] = (
           await as(admin).get(
-            `/admin/organizations/${tenant.organizationId}/${ruta}`,
+            `/platform/organizations/${tenant.organizationId}/${ruta}`,
           )
         ).status;
       }
@@ -259,13 +260,13 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await conceder(admin, tenant, 'METADATA');
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(200);
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/diagnostics`)
+        .get(`/platform/organizations/${tenant.organizationId}/diagnostics`)
         .expect(403);
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/documents`)
+        .get(`/platform/organizations/${tenant.organizationId}/documents`)
         .expect(403);
     });
 
@@ -273,13 +274,13 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
       await conceder(admin, tenant, 'DIAGNOSTICS');
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/diagnostics`)
+        .get(`/platform/organizations/${tenant.organizationId}/diagnostics`)
         .expect(200);
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(403);
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/documents`)
+        .get(`/platform/organizations/${tenant.organizationId}/documents`)
         .expect(403);
     });
 
@@ -288,7 +289,7 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
 
       // Pendiente: pedirla no la abre, ni con segundo factor ni reautenticado.
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/documents`)
+        .get(`/platform/organizations/${tenant.organizationId}/documents`)
         .expect(403);
 
       await reauthenticate(tenant.owner);
@@ -299,24 +300,24 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
         .expect(201);
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/documents`)
+        .get(`/platform/organizations/${tenant.organizationId}/documents`)
         .expect(200);
     });
 
     it('CRÍTICO: retirar la concesión deniega en el acto', async () => {
       const concesion = await conceder(admin, tenant, 'METADATA');
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(200);
 
       await as(admin)
         .post(
-          `/admin/organizations/${tenant.organizationId}/access/${concesion}/revoke`,
+          `/platform/organizations/${tenant.organizationId}/access/${concesion}/revoke`,
         )
         .expect(201);
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(403);
     });
 
@@ -345,13 +346,13 @@ describe('plataforma: segundo factor y reautenticación sin bypass', () => {
 
     // Y sigue sin abrirse.
     await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/documents`)
+      .get(`/platform/organizations/${tenant.organizationId}/documents`)
       .expect(403);
   });
 
   it('la entrada de auditoría del intento denegado no lleva ningún secreto', async () => {
     await as(admin)
-      .post(`/admin/organizations/${tenant.organizationId}/access`)
+      .post(`/platform/organizations/${tenant.organizationId}/access`)
       .send({ scope: 'METADATA', reason: 'Investigando una incidencia real.' })
       .expect(403);
 
@@ -373,7 +374,7 @@ async function conceder(
   scope: 'METADATA' | 'DIAGNOSTICS' | 'CONTENT',
 ): Promise<string> {
   const respuesta = await as(admin)
-    .post(`/admin/organizations/${tenant.organizationId}/access`)
+    .post(`/platform/organizations/${tenant.organizationId}/access`)
     .send({ scope, reason: `Investigando ${scope} por una incidencia real.` })
     .expect(201);
 

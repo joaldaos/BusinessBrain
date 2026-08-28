@@ -56,9 +56,9 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
   describe('la puerta de administración', () => {
     it('CRÍTICO: sin sesión no se entra', async () => {
       for (const ruta of [
-        '/admin/stats',
-        '/admin/organizations',
-        '/admin/users',
+        '/platform/overview',
+        '/platform/organizations',
+        '/platform/users',
       ]) {
         await http().get(ruta).expect(401);
       }
@@ -68,21 +68,21 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
       // Ser dueño de una empresa no es tener nada que ver con la administración de la
       // plataforma. Son dos ejes distintos y esta es la prueba de que no se cruzan.
       for (const ruta of [
-        '/admin/stats',
-        '/admin/organizations',
-        '/admin/users',
+        '/platform/overview',
+        '/platform/organizations',
+        '/platform/users',
       ]) {
         await as(tenant.owner, tenant).get(ruta).expect(403);
       }
       await as(tenant.owner, tenant)
-        .post(`/admin/users/${tenant.owner.userId}/ban`)
+        .post(`/platform/users/${tenant.owner.userId}/ban`)
         .expect(403);
     });
 
     it('el administrador de plataforma sí entra', async () => {
-      await comoAdmin().get('/admin/stats').expect(200);
-      await comoAdmin().get('/admin/organizations').expect(200);
-      await comoAdmin().get('/admin/users').expect(200);
+      await comoAdmin().get('/platform/overview').expect(200);
+      await comoAdmin().get('/platform/organizations').expect(200);
+      await comoAdmin().get('/platform/users').expect(200);
     });
   });
 
@@ -190,7 +190,7 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
   describe('lo que la plataforma ve de sus clientes', () => {
     it('CRÍTICO: el listado de organizaciones no lleva su configuración', async () => {
       const respuesta = await comoAdmin()
-        .get('/admin/organizations')
+        .get('/platform/organizations')
         .expect(200);
 
       const cuerpo = JSON.stringify(respuesta.body);
@@ -201,7 +201,7 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
 
     it('los recuentos sí: son la señal operativa', async () => {
       const respuesta = await comoAdmin()
-        .get('/admin/organizations')
+        .get('/platform/organizations')
         .expect(200);
 
       const items = (
@@ -212,7 +212,7 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
     });
 
     it('CRÍTICO: leer la lista de personas deja rastro, sin copiar los correos', async () => {
-      await comoAdmin().get('/admin/users').expect(200);
+      await comoAdmin().get('/platform/users').expect(200);
 
       const traza = await prisma.auditLog.findFirst({
         where: { action: 'platform.users.listed', actorId: admin.userId },
@@ -237,7 +237,7 @@ describe('Administración de plataforma y aislamiento (E2E)', () => {
       await reauthenticate(admin);
 
       await comoAdmin()
-        .post(`/admin/organizations/${efimera.organizationId}/plan`)
+        .post(`/platform/organizations/${efimera.organizationId}/plan`)
         .send({ planTier: 'PRO' })
         .expect(201);
 

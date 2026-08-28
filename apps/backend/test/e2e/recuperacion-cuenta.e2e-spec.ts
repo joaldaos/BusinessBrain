@@ -318,7 +318,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
 
     it('CRÍTICO: sin motivo, no', async () => {
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({ reason: '' })
         .expect(400);
 
@@ -330,7 +330,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
 
     it('con motivo, sí', async () => {
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -349,7 +349,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       });
 
       const respuesta = await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -369,7 +369,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       ).passwordHash;
 
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -388,23 +388,23 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       // Retirar el segundo factor no es una concesión de acceso. Las dos cosas son
       // independientes y siguen siéndolo.
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
         .expect(201);
 
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/documents`)
+        .get(`/platform/organizations/${tenant.organizationId}/documents`)
         .expect(403);
       await as(admin)
-        .get(`/admin/organizations/${tenant.organizationId}/overview`)
+        .get(`/platform/organizations/${tenant.organizationId}/overview`)
         .expect(403);
     });
 
     it('avisa a la persona afectada', async () => {
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -421,7 +421,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       const miembro = await enableMfa(await addMember(tenant, 'ADMIN', 'otro'));
 
       await as(admin)
-        .post(`/admin/users/${miembro.userId}/mfa/remove`)
+        .post(`/platform/users/${miembro.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -437,7 +437,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       const otroAdmin = await registerPlatformAdmin('sin-reauth');
 
       await as(otroAdmin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
@@ -450,7 +450,7 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
       const motivo =
         'Ha perdido el móvil y los códigos; verificado por teléfono.';
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({ reason: motivo })
         .expect(201);
 
@@ -472,14 +472,14 @@ describe('recuperar una cuenta sin abrir una puerta trasera', () => {
 
     it('y aparece en el listado de auditoría de plataforma', async () => {
       await as(admin)
-        .post(`/admin/users/${afectado.userId}/mfa/remove`)
+        .post(`/platform/users/${afectado.userId}/mfa/remove`)
         .send({
           reason: 'Ha perdido el móvil y los códigos; verificado por teléfono.',
         })
         .expect(201);
 
       const listado = await as(admin)
-        .get('/admin/audit?code=platform.user.mfa_removed')
+        .get('/platform/audit?code=platform.user.mfa_removed')
         .expect(200);
 
       expect(listado.body.data.items.length).toBeGreaterThan(0);

@@ -13,7 +13,7 @@ Exponer `PrismaService` (cliente Prisma con ciclo de vida NestJS) a toda la apli
 No aplica.
 
 ## Decisiones de diseño
-- **Sin lógica de scoping por organización aquí todavía.** Cada módulo filtra explícitamente por `organizationId` en sus propias queries (p. ej. `OrganizationsService`, `AdminService`). Añadir aquí un middleware de Prisma que inyecte automáticamente el filtro es una optimización razonable, pero prematura con un solo módulo de dominio construido — se revisará cuando haya 3-4 módulos repitiendo el mismo patrón de filtrado.
+- **Sin lógica de scoping por organización aquí todavía.** Cada módulo filtra explícitamente por `organizationId` en sus propias queries (p. ej. `OrganizationsService`, `PlatformOrganizationsService`). Añadir aquí un middleware de Prisma que inyecte automáticamente el filtro es una optimización razonable, pero prematura con un solo módulo de dominio construido — se revisará cuando haya 3-4 módulos repitiendo el mismo patrón de filtrado.
 - Row-Level Security de PostgreSQL como segunda capa de aislamiento está en el roadmap (fase 9, hardening), no en esta fase.
 
 ## Ampliaciones futuras

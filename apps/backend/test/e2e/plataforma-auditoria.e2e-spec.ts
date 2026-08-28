@@ -75,19 +75,21 @@ describe('Auditoría de plataforma (E2E)', () => {
   }
 
   const leerAuditoria = async (query = ''): Promise<Entrada[]> => {
-    const respuesta = await comoAdmin().get(`/admin/audit${query}`).expect(200);
+    const respuesta = await comoAdmin()
+      .get(`/platform/audit${query}`)
+      .expect(200);
     return (respuesta.body as { data: { items: Entrada[] } }).data.items;
   };
 
   describe('la puerta', () => {
     it('CRÍTICO: sin sesión no se lee', async () => {
-      await http().get('/admin/audit').expect(401);
-      await http().get('/admin/audit/actions').expect(401);
+      await http().get('/platform/audit').expect(401);
+      await http().get('/platform/audit/actions').expect(401);
     });
 
     it('CRÍTICO: un cliente no lee la auditoría de plataforma, ni siendo OWNER', async () => {
-      await as(tenant.owner, tenant).get('/admin/audit').expect(403);
-      await as(tenant.owner, tenant).get('/admin/audit/actions').expect(403);
+      await as(tenant.owner, tenant).get('/platform/audit').expect(403);
+      await as(tenant.owner, tenant).get('/platform/audit/actions').expect(403);
     });
   });
 
@@ -96,7 +98,7 @@ describe('Auditoría de plataforma (E2E)', () => {
       // Quién, qué, sobre qué empresa, cuándo y qué dejó. Una traza que no responda a las
       // cinco no sirve para investigar nada.
       await comoAdmin()
-        .post(`/admin/organizations/${tenant.organizationId}/plan`)
+        .post(`/platform/organizations/${tenant.organizationId}/plan`)
         .send({ planTier: 'PRO' })
         .expect(201);
 
@@ -116,7 +118,7 @@ describe('Auditoría de plataforma (E2E)', () => {
     });
 
     it('la lectura de datos personales aparece como lo que es', async () => {
-      await comoAdmin().get('/admin/users').expect(200);
+      await comoAdmin().get('/platform/users').expect(200);
 
       const entradas = await leerAuditoria();
       const lectura = entradas.find(
@@ -153,7 +155,7 @@ describe('Auditoría de plataforma (E2E)', () => {
 
     it('el catálogo de acciones consultables es solo de plataforma', async () => {
       const respuesta = await comoAdmin()
-        .get('/admin/audit/actions')
+        .get('/platform/audit/actions')
         .expect(200);
       const acciones = (respuesta.body as { data: string[] }).data;
 
@@ -237,8 +239,8 @@ describe('Auditoría de plataforma (E2E)', () => {
     });
 
     it('CRÍTICO: la respuesta no lleva correos, secretos ni contenido', async () => {
-      await comoAdmin().get('/admin/users').expect(200);
-      const respuesta = await comoAdmin().get('/admin/audit').expect(200);
+      await comoAdmin().get('/platform/users').expect(200);
+      const respuesta = await comoAdmin().get('/platform/audit').expect(200);
       const cuerpo = JSON.stringify(respuesta.body);
 
       // Ni el correo del administrador ni el de nadie: para saber quién hizo algo basta el
@@ -261,7 +263,7 @@ describe('Auditoría de plataforma (E2E)', () => {
       });
 
       await comoAdmin()
-        .post(`/admin/organizations/${efimera.organizationId}/plan`)
+        .post(`/platform/organizations/${efimera.organizationId}/plan`)
         .send({ planTier: 'ENTERPRISE' })
         .expect(201);
 

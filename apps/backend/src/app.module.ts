@@ -7,7 +7,7 @@ import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
-import { AdminModule } from './admin/admin.module';
+import { PlatformModule } from './platform/platform.module';
 import { LlmModule } from './llm/llm.module';
 import { KnowledgeEngineModule } from './knowledge-engine/knowledge-engine.module';
 import { UnderstandingEngineModule } from './understanding-engine/understanding-engine.module';
@@ -57,7 +57,7 @@ import type { AppConfig } from './config/configuration';
     OrganizationsModule,
     PrivacyModule,
     PlatformAccessModule,
-    AdminModule,
+    PlatformModule,
     LlmModule,
     KnowledgeEngineModule,
     UnderstandingEngineModule,

@@ -1,4 +1,5 @@
 import {
+  addMember,
   as,
   codeFor,
   createTenant,
@@ -81,9 +82,9 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
     // ── 2. Sin segundo factor NO administra nada ─────────────────────────────
     const cerradas: Record<string, number> = {};
     for (const ruta of [
-      '/admin/stats',
-      '/admin/organizations',
-      '/admin/audit',
+      '/platform/overview',
+      '/platform/organizations',
+      '/platform/audit',
     ]) {
       cerradas[ruta] = (await as(admin).get(ruta)).status;
     }
@@ -102,7 +103,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
     admin = { ...admin, mfaSecret: secreto };
 
     // Y ahora sí administra.
-    await as(admin).get('/admin/stats').expect(200);
+    await as(admin).get('/platform/overview').expect(200);
 
     // ── 4. Entrar de cero: contraseña + código ───────────────────────────────
     const paso1 = await http()
@@ -117,9 +118,39 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
       .expect(201);
     admin = { ...admin, accessToken: paso2.body.data.accessToken };
 
-    // ── 5. Una acción administrativa, sin haber confirmado la identidad ──────
+    // ── 5. Consultar la cartera de clientes y las personas ───────────────────
+    const cartera = await as(admin).get('/platform/organizations').expect(200);
+    const fila = cartera.body.data.items.find(
+      (o: { id: string }) => o.id === tenant.organizationId,
+    );
+    expect(fila).toBeDefined();
+    expect(fila.planTier).toBe('FREE');
+    expect(fila._count.knowledgeItems).toBe(1);
+
+    const personas = await as(admin).get('/platform/users').expect(200);
+    const propietario = personas.body.data.items.find(
+      (u: { id: string }) => u.id === tenant.owner.userId,
+    );
+    expect(propietario).toBeDefined();
+    expect(propietario.status).toBe('ACTIVE');
+
+    // ── 6. Y en ninguna de las dos sale un secreto ───────────────────────────
+    for (const respuesta of [cartera, personas]) {
+      const cuerpo = JSON.stringify(respuesta.body);
+      for (const prohibido of [
+        'passwordHash',
+        'mfaSecretEnc',
+        'settings',
+        'contentText',
+        'quince por ciento',
+      ]) {
+        expect(cuerpo).not.toContain(prohibido);
+      }
+    }
+
+    // ── 7. Una acción administrativa, sin haber confirmado la identidad ──────
     await as(admin)
-      .post(`/admin/organizations/${tenant.organizationId}/plan`)
+      .post(`/platform/organizations/${tenant.organizationId}/plan`)
       .send({ planTier: 'PRO' })
       .expect(403);
 
@@ -130,18 +161,54 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
       .expect(200);
 
     await as(admin)
-      .post(`/admin/organizations/${tenant.organizationId}/plan`)
+      .post(`/platform/organizations/${tenant.organizationId}/plan`)
       .send({ planTier: 'PRO' })
       .expect(201);
 
-    // ── 7. Pedir acceso, y solo a lo que hace falta ──────────────────────────
+    // ── 8. Bloquear a alguien, y comprobar que deja de entrar ────────────────
+    const empleado = await addMember(tenant, 'MEMBER', 'recorrido-empleado');
+    await as(empleado).get('/auth/me').expect(200);
+
+    await as(admin).post(`/platform/users/${empleado.userId}/ban`).expect(201);
+
+    // No hace falta revocar sesiones a mano: el estado se comprueba en cada petición.
+    await as(empleado).get('/auth/me').expect(401);
+    await http()
+      .post('/auth/login')
+      .send({ email: empleado.email, password: empleado.password })
+      .expect(401);
+
+    await as(admin)
+      .post(`/platform/users/${empleado.userId}/unban`)
+      .expect(201);
+    await http()
+      .post('/auth/login')
+      .send({ email: empleado.email, password: empleado.password })
+      .expect(201);
+
+    // ── 9. Y las dos acciones quedan registradas ─────────────────────────────
+    const trasBloqueo = await as(admin).get('/platform/audit').expect(200);
+    const codigosDelBloqueo = trasBloqueo.body.data.items
+      .filter(
+        (e: { target: { id: string } }) => e.target.id === empleado.userId,
+      )
+      .map((e: { code: string }) => e.code);
+
+    expect(codigosDelBloqueo).toEqual(
+      expect.arrayContaining([
+        'platform.user.banned',
+        'platform.user.unbanned',
+      ]),
+    );
+
+    // ── 10. Pedir acceso, y solo a lo que hace falta ─────────────────────────
     // Sin concesión, ni un contador de esa empresa.
     await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/overview`)
+      .get(`/platform/organizations/${tenant.organizationId}/overview`)
       .expect(403);
 
     const metadatos = await as(admin)
-      .post(`/admin/organizations/${tenant.organizationId}/access`)
+      .post(`/platform/organizations/${tenant.organizationId}/access`)
       .send({
         scope: 'METADATA',
         reason: 'El cliente dice que no le entra nada; hay que ver su estado.',
@@ -151,7 +218,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     // ── 8. Y ve exactamente lo concedido ─────────────────────────────────────
     const panorama = await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/overview`)
+      .get(`/platform/organizations/${tenant.organizationId}/overview`)
       .expect(200);
     expect(panorama.body.data.counts.documentos).toBe(1);
     // Ni una línea de contenido: la consulta que sirve esta ruta no lo selecciona.
@@ -159,15 +226,15 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     // Los otros dos alcances siguen cerrados.
     await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/diagnostics`)
+      .get(`/platform/organizations/${tenant.organizationId}/diagnostics`)
       .expect(403);
     await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/documents`)
+      .get(`/platform/organizations/${tenant.organizationId}/documents`)
       .expect(403);
 
     // ── 9. El contenido, solo si lo aprueba el propietario ───────────────────
     const contenido = await as(admin)
-      .post(`/admin/organizations/${tenant.organizationId}/access`)
+      .post(`/platform/organizations/${tenant.organizationId}/access`)
       .send({
         scope: 'CONTENT',
         reason: 'Un documento no se indexa y hay que ver qué tiene dentro.',
@@ -178,7 +245,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     // Pedirlo no lo concede.
     await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/documents`)
+      .get(`/platform/organizations/${tenant.organizationId}/documents`)
       .expect(403);
 
     // El cliente lo ve desde su cuenta, con quién, por qué y hasta cuándo.
@@ -200,7 +267,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     // ── 10. Ahora sí, y documento a documento ────────────────────────────────
     const listado = await as(admin)
-      .get(`/admin/organizations/${tenant.organizationId}/documents`)
+      .get(`/platform/organizations/${tenant.organizationId}/documents`)
       .expect(200);
     expect(listado.body.data).toHaveLength(1);
     // El listado da títulos, no texto: el contenido se pide de uno en uno para que la traza
@@ -209,7 +276,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     const leido = await as(admin)
       .get(
-        `/admin/organizations/${tenant.organizationId}/documents/${documento.id}`,
+        `/platform/organizations/${tenant.organizationId}/documents/${documento.id}`,
       )
       .expect(200);
     expect(leido.body.data.contentText).toContain('quince por ciento');
@@ -235,21 +302,56 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
       Object.entries(tenantRoutes).filter(([, status]) => status === 200),
     ).toEqual([]);
 
+    // ── 12b. La concesión caduca sola, por reloj ─────────────────────────────
+    // No hay estado `EXPIRED` persistido: se deriva en cada comprobación. Se envejece la fila
+    // en vez de esperar veinticuatro horas — el reloj del proceso no se toca, así que lo que
+    // se prueba es la comprobación real y no un tiempo simulado.
+    const otraEmpresa = await createTenant('recorrido-caducidad');
+    const efimera = await as(admin)
+      .post(`/platform/organizations/${otraEmpresa.organizationId}/access`)
+      .send({ scope: 'METADATA', reason: 'Comprobando un aviso del cliente.' })
+      .expect(201);
+
+    await as(admin)
+      .get(`/platform/organizations/${otraEmpresa.organizationId}/overview`)
+      .expect(200);
+
+    await prisma.platformAccessGrant.update({
+      where: { id: efimera.body.data.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const caducada = await as(admin)
+      .get(`/platform/organizations/${otraEmpresa.organizationId}/overview`)
+      .expect(403);
+    expect(JSON.stringify(caducada.body)).toMatch(/ha caducado/i);
+
+    // Y en "mis accesos" se ve como caducada, sin haber tenido que tocar la fila.
+    const mios = await as(admin).get('/platform/access').expect(200);
+    const vista = mios.body.data.find(
+      (c: { id: string }) => c.id === efimera.body.data.id,
+    );
+    expect(vista).toMatchObject({ expired: true, usable: false });
+    // El estado ALMACENADO sigue siendo ACTIVE: la caducidad no se persiste.
+    expect(vista.status).toBe('ACTIVE');
+
+    await destroyTenant(otraEmpresa);
+
     // ── 13. Retirar la concesión cierra la puerta en el acto ─────────────────
     await as(admin)
       .post(
-        `/admin/organizations/${tenant.organizationId}/access/${contenido.body.data.id}/revoke`,
+        `/platform/organizations/${tenant.organizationId}/access/${contenido.body.data.id}/revoke`,
       )
       .expect(201);
 
     await as(admin)
       .get(
-        `/admin/organizations/${tenant.organizationId}/documents/${documento.id}`,
+        `/platform/organizations/${tenant.organizationId}/documents/${documento.id}`,
       )
       .expect(403);
 
     // ── 14. Y todo lo hecho está registrado, en el espacio de plataforma ─────
-    const auditoria = await as(admin).get('/admin/audit').expect(200);
+    const auditoria = await as(admin).get('/platform/audit').expect(200);
     const codigos = auditoria.body.data.items.map(
       (e: { code: string }) => e.code,
     );
@@ -285,7 +387,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
 
     // Ni hereda la reautenticación del primero…
     await as(otro)
-      .post(`/admin/organizations/${tenant.organizationId}/access`)
+      .post(`/platform/organizations/${tenant.organizationId}/access`)
       .send({
         scope: 'METADATA',
         reason: 'Intento de reutilizar acceso ajeno.',
@@ -295,7 +397,7 @@ describe('RECORRIDO DE PLATAFORMA desde base de datos vacía (E2E)', () => {
     // …ni la concesión que el primero pidió.
     await reauthenticate(otro);
     await as(otro)
-      .get(`/admin/organizations/${tenant.organizationId}/overview`)
+      .get(`/platform/organizations/${tenant.organizationId}/overview`)
       .expect(403);
 
     await prisma.user.deleteMany({ where: { id: otro.userId } });

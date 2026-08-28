@@ -2,7 +2,7 @@
 
 Implementación NestJS de la arquitectura definida en [`docs/BUSINESSBRAIN_MIGRATION_PLAN.md`](../../docs/BUSINESSBRAIN_MIGRATION_PLAN.md) (documento congelado — cualquier cambio de dominio/modelo pasa por ahí primero, no por este código).
 
-Cada módulo de dominio tiene su propio `README.md` junto a su código (responsabilidad, endpoints, decisiones de diseño, ampliaciones futuras): [`src/prisma`](src/prisma/README.md), [`src/common`](src/common/README.md), [`src/auth`](src/auth/README.md), [`src/organizations`](src/organizations/README.md), [`src/admin`](src/admin/README.md), [`src/llm`](src/llm/README.md), [`src/health`](src/health/README.md).
+Cada módulo de dominio tiene su propio `README.md` junto a su código (responsabilidad, endpoints, decisiones de diseño, ampliaciones futuras): [`src/prisma`](src/prisma/README.md), [`src/common`](src/common/README.md), [`src/auth`](src/auth/README.md), [`src/organizations`](src/organizations/README.md), [`src/platform`](src/platform/README.md), [`src/llm`](src/llm/README.md), [`src/health`](src/health/README.md).
 
 ## Requisitos
 

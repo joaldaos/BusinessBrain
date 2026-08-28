@@ -83,7 +83,7 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
       http().post(url).set('Authorization', `Bearer ${actor.accessToken}`),
   });
 
-  const base = () => `/admin/organizations/${tenant.organizationId}`;
+  const base = () => `/platform/organizations/${tenant.organizationId}`;
   const clienteBase = () =>
     `/organizations/${tenant.organizationId}/platform-access`;
 
@@ -539,7 +539,7 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
       );
       await comoAdmin().get(`${base()}/overview`).expect(200);
 
-      const respuesta = await comoAdmin().get('/admin/audit').expect(200);
+      const respuesta = await comoAdmin().get('/platform/audit').expect(200);
       const cuerpo = JSON.stringify(respuesta.body);
 
       expect(cuerpo).toContain('platform.access.requested');

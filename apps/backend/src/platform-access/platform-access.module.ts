@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PlatformAccessController } from './api/platform-access.controller';
 import { OrganizationAccessController } from './api/organization-access.controller';
+import { MyGrantsController } from './api/my-grants.controller';
 import { PlatformAccessService } from './application/platform-access.service';
 import { OrganizationInspectionService } from './application/organization-inspection.service';
 
@@ -12,7 +13,11 @@ import { OrganizationInspectionService } from './application/organization-inspec
  * hace imposible que las dos caras del mismo permiso lleguen a discrepar sobre si está vigente.
  */
 @Module({
-  controllers: [PlatformAccessController, OrganizationAccessController],
+  controllers: [
+    PlatformAccessController,
+    OrganizationAccessController,
+    MyGrantsController,
+  ],
   providers: [PlatformAccessService, OrganizationInspectionService],
 })
 export class PlatformAccessModule {}

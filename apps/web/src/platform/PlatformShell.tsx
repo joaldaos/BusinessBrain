@@ -25,6 +25,7 @@ import { LanguagePicker } from '../components/LanguagePicker';
  */
 const NAV: { to: string; label: TranslationKey; end?: boolean }[] = [
   { to: '/platform', label: 'platform.nav.overview', end: true },
+  { to: '/platform/assistant', label: 'platform.nav.assistant' },
   { to: '/platform/organizations', label: 'platform.nav.organizations' },
   { to: '/platform/users', label: 'platform.nav.users' },
   { to: '/platform/access', label: 'platform.nav.access' },

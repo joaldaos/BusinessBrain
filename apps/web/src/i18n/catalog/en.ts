@@ -736,7 +736,54 @@ export const en: Catalog = {
   'platform.chrome.boundary':
     'You administer BusinessBrain. Each company’s data stays theirs: reading it takes an access grant with a stated reason, an end date, and a record the client can see.',
 
+  'platform.nav.assistant': 'Assistant',
   'platform.nav.account': 'My account',
+
+  // ── Operations assistant ──────────────────────────────────────────────────
+  'platform.assistant.title': 'Operations assistant',
+  'platform.assistant.subtitle':
+    'Ask about the state of the platform and your clients. It consults exactly what you can consult, with your own permissions, and it executes nothing.',
+  'platform.assistant.startHere': 'Where to start',
+  'platform.assistant.startHint':
+    'Type your question below, or try one of these.',
+  'platform.assistant.example.health': 'How is the platform doing right now?',
+  'platform.assistant.example.quiet':
+    'Which companies have not uploaded anything in a while?',
+  'platform.assistant.example.recent':
+    'What has been done from operations this week?',
+  'platform.assistant.ask': 'Ask',
+  'platform.assistant.placeholder':
+    'For example: which clients are on the free plan with more than a hundred documents?',
+  'platform.assistant.thinking': 'Looking it up…',
+  'platform.assistant.failed':
+    'It could not answer. Try again in a moment.',
+  'platform.assistant.neverExecutes':
+    'The assistant proposes; executing is up to you.',
+  'platform.assistant.consulted': 'It looked at',
+  'platform.assistant.consultedNothing':
+    'It looked at nothing: this answer is not backed by data.',
+  'platform.assistant.outcome.NEEDS_GRANT': 'No access granted',
+  'platform.assistant.outcome.UNKNOWN_TOOL': 'It cannot do that',
+  'platform.assistant.currentAccess': 'Your open access',
+  'platform.assistant.currentAccessHint':
+    'The assistant only reaches what you have been granted right now.',
+  'platform.assistant.noAccess':
+    'None. It can answer about the platform, but not about what is inside a company.',
+  'platform.assistant.canConsult': 'What it can look up',
+  'platform.assistant.needsScope': 'Needs access of type “{scope}”.',
+  'platform.assistant.cannot': 'What it cannot do',
+  'platform.assistant.cannotHint':
+    'It cannot read any company’s documents, change anything, grant access, or use someone else’s. It is not that it is denied: those capabilities do not exist.',
+  'platform.assistant.asWho': 'Looking things up as {who}.',
+  'platform.assistant.tool.platform_overview':
+    'The general state of the platform',
+  'platform.assistant.tool.list_organizations': 'The list of companies',
+  'platform.assistant.tool.organization_metadata':
+    'A company’s general data',
+  'platform.assistant.tool.organization_diagnostics':
+    'A company’s diagnostics',
+  'platform.assistant.tool.my_access': 'Your open access',
+  'platform.assistant.tool.platform_audit': 'The operations log',
   'platform.account.title': 'My account',
   'platform.account.subtitle': 'Two-step verification is required to administer BusinessBrain: without it you will not be able to use the rest of the panel.',
   'platform.nav.overview': 'Home',

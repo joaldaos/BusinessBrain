@@ -19,5 +19,8 @@ import { OrganizationInspectionService } from './application/organization-inspec
     MyGrantsController,
   ],
   providers: [PlatformAccessService, OrganizationInspectionService],
+  // El asistente comprueba concesiones e inspecciona por alcance con ESTOS servicios, los
+  // mismos que usa el panel. Dos implementaciones del permiso acabarian discrepando.
+  exports: [PlatformAccessService, OrganizationInspectionService],
 })
 export class PlatformAccessModule {}

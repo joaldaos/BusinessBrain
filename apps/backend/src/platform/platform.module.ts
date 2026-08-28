@@ -43,5 +43,9 @@ import { AuthModule } from '../auth/auth.module';
     PlatformUsersService,
     PlatformAuditService,
   ],
+  // Los consulta el asistente de operacion a traves de su ejecutor de herramientas. Se
+  // exportan los DOS de solo lectura y no el de personas: el asistente no tiene ninguna
+  // herramienta que mire cuentas, y exportarlo seria dejar la puerta abierta a que la tenga.
+  exports: [PlatformOrganizationsService, PlatformAuditService],
 })
 export class PlatformModule {}

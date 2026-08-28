@@ -768,7 +768,55 @@ export const es = {
   'platform.chrome.boundary':
     'Administras BusinessBrain. Los datos de cada empresa siguen siendo suyos: para consultarlos hace falta un acceso motivado, con fecha de fin y visible para el cliente.',
 
+  'platform.nav.assistant': 'Asistente',
   'platform.nav.account': 'Mi cuenta',
+
+  // ── Asistente de operación ────────────────────────────────────────────────
+  'platform.assistant.title': 'Asistente de operación',
+  'platform.assistant.subtitle':
+    'Pregunta sobre el estado de la plataforma y de tus clientes. Consulta lo mismo que puedes consultar tú, con tus mismos permisos, y no ejecuta nada.',
+  'platform.assistant.startHere': 'Por dónde empezar',
+  'platform.assistant.startHint':
+    'Escribe tu pregunta abajo, o prueba con una de estas.',
+  'platform.assistant.example.health':
+    '¿Cómo está la plataforma ahora mismo?',
+  'platform.assistant.example.quiet':
+    '¿Qué empresas llevan tiempo sin subir nada?',
+  'platform.assistant.example.recent':
+    '¿Qué se ha hecho desde administración esta semana?',
+  'platform.assistant.ask': 'Preguntar',
+  'platform.assistant.placeholder':
+    'Por ejemplo: ¿qué clientes tienen el plan gratuito y más de cien documentos?',
+  'platform.assistant.thinking': 'Consultando…',
+  'platform.assistant.failed':
+    'No se ha podido responder. Vuelve a intentarlo en un momento.',
+  'platform.assistant.neverExecutes':
+    'El asistente propone; ejecutar es cosa tuya.',
+  'platform.assistant.consulted': 'Ha consultado',
+  'platform.assistant.consultedNothing':
+    'No ha consultado nada: esta respuesta no se apoya en datos.',
+  'platform.assistant.outcome.NEEDS_GRANT': 'Sin acceso concedido',
+  'platform.assistant.outcome.UNKNOWN_TOOL': 'No puede hacer eso',
+  'platform.assistant.currentAccess': 'Tus accesos abiertos',
+  'platform.assistant.currentAccessHint':
+    'El asistente solo alcanza lo que tú tienes concedido ahora mismo.',
+  'platform.assistant.noAccess':
+    'Ninguno. Puede responderte sobre la plataforma, pero no sobre lo que hay dentro de una empresa.',
+  'platform.assistant.canConsult': 'Qué puede consultar',
+  'platform.assistant.needsScope': 'Necesita un acceso de tipo «{scope}».',
+  'platform.assistant.cannot': 'Qué no puede hacer',
+  'platform.assistant.cannotHint':
+    'No puede leer los documentos de ninguna empresa, ni cambiar nada, ni conceder accesos, ni usar los de otra persona. No es que se le deniegue: no existen esas capacidades.',
+  'platform.assistant.asWho': 'Consulta como {who}.',
+  'platform.assistant.tool.platform_overview':
+    'El estado general de la plataforma',
+  'platform.assistant.tool.list_organizations': 'La lista de empresas',
+  'platform.assistant.tool.organization_metadata':
+    'Los datos generales de una empresa',
+  'platform.assistant.tool.organization_diagnostics':
+    'El diagnóstico de una empresa',
+  'platform.assistant.tool.my_access': 'Tus accesos abiertos',
+  'platform.assistant.tool.platform_audit': 'El registro de administración',
   'platform.account.title': 'Mi cuenta',
   'platform.account.subtitle': 'La verificación en dos pasos es obligatoria para administrar BusinessBrain: sin ella no podrás usar el resto del panel.',
   'platform.nav.overview': 'Inicio',

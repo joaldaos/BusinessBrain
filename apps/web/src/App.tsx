@@ -29,6 +29,7 @@ import {
 import { PlatformMyAccessPage } from './platform/MyAccessPage';
 import { PlatformAuditPage } from './platform/AuditPage';
 import { PlatformAccountPage } from './platform/AccountPage';
+import { PlatformAssistantPage } from './platform/AssistantPage';
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -108,6 +109,10 @@ export function App() {
           */}
           <Route element={<PlatformProtected />}>
             <Route path="/platform" element={<PlatformOverviewPage />} />
+            <Route
+              path="/platform/assistant"
+              element={<PlatformAssistantPage />}
+            />
             <Route
               path="/platform/organizations"
               element={<PlatformOrganizationsPage />}

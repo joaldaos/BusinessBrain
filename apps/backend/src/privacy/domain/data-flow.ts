@@ -92,6 +92,29 @@ export const AI_PROVIDER_DATA_FLOWS: AiDataFlow[] = [
     what: 'Una frase de prueba, sin datos tuyos, para comprobar que la clave funciona.',
     trigger: 'Al guardar la configuración de la IA.',
   },
+  /**
+   * El asistente de operación de BusinessBrain.
+   *
+   * ## Por qué esto se le declara al CLIENTE
+   *
+   * Es la salida menos evidente de la lista y la que más fácil habría sido no declarar: no la
+   * provoca el cliente, la provoca nuestro equipo, y va a NUESTRO proveedor con NUESTRA clave.
+   *
+   * Y aun así hay que decirla, porque cuando existe un acceso concedido a esa empresa, lo que
+   * viaja son sus metadatos: los nombres de sus fuentes y los mensajes de error de sus
+   * sincronizaciones. Es poco, pero es suyo, y quien sube sus contratos a un producto tiene
+   * derecho a saber que eso ocurre — sobre todo cuando ocurre sin que él lo pida.
+   *
+   * Lo que NO viaja nunca es el texto de sus documentos: el asistente no tiene ninguna
+   * herramienta que los lea.
+   */
+  {
+    callSite: 'platform-assistant/application/assistant.service.ts',
+    code: 'PLATFORM_ASSISTANT',
+    what: 'Cuando has autorizado un acceso a BusinessBrain, los datos generales de tu empresa —cuántos documentos tienes, qué fuentes has conectado y qué errores han dado— para que su equipo pueda responderse preguntas de soporte. El texto de tus documentos NO sale por aquí.',
+    trigger:
+      'Solo cuando alguien de BusinessBrain pregunta a su asistente y tiene un acceso autorizado por ti en vigor. Queda en tu registro de accesos.',
+  },
 ];
 
 /** Qué guarda BusinessBrain, dicho igual de claro. */

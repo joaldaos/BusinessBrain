@@ -128,6 +128,29 @@ export class ProviderRegistry {
   }
 
   /**
+   * El perfil con el que piensa la PLATAFORMA, no ninguna empresa.
+   *
+   * Solo el de plataforma (`organizationId: null`). No cae a ninguno de cliente y no podría:
+   * el asistente de operación no pertenece a ninguna empresa, y gastar la clave BYO de un
+   * cliente para responder una pregunta de administración sería facturarle a él nuestro
+   * trabajo — además de meter su clave en un turno que no es suyo.
+   */
+  async resolveForPlatform(): Promise<ResolvedLlmProfile> {
+    const profile = await this.prisma.llmProfile.findFirst({
+      where: { organizationId: null, isDefault: true },
+    });
+
+    if (!profile) {
+      throw new ServiceUnavailableException(
+        'El asistente de operación todavía no tiene configurado un modelo de plataforma.',
+      );
+    }
+
+    // Sin organización: `usable` devuelve la clave de plataforma y nunca la de un cliente.
+    return this.usable(profile, null);
+  }
+
+  /**
    * Resuelve el perfil con el que responde un agente — §7.3: primero el `LlmProfile` del
    * `Agent` si lo tiene, si no el de la organización.
    *
@@ -190,18 +213,28 @@ export class ProviderRegistry {
   }
 
   /** Descifra la clave propia, si la hay, y aparta el texto cifrado del resultado. */
+  /**
+   * `organizationId` nulo = la plataforma, no una empresa.
+   *
+   * En ese caso NO se mide contra ningún presupuesto, y tiene que ser así: el contador y el
+   * tope de gasto son de la empresa, y cargarle a un cliente el consumo del asistente de
+   * operación le facturaría nuestro trabajo. La contrapartida es explícita —el gasto de
+   * plataforma no tiene tope por presupuesto— y quien lo acota es el tope de vueltas del
+   * propio asistente.
+   */
   private usable(
     profile: LlmProfile,
-    organizationId: string,
+    organizationId: string | null,
   ): ResolvedLlmProfile {
     const { apiKeyEnc, ...visible } = profile;
+    const provider = this.getLlmProvider(profile.provider);
 
     return {
       profile: visible,
-      provider: this.meteredLlm(
-        organizationId,
-        this.getLlmProvider(profile.provider),
-      ),
+      provider:
+        organizationId === null
+          ? provider
+          : this.meteredLlm(organizationId, provider),
       // Sin clave propia se devuelve `undefined`, que es lo que el proveedor interpreta como
       // "usa la de plataforma". Nunca una cadena vacía: parecería una clave y fallaría lejos.
       apiKey: apiKeyEnc ? this.encryption.decrypt(apiKeyEnc) : undefined,

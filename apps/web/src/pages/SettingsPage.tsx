@@ -3,8 +3,6 @@ import { api } from '../api/client';
 import { AiConfigurationCard } from '../components/AiConfigurationCard';
 import { AiUsageCard } from '../components/AiUsageCard';
 import { PrivacyCard } from '../components/PrivacyCard';
-import { SecurityCard } from '../components/SecurityCard';
-import { LanguagePicker } from '../components/LanguagePicker';
 import { useAuth } from '../auth';
 import {
   hasRole,
@@ -16,7 +14,9 @@ import {
 import {
   Badge,
   Button,
-  Card,
+  Section,
+  PageHeader,
+  usePageTitle,
   Empty,
   ErrorNote,
   Field,
@@ -47,6 +47,9 @@ export function SettingsPage() {
   const t = useT();
   const labels = useLabels();
   const canAdmin = hasRole(role, 'ADMIN');
+  // El título de la pestaña es corto a propósito: con cuatro pestañas abiertas, lo que hay
+  // que distinguir es la sección, no leer una frase.
+  usePageTitle('nav.settings');
 
   const organization = useResource(
     () => api<Organization>(`/organizations/${organizationId}`),
@@ -60,128 +63,180 @@ export function SettingsPage() {
     api<KnowledgeCollection[]>('/knowledge-collections'),
   );
 
+  const secciones: Seccion[] = [
+    { id: 'ia', label: 'settings.section.ai' },
+    { id: 'privacidad', label: 'settings.section.privacy' },
+    { id: 'empresa', label: 'settings.section.company' },
+    { id: 'equipo', label: 'settings.section.team' },
+  ];
+  const [activa, setActiva] = useState<Seccion['id']>('ia');
+
   return (
     <>
-      {/* El idioma primero: si alguien no entiende la pantalla, es lo único que necesita
-          encontrar. */}
-      <Card title={t('settings.language')}>
-        <p className="mb-3 text-xs text-gray-500">{t('settings.languageHint')}</p>
-        <LanguagePicker compact />
-      </Card>
-
-      {/* La seguridad de la CUENTA, antes que nada de la empresa: es lo único de esta
-          pantalla que protege a la persona aunque cambie de empresa. */}
-      <SecurityCard />
-
-      {/* Sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
-      <AiConfigurationCard canAdmin={canAdmin} />
-
-      {/* Justo debajo de la clave: es el gasto de esa clave, y es de la empresa. */}
-      <AiUsageCard canAdmin={canAdmin} organizationId={organizationId} />
-
-      {/* Después, y no al final de la pantalla: quien acaba de dar su clave de IA es
-          exactamente quien se está preguntando qué sale de su empresa. */}
-      <PrivacyCard
-        organizationId={organizationId}
-        organizationName={organization.data?.name ?? null}
-        isOwner={role === 'OWNER'}
+      <PageHeader
+        title={t('settings.title')}
+        description={t('settings.subtitle')}
       />
 
-      <Card title={t('settings.org.title')}>
-        <ErrorNote error={organization.error} />
-        {organization.data && (
-          <dl className="grid gap-2 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-gray-500">{t('settings.org.name')}</dt>
-              <dd>{organization.data.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-gray-500">{t('settings.org.slug')}</dt>
-              <dd className="font-mono text-xs">{organization.data.slug}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-gray-500">
-                {t('settings.org.yourRole')}
-              </dt>
-              <dd>
-                <Badge>{labels.role(role ?? null)}</Badge>
-              </dd>
-            </div>
-          </dl>
-        )}
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-[13rem_1fr] lg:items-start">
+        {/*
+          Navegación lateral en escritorio, pestañas horizontales en móvil. Antes esto eran
+          doce tarjetas apiladas en tres mil píxeles: encontrar el tope de gasto exigía
+          recorrer el aviso de privacidad entero.
+        */}
+        <nav
+          aria-label={t('settings.title')}
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 lg:sticky lg:top-6 lg:flex-col lg:overflow-visible"
+        >
+          {secciones.map((seccion) => (
+            <button
+              key={seccion.id}
+              type="button"
+              onClick={() => setActiva(seccion.id)}
+              aria-current={activa === seccion.id ? 'page' : undefined}
+              className={`whitespace-nowrap rounded-md px-3 py-2 text-left t-small transition-colors ${
+                activa === seccion.id
+                  ? 'bg-accent-soft font-medium text-accent'
+                  : 'text-muted hover:bg-sunken hover:text-ink'
+              }`}
+            >
+              {t(seccion.label)}
+            </button>
+          ))}
+        </nav>
 
-      <Card
-        title={t('settings.members.title', {
-          count: members.data?.length ?? 0,
-        })}
-      >
-        <ErrorNote error={members.error} />
-        {members.loading && <Empty>{t('common.loading')}</Empty>}
-        {(members.data?.length ?? 0) > 0 && (
-          <Table
-            head={[
-              t('settings.members.column.name'),
-              t('settings.members.column.email'),
-              t('settings.members.column.role'),
-            ]}
-          >
-            {members.data?.map((member) => (
-              <tr
-                key={member.userId}
-                className="border-b border-gray-100 last:border-0"
-              >
-                <td className="px-2 py-2">{member.user?.name ?? '—'}</td>
-                <td className="px-2 py-2 text-gray-600">
-                  {member.user?.email ?? '—'}
-                </td>
-                <td className="px-2 py-2">
-                  <Badge>{labels.role(member.role)}</Badge>
-                </td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Card>
-
-      {canAdmin && (
-        <ReliabilityCard
-          organizationId={organizationId}
-          onSaved={organization.reload}
-        />
-      )}
-
-      {canAdmin && (
-        <InviteCard
-          organizationId={organizationId}
-          onInvited={members.reload}
-        />
-      )}
-
-      {canAdmin && (
-        <Card title={t('settings.access.title')}>
-          <p className="mb-3 text-xs text-gray-500">
-            {t('settings.access.explain')}
-          </p>
-
-          <ErrorNote error={collections.error} />
-          {(collections.data?.length ?? 0) === 0 && (
-            <Empty>{t('settings.access.noCollections')}</Empty>
+        <div className="min-w-0 space-y-4">
+          {activa === 'ia' && (
+            <>
+              {/* Sin IA no hay producto, y explica por qué una pregunta no encuentra nada. */}
+              <AiConfigurationCard canAdmin={canAdmin} />
+              {/* Justo debajo de la clave: es el gasto de esa clave, y es de la empresa. */}
+              <AiUsageCard canAdmin={canAdmin} organizationId={organizationId} />
+            </>
           )}
 
-          <ul className="space-y-3">
-            {collections.data?.map((collection) => (
-              <CollectionAccess
-                key={collection.id}
-                collection={collection}
-                members={members.data ?? []}
-              />
-            ))}
-          </ul>
-        </Card>
-      )}
+          {activa === 'privacidad' && (
+            <PrivacyCard
+              organizationId={organizationId}
+              organizationName={organization.data?.name ?? null}
+              isOwner={role === 'OWNER'}
+            />
+          )}
+
+          {activa === 'empresa' && (
+            <>
+              <Section title={t('settings.org.title')}>
+                <ErrorNote error={organization.error} />
+                {organization.data && (
+                  <dl className="grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <dt className="t-micro text-muted">{t('settings.org.name')}</dt>
+                      <dd className="mt-1 t-body">{organization.data.name}</dd>
+                    </div>
+                    <div>
+                      <dt className="t-micro text-muted">{t('settings.org.slug')}</dt>
+                      <dd className="mt-1 font-mono t-small text-muted">
+                        {organization.data.slug}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="t-micro text-muted">
+                        {t('settings.org.yourRole')}
+                      </dt>
+                      <dd className="mt-1">
+                        <Badge>{labels.role(role ?? null)}</Badge>
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+              </Section>
+
+              {canAdmin && (
+                <ReliabilityCard
+                  organizationId={organizationId}
+                  onSaved={organization.reload}
+                />
+              )}
+            </>
+          )}
+
+          {activa === 'equipo' && (
+            <>
+              <Section
+                title={t('settings.members.title', {
+                  count: members.data?.length ?? 0,
+                })}
+                flush
+              >
+                <div className="px-5 pb-5">
+                  <ErrorNote error={members.error} />
+                </div>
+                {members.loading && <Empty>{t('common.loading')}</Empty>}
+                {(members.data?.length ?? 0) > 0 && (
+                  <Table
+                    head={[
+                      t('settings.members.column.name'),
+                      t('settings.members.column.email'),
+                      t('settings.members.column.role'),
+                    ]}
+                  >
+                    {members.data?.map((member) => (
+                      <tr key={member.userId}>
+                        <td className="px-5 py-3 t-body">
+                          {member.user?.name ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 t-body text-muted">
+                          {member.user?.email ?? '—'}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge>{labels.role(member.role)}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                )}
+              </Section>
+
+              {canAdmin && (
+                <InviteCard
+                  organizationId={organizationId}
+                  onInvited={members.reload}
+                />
+              )}
+
+              {canAdmin && (
+                <Section
+                  title={t('settings.access.title')}
+                  description={t('settings.access.explain')}
+                >
+                  <ErrorNote error={collections.error} />
+                  {(collections.data?.length ?? 0) === 0 && (
+                    <Empty>{t('settings.access.noCollections')}</Empty>
+                  )}
+
+                  <ul className="space-y-3">
+                    {collections.data?.map((collection) => (
+                      <CollectionAccess
+                        key={collection.id}
+                        collection={collection}
+                        members={members.data ?? []}
+                      />
+                    ))}
+                  </ul>
+                </Section>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
+}
+
+/** Las cuatro áreas de la configuración de una empresa. */
+interface Seccion {
+  id: 'ia' | 'privacidad' | 'empresa' | 'equipo';
+  label: Parameters<ReturnType<typeof useT>>[0];
 }
 
 /**
@@ -207,8 +262,8 @@ function ReliabilityCard({
   const action = useAction();
 
   return (
-    <Card title={t('settings.reliability.title')}>
-      <p className="mb-3 text-xs text-gray-500">
+    <Section title={t('settings.reliability.title')}>
+      <p className="mb-3 t-fine text-muted">
         {t('settings.reliability.explain')}
       </p>
 
@@ -253,12 +308,12 @@ function ReliabilityCard({
           {t('settings.reliability.save')}
         </Button>
         {saved && (
-          <span className="text-xs text-green-700">
+          <span className="t-fine text-positive">
             {t('settings.reliability.saved')}
           </span>
         )}
       </form>
-    </Card>
+    </Section>
   );
 }
 
@@ -290,8 +345,8 @@ function InviteCard({
   const action = useAction();
 
   return (
-    <Card title={t('settings.invite.title')}>
-      <p className="mb-3 text-xs text-gray-500">{t('settings.invite.explain')}</p>
+    <Section title={t('settings.invite.title')}>
+      <p className="mb-3 t-fine text-muted">{t('settings.invite.explain')}</p>
 
       <ErrorNote error={action.error} />
 
@@ -346,14 +401,14 @@ function InviteCard({
       </form>
 
       {link && (
-        <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs text-gray-600">
+        <div className="mt-3 rounded border border-line bg-sunken p-3">
+          <p className="t-fine text-muted">
             {t('settings.invite.linkTitle')}
           </p>
-          <code className="mt-1 block break-all text-xs">{link}</code>
+          <code className="mt-1 block break-all t-fine">{link}</code>
         </div>
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -376,9 +431,9 @@ function CollectionAccess({
   );
 
   return (
-    <li className="rounded border border-gray-200 p-3">
+    <li className="rounded border border-line p-3">
       {/* El nombre de la colección lo puso la empresa: se muestra tal cual. */}
-      <p className="text-sm font-medium">{collection.name}</p>
+      <p className="t-small font-medium">{collection.name}</p>
 
       <ul className="mt-2 flex flex-wrap gap-2">
         {granted.data?.map((grant) => (
@@ -389,7 +444,7 @@ function CollectionAccess({
             <button
               type="button"
               title={t('settings.access.revokeTitle')}
-              className="text-xs text-red-700 underline"
+              className="t-fine text-danger underline"
               onClick={() =>
                 void action
                   .run(() =>
@@ -406,7 +461,7 @@ function CollectionAccess({
           </li>
         ))}
         {(granted.data?.length ?? 0) === 0 && !granted.loading && (
-          <li className="text-xs text-gray-500">
+          <li className="t-fine text-muted">
             {t('settings.access.nobody')}
           </li>
         )}

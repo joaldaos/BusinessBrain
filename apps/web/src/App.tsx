@@ -17,6 +17,7 @@ import { ObjectivesPage } from './pages/ObjectivesPage';
 import { AnalysisPage } from './pages/AnalysisPage';
 import { AutomationsPage } from './pages/AutomationsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { AccountPage } from './pages/AccountPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PlatformShell } from './platform/PlatformShell';
 import { PlatformOverviewPage } from './platform/OverviewPage';
@@ -145,6 +146,7 @@ export function App() {
             <Route path="/recomendaciones" element={<RecommendationsPage />} />
             <Route path="/automatizaciones" element={<AutomationsPage />} />
             <Route path="/informes" element={<ReportsPage />} />
+            <Route path="/cuenta" element={<AccountPage />} />
             <Route path="/configuracion" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

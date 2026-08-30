@@ -27,10 +27,10 @@ export function LanguagePicker({ compact = false }: { compact?: boolean }) {
           : 'flex items-center justify-center gap-2'
       }
     >
-      <span className="text-xs text-gray-500">{t('settings.language')}</span>
+      <span className="t-fine text-muted">{t('settings.language')}</span>
       <select
         aria-label={t('settings.language')}
-        className="rounded border border-gray-300 px-2 py-1 text-sm"
+        className="rounded border border-line-strong px-2 py-1 t-small"
         value={locale}
         onChange={(event) => void setLocale(event.target.value as Locale)}
       >

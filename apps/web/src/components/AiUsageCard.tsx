@@ -64,7 +64,7 @@ export function AiUsageCard({
       {usage.data && (
         <>
           <div
-            className="h-2 w-full overflow-hidden rounded bg-gray-100"
+            className="h-2 w-full overflow-hidden rounded bg-sunken"
             role="progressbar"
             aria-valuenow={Math.round(proporcion * 100)}
             aria-valuemin={0}
@@ -72,12 +72,12 @@ export function AiUsageCard({
             aria-label={t('aiUsage.label')}
           >
             <div
-              className={`h-full ${proporcion >= 1 ? 'bg-red-500' : 'bg-blue-500'}`}
+              className={`h-full ${proporcion >= 1 ? 'bg-danger' : 'bg-accent'}`}
               style={{ width: `${proporcion * 100}%` }}
             />
           </div>
 
-          <p className="mt-2 text-xs text-gray-600">
+          <p className="mt-2 t-fine text-muted">
             {t('aiUsage.summary', {
               used: enPaginas(usado),
               limit: enPaginas(techo),
@@ -85,14 +85,14 @@ export function AiUsageCard({
           </p>
 
           {proporcion >= 1 && (
-            <p className="mt-1 text-xs text-red-700">{t('aiUsage.reached')}</p>
+            <p className="mt-1 t-fine text-danger">{t('aiUsage.reached')}</p>
           )}
         </>
       )}
 
       {canAdmin && (
         <form
-          className="mt-3 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+          className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3"
           onSubmit={action.onSubmit(async () => {
             await api(`/organizations/${organizationId}`, {
               method: 'PATCH',
@@ -129,7 +129,7 @@ export function AiUsageCard({
             {t('aiUsage.save')}
           </Button>
           {guardado && (
-            <span className="text-xs text-green-700">{t('aiUsage.saved')}</span>
+            <span className="t-fine text-positive">{t('aiUsage.saved')}</span>
           )}
         </form>
       )}

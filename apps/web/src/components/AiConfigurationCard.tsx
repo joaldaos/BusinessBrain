@@ -60,23 +60,23 @@ export function AiConfigurationCard({
             {status.data.ready ? t('ai.ready') : t('ai.notConfigured')}
           </Badge>
           {status.data.modelName && (
-            <span className="text-xs text-gray-600">{status.data.modelName}</span>
+            <span className="t-fine text-muted">{status.data.modelName}</span>
           )}
-          <p className="w-full text-xs text-gray-600">
+          <p className="w-full t-fine text-muted">
             {t((`ai.explanation.${status.data.explanationCode}`) as TranslationKey)}
           </p>
         </div>
       )}
 
       {!canAdmin && (
-        <p className="text-xs text-gray-500">
+        <p className="t-fine text-muted">
           {t('ai.adminOnly')}
         </p>
       )}
 
       {canAdmin && (
         <form
-          className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+          className="flex flex-wrap items-end gap-2 border-t border-line pt-3"
           onSubmit={action.onSubmit(async () => {
             await api('/ai-configuration', {
               method: 'POST',
@@ -162,7 +162,7 @@ export function AiConfigurationCard({
       )}
 
       {canAdmin && chosen && (
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 t-fine text-muted">
           {t('ai.noKey')}{' '}
           <a
             className="underline"

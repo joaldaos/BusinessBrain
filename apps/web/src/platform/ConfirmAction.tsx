@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react';
-import { ApiError } from '../api/client';
-import { useT } from '../i18n';
-import { useSensitiveAction } from '../components/ReauthDialog';
-import { ActionButton } from './ui';
+import { useState, type ReactNode } from "react";
+import { ApiError } from "../api/client";
+import { useT } from "../i18n";
+import { useSensitiveAction } from "../components/ReauthDialog";
+import { ActionButton } from "./ui";
 
 /**
  * El paso previo a cualquier acción que afecte a una empresa o a la cuenta de otra persona.
@@ -35,7 +35,7 @@ export function ConfirmAction({
   /** Sobre quién o sobre qué. Se enseña destacado: es lo que se lee mal cuando hay prisa. */
   subject,
   confirmLabel,
-  variant = 'default',
+  variant = "secondary",
   requiresReason,
   reasonLabel,
   reasonHint,
@@ -47,7 +47,7 @@ export function ConfirmAction({
   consequence: string;
   subject?: string;
   confirmLabel: string;
-  variant?: 'default' | 'primary' | 'grave';
+  variant?: "primary" | "danger" | "secondary";
   requiresReason?: boolean;
   reasonLabel?: string;
   reasonHint?: string;
@@ -56,17 +56,17 @@ export function ConfirmAction({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [failed, setFailed] = useState<'denied' | 'invalid' | 'unknown' | null>(
+  const [failed, setFailed] = useState<"denied" | "invalid" | "unknown" | null>(
     null,
   );
   const sensitive = useSensitiveAction();
 
   const cerrar = () => {
     setOpen(false);
-    setReason('');
+    setReason("");
     setFailed(null);
   };
 
@@ -78,7 +78,7 @@ export function ConfirmAction({
         await onConfirm(reason.trim());
         setDone(true);
         setOpen(false);
-        setReason('');
+        setReason("");
         onDone?.();
       });
     } catch (error) {
@@ -86,10 +86,10 @@ export function ConfirmAction({
       // un registro. Lo que se traduce es la CATEGORÍA, que es lo que dice qué hacer ahora.
       setFailed(
         error instanceof ApiError && error.status === 400
-          ? 'invalid'
+          ? "invalid"
           : error instanceof ApiError && error.status === 403
-            ? 'denied'
-            : 'unknown',
+            ? "denied"
+            : "unknown",
       );
     } finally {
       setBusy(false);
@@ -107,7 +107,7 @@ export function ConfirmAction({
 
       {done && !open && (
         <p className="mt-2 text-[12.5px] text-emerald-700">
-          {t('platform.confirm.done')}
+          {t("platform.confirm.done")}
         </p>
       )}
 
@@ -121,7 +121,7 @@ export function ConfirmAction({
           <h3 className="text-[13.5px] font-semibold text-ink">{title}</h3>
 
           {subject && (
-            <p className="mt-2 rounded border border-amber-200 bg-white px-3 py-2 text-[13px] font-medium text-ink">
+            <p className="mt-2 rounded border border-amber-200 bg-surface px-3 py-2 text-[13px] font-medium text-ink">
               {subject}
             </p>
           )}
@@ -133,16 +133,16 @@ export function ConfirmAction({
           {requiresReason && (
             <label className="mt-3 block">
               <span className="text-[12px] font-medium text-ink">
-                {reasonLabel ?? t('platform.confirm.reason')}
+                {reasonLabel ?? t("platform.confirm.reason")}
               </span>
               <textarea
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 rows={2}
-                className="mt-1 w-full rounded border border-line bg-white px-2.5 py-1.5 text-[13px] outline-none focus:border-gray-500"
+                className="mt-1 w-full rounded border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
               />
               <span className="mt-1 block text-[11.5px] text-muted">
-                {reasonHint ?? t('platform.confirm.reasonHint')}
+                {reasonHint ?? t("platform.confirm.reasonHint")}
               </span>
             </label>
           )}
@@ -152,17 +152,17 @@ export function ConfirmAction({
             la decisión, no una consecuencia que se descubre luego.
           */}
           <p className="mt-3 text-[11.5px] text-muted">
-            {t('platform.confirm.audited')}
+            {t("platform.confirm.audited")}
           </p>
 
           {failed && (
             <p role="alert" className="mt-2 text-[12.5px] text-red-700">
               {t(
-                failed === 'invalid'
-                  ? 'platform.confirm.invalid'
-                  : failed === 'denied'
-                    ? 'platform.confirm.denied'
-                    : 'platform.confirm.failed',
+                failed === "invalid"
+                  ? "platform.confirm.invalid"
+                  : failed === "denied"
+                    ? "platform.confirm.denied"
+                    : "platform.confirm.failed",
               )}
             </p>
           )}
@@ -176,14 +176,14 @@ export function ConfirmAction({
               onClick={() => void ejecutar()}
               disabled={busy || motivoCorto}
             >
-              {busy ? t('common.moment') : confirmLabel}
+              {busy ? t("common.moment") : confirmLabel}
             </ActionButton>
             <button
               type="button"
               onClick={cerrar}
               className="text-[12.5px] text-muted underline"
             >
-              {t('platform.confirm.cancel')}
+              {t("platform.confirm.cancel")}
             </button>
           </div>
         </div>

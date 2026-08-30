@@ -116,15 +116,15 @@ export function SecurityCard() {
   return (
     <div className="space-y-4">
       <Card title={t('mfa.title')}>
-        <p className="text-sm text-gray-600">{t('mfa.explain')}</p>
+        <p className="t-small text-muted">{t('mfa.explain')}</p>
 
         {status.data && (
-          <p className="mt-3 text-sm">
+          <p className="mt-3 t-small">
             <strong>
               {status.data.enabled ? t('mfa.status.on') : t('mfa.status.off')}
             </strong>
             {status.data.enabled && status.data.enabledAt && (
-              <span className="ml-2 text-gray-500">
+              <span className="ml-2 text-muted">
                 {t('mfa.status.since', {
                   date: formatDate(status.data.enabledAt),
                 })}
@@ -134,13 +134,13 @@ export function SecurityCard() {
         )}
 
         {status.data?.pendingConfirmation && !enrollment && (
-          <p className="mt-2 text-xs text-amber-700">
+          <p className="mt-2 t-fine text-attention">
             {t('mfa.status.pending')}
           </p>
         )}
 
         {status.data?.enabled && (
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 t-fine text-muted">
             {t(
               status.data.remainingRecoveryCodes <= 3
                 ? 'mfa.status.lowCodes'
@@ -153,17 +153,17 @@ export function SecurityCard() {
         {/* ── Alta: el QR y el primer código ── */}
         {enrollment && (
           <form onSubmit={confirm} className="mt-4 space-y-3 border-t pt-4">
-            <p className="text-sm text-gray-700">{t('mfa.setup.step1')}</p>
+            <p className="t-small text-ink-soft">{t('mfa.setup.step1')}</p>
             <img
               src={enrollment.qrDataUrl}
               alt={t('mfa.setup.qrAlt')}
-              className="rounded border border-gray-200"
+              className="rounded border border-line"
               width={200}
               height={200}
             />
-            <p className="text-xs text-gray-500">
+            <p className="t-fine text-muted">
               {t('mfa.setup.manual')}{' '}
-              <code className="rounded bg-gray-100 px-1 font-mono">
+              <code className="rounded bg-sunken px-1 font-mono">
                 {enrollment.manualKey}
               </code>
             </p>
@@ -188,7 +188,7 @@ export function SecurityCard() {
               </Button>
               <button
                 type="button"
-                className="text-xs text-gray-500 underline"
+                className="t-fine text-muted underline"
                 onClick={() => setEnrollment(null)}
               >
                 {t('mfa.setup.cancel')}
@@ -199,10 +199,10 @@ export function SecurityCard() {
 
         {/* ── Los códigos de repuesto. Una vez. ── */}
         {freshCodes && (
-          <div className="mt-4 space-y-2 rounded border border-blue-300 bg-blue-50 p-3">
-            <h4 className="text-sm font-semibold">{t('mfa.codes.title')}</h4>
-            <p className="text-xs text-gray-700">{t('mfa.codes.explain')}</p>
-            <ul className="grid grid-cols-2 gap-1 font-mono text-sm">
+          <div className="mt-4 space-y-2 rounded border border-accent/30 bg-accent-soft p-3">
+            <h4 className="t-small font-semibold">{t('mfa.codes.title')}</h4>
+            <p className="t-fine text-ink-soft">{t('mfa.codes.explain')}</p>
+            <ul className="grid grid-cols-2 gap-1 font-mono t-small">
               {freshCodes.map((c) => (
                 <li key={c}>{c}</li>
               ))}
@@ -231,7 +231,7 @@ export function SecurityCard() {
                 type="button"
                 onClick={disable}
                 disabled={otherAction.busy}
-                className="text-xs text-gray-500 underline"
+                className="t-fine text-muted underline"
               >
                 {t('mfa.deactivate')}
               </button>
@@ -239,7 +239,7 @@ export function SecurityCard() {
           )}
         </div>
         {status.data?.enabled && (
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 t-fine text-muted">
             {t('mfa.codes.regenerateHint')}
           </p>
         )}
@@ -282,7 +282,7 @@ function PasswordCard() {
 
   return (
     <Card title={t('password.title')}>
-      <p className="text-sm text-gray-600">{t('password.explain')}</p>
+      <p className="t-small text-muted">{t('password.explain')}</p>
 
       <form onSubmit={submit} className="mt-3 space-y-3">
         <Field label={t('password.new')}>
@@ -308,7 +308,7 @@ function PasswordCard() {
         </Field>
 
         <ErrorNote error={action.error} />
-        {done && <p className="text-xs text-green-700">{t('password.done')}</p>}
+        {done && <p className="t-fine text-positive">{t('password.done')}</p>}
         {sensitive.dialog}
 
         <Button type="submit" disabled={action.busy}>

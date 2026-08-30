@@ -65,11 +65,11 @@ export function ReauthDialog({
           submit();
         }
       }}
-      className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4"
+      className="space-y-3 rounded-lg border border-attention/40 bg-attention-soft p-4"
     >
       <div>
-        <h3 className="text-sm font-semibold">{t('reauth.title')}</h3>
-        <p className="mt-1 text-xs text-gray-600">{t('reauth.explain')}</p>
+        <h3 className="t-small font-semibold">{t('reauth.title')}</h3>
+        <p className="mt-1 t-fine text-muted">{t('reauth.explain')}</p>
       </div>
 
       <Field label={usesCode ? t('reauth.code') : t('reauth.password')}>
@@ -98,7 +98,7 @@ export function ReauthDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="text-xs text-gray-500 underline"
+          className="t-fine text-muted underline"
         >
           {t('reauth.cancel')}
         </button>

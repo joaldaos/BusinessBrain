@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { api } from '../api/client';
-import { useResource } from '../components/ui';
-import { useT } from '../i18n';
-import { ConfirmAction } from './ConfirmAction';
-import { ScopeContent, ScopePanel } from './ScopePanel';
+import { useCallback, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { api } from "../api/client";
+import { useResource } from "../components/ui";
+import { useT } from "../i18n";
+import { ConfirmAction } from "./ConfirmAction";
+import { ScopeContent, ScopePanel } from "./ScopePanel";
 import {
   ActionButton,
   Cell,
@@ -16,7 +16,8 @@ import {
   Section,
   StatusPill,
   useDateFormat,
-} from './ui';
+  usePageTitle,
+} from "./ui";
 import type {
   Grant,
   OrganizationDiagnostics,
@@ -25,7 +26,7 @@ import type {
   OrganizationInspection,
   PlanTier,
   PlatformOrganization,
-} from './types';
+} from "./types";
 
 /**
  * Una empresa cliente, vista desde la operación.
@@ -41,17 +42,17 @@ import type {
  * documentos" con "puedo leerlos".
  */
 export function PlatformOrganizationDetailPage() {
-  const { organizationId = '' } = useParams();
+  usePageTitle("platform.nav.organizations");
+  const { organizationId = "" } = useParams();
   const t = useT();
   const { date } = useDateFormat();
 
   const organization = useResource<PlatformOrganization>(
     useCallback(
       () =>
-        api<PlatformOrganization>(
-          `/platform/organizations/${organizationId}`,
-          { withoutOrganization: true },
-        ),
+        api<PlatformOrganization>(`/platform/organizations/${organizationId}`, {
+          withoutOrganization: true,
+        }),
       [organizationId],
     ),
     [organizationId],
@@ -69,10 +70,13 @@ export function PlatformOrganizationDetailPage() {
   );
 
   /** La concesión VIGENTE de un alcance, o la que está esperando aprobación. */
-  const grantFor = (scope: Grant['scope']) =>
+  const grantFor = (scope: Grant["scope"]) =>
     (grants.data ?? [])
       .filter((grant) => grant.scope === scope)
-      .find((grant) => grant.usable || (grant.status === 'PENDING' && !grant.expired));
+      .find(
+        (grant) =>
+          grant.usable || (grant.status === "PENDING" && !grant.expired),
+      );
 
   const recargar = () => {
     grants.reload();
@@ -85,7 +89,7 @@ export function PlatformOrganizationDetailPage() {
         to="/platform/organizations"
         className="mb-4 inline-block text-[12.5px] text-muted underline"
       >
-        {t('platform.organization.back')}
+        {t("platform.organization.back")}
       </Link>
 
       <DataState
@@ -97,7 +101,7 @@ export function PlatformOrganizationDetailPage() {
           <>
             <PageHeader
               title={organization.data.name}
-              description={t('platform.organization.subtitle', {
+              description={t("platform.organization.subtitle", {
                 slug: organization.data.slug,
               })}
               actions={
@@ -113,19 +117,19 @@ export function PlatformOrganizationDetailPage() {
             {/* ── La relación ─────────────────────────────────────────── */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric
-                label={t('platform.organization.plan')}
+                label={t("platform.organization.plan")}
                 value={t(`platform.plan.${organization.data.planTier}`)}
               />
               <Metric
-                label={t('platform.organizations.column.people')}
+                label={t("platform.organizations.column.people")}
                 value={organization.data._count.memberships}
               />
               <Metric
-                label={t('platform.organizations.column.documents')}
+                label={t("platform.organizations.column.documents")}
                 value={organization.data._count.knowledgeItems}
               />
               <Metric
-                label={t('platform.organization.since')}
+                label={t("platform.organization.since")}
                 value={date(organization.data.createdAt)}
               />
             </div>
@@ -133,10 +137,10 @@ export function PlatformOrganizationDetailPage() {
             {/* ── La frontera, dicha en voz alta ──────────────────────── */}
             <div className="mt-10 mb-5 border-t border-line pt-5">
               <h2 className="text-[15px] font-semibold tracking-[-0.01em]">
-                {t('platform.organization.theirData')}
+                {t("platform.organization.theirData")}
               </h2>
               <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted">
-                {t('platform.organization.theirDataHint')}
+                {t("platform.organization.theirDataHint")}
               </p>
             </div>
 
@@ -150,7 +154,7 @@ export function PlatformOrganizationDetailPage() {
                   organizationId={organizationId}
                   organizationName={organization.data.name}
                   scope="METADATA"
-                  grant={grantFor('METADATA')}
+                  grant={grantFor("METADATA")}
                   onChanged={recargar}
                 >
                   <Metadata organizationId={organizationId} />
@@ -160,7 +164,7 @@ export function PlatformOrganizationDetailPage() {
                   organizationId={organizationId}
                   organizationName={organization.data.name}
                   scope="DIAGNOSTICS"
-                  grant={grantFor('DIAGNOSTICS')}
+                  grant={grantFor("DIAGNOSTICS")}
                   onChanged={recargar}
                 >
                   <Diagnostics organizationId={organizationId} />
@@ -170,7 +174,7 @@ export function PlatformOrganizationDetailPage() {
                   organizationId={organizationId}
                   organizationName={organization.data.name}
                   scope="CONTENT"
-                  grant={grantFor('CONTENT')}
+                  grant={grantFor("CONTENT")}
                   onChanged={recargar}
                 >
                   <Documents organizationId={organizationId} />
@@ -211,10 +215,10 @@ function Metadata({ organizationId }: { organizationId: string }) {
           <ul className="mb-4 flex flex-wrap gap-x-10 gap-y-3">
             {(
               [
-                ['miembros', 'platform.organizations.column.people'],
-                ['documentos', 'platform.organizations.column.documents'],
-                ['colecciones', 'platform.metadata.collections'],
-                ['conclusiones', 'platform.metadata.insights'],
+                ["miembros", "platform.organizations.column.people"],
+                ["documentos", "platform.organizations.column.documents"],
+                ["colecciones", "platform.metadata.collections"],
+                ["conclusiones", "platform.metadata.insights"],
               ] as const
             ).map(([clave, etiqueta]) => (
               <li key={clave}>
@@ -231,9 +235,9 @@ function Metadata({ organizationId }: { organizationId: string }) {
           {data.sources.length > 0 && (
             <DataTable
               head={[
-                t('platform.metadata.source'),
-                t('platform.metadata.state'),
-                t('platform.metadata.lastSync'),
+                t("platform.metadata.source"),
+                t("platform.metadata.state"),
+                t("platform.metadata.lastSync"),
               ]}
             >
               {data.sources.map((source) => (
@@ -241,7 +245,7 @@ function Metadata({ organizationId }: { organizationId: string }) {
                   <Cell>{source.name}</Cell>
                   <Cell>
                     <StatusPill
-                      tone={source.status === 'ERROR' ? 'blocked' : 'quiet'}
+                      tone={source.status === "ERROR" ? "danger" : "quiet"}
                     >
                       {source.status}
                     </StatusPill>
@@ -285,7 +289,7 @@ function Diagnostics({ organizationId }: { organizationId: string }) {
           {data.failingSources.length > 0 && (
             <div>
               <h4 className="mb-2 text-[12.5px] font-semibold">
-                {t('platform.diagnostics.failingSources')}
+                {t("platform.diagnostics.failingSources")}
               </h4>
               <ul className="space-y-2">
                 {data.failingSources.map((source) => (
@@ -314,27 +318,27 @@ function Diagnostics({ organizationId }: { organizationId: string }) {
           {data.recentJobs.length > 0 && (
             <div>
               <h4 className="mb-2 text-[12.5px] font-semibold">
-                {t('platform.diagnostics.recentJobs')}
+                {t("platform.diagnostics.recentJobs")}
               </h4>
               <DataTable
                 head={[
-                  t('platform.diagnostics.state'),
-                  t('platform.diagnostics.detail'),
-                  t('platform.diagnostics.when'),
+                  t("platform.diagnostics.state"),
+                  t("platform.diagnostics.detail"),
+                  t("platform.diagnostics.when"),
                 ]}
               >
                 {data.recentJobs.map((job) => (
                   <Row key={job.id}>
                     <Cell>
                       <StatusPill
-                        tone={job.status === 'FAILED' ? 'blocked' : 'quiet'}
+                        tone={job.status === "FAILED" ? "danger" : "quiet"}
                       >
                         {job.status}
                       </StatusPill>
                     </Cell>
                     <Cell muted>
                       <span className="font-mono text-[12px]">
-                        {job.error ?? '—'}
+                        {job.error ?? "—"}
                       </span>
                     </Cell>
                     <Cell muted>{dateTime(job.startedAt)}</Cell>
@@ -347,7 +351,7 @@ function Diagnostics({ organizationId }: { organizationId: string }) {
           {data.failedAnalyses.length > 0 && (
             <div>
               <h4 className="mb-2 text-[12.5px] font-semibold">
-                {t('platform.diagnostics.failedAnalyses')}
+                {t("platform.diagnostics.failedAnalyses")}
               </h4>
               <ul className="space-y-1.5">
                 {data.failedAnalyses.map((run) => (
@@ -416,10 +420,10 @@ function Documents({ organizationId }: { organizationId: string }) {
         <>
           <DataTable
             head={[
-              t('platform.content.title'),
-              t('platform.content.state'),
-              t('platform.content.indexed'),
-              '',
+              t("platform.content.title"),
+              t("platform.content.state"),
+              t("platform.content.indexed"),
+              "",
             ]}
           >
             {documents.map((document) => (
@@ -431,13 +435,13 @@ function Documents({ organizationId }: { organizationId: string }) {
                 <Cell muted>{dateTime(document.indexedAt)}</Cell>
                 <Cell>
                   <ActionButton
-                    variant="grave"
+                    variant="danger"
                     disabled={cargando === document.id}
                     onClick={() => void abrir(document.id)}
                   >
                     {cargando === document.id
-                      ? t('common.moment')
-                      : t('platform.content.read')}
+                      ? t("common.moment")
+                      : t("platform.content.read")}
                   </ActionButton>
                 </Cell>
               </Row>
@@ -445,7 +449,7 @@ function Documents({ organizationId }: { organizationId: string }) {
           </DataTable>
 
           {abierto && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-white p-4">
+            <div className="mt-4 rounded-lg border border-red-200 bg-surface p-4">
               <div className="mb-2 flex items-start justify-between gap-3">
                 <h4 className="text-[13.5px] font-semibold">{abierto.title}</h4>
                 <button
@@ -453,17 +457,17 @@ function Documents({ organizationId }: { organizationId: string }) {
                   onClick={() => setAbierto(null)}
                   className="text-[12.5px] text-muted underline"
                 >
-                  {t('platform.content.close')}
+                  {t("platform.content.close")}
                 </button>
               </div>
               <p className="mb-2 text-[11.5px] text-muted">
-                {t('platform.content.readLogged')}
+                {t("platform.content.readLogged")}
               </p>
               {/*
                 El documento se enseña TAL CUAL, sin traducir ni resumir: es evidencia del
                 cliente y cualquier transformación lo dejaría de ser.
               */}
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-gray-50 p-3 font-mono text-[12.5px] leading-relaxed">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-sunken p-3 font-mono text-[12.5px] leading-relaxed">
                 {abierto.contentText}
               </pre>
             </div>
@@ -482,23 +486,23 @@ function GrantHistory({ grants }: { grants: Grant[] }) {
 
   return (
     <Section
-      title={t('platform.grantHistory.title')}
-      description={t('platform.grantHistory.hint')}
+      title={t("platform.grantHistory.title")}
+      description={t("platform.grantHistory.hint")}
     >
       <DataState
         loading={false}
         error={null}
         empty={grants.length === 0}
-        emptyMessage={t('platform.grantHistory.none')}
+        emptyMessage={t("platform.grantHistory.none")}
       >
         <DataTable
           head={[
-            t('platform.grantHistory.scope'),
-            t('platform.grantHistory.state'),
-            t('platform.grantHistory.reason'),
-            t('platform.grantHistory.requestedBy'),
-            t('platform.grantHistory.requestedAt'),
-            t('platform.grantHistory.expires'),
+            t("platform.grantHistory.scope"),
+            t("platform.grantHistory.state"),
+            t("platform.grantHistory.reason"),
+            t("platform.grantHistory.requestedBy"),
+            t("platform.grantHistory.requestedAt"),
+            t("platform.grantHistory.expires"),
           ]}
         >
           {grants.map((grant) => (
@@ -508,16 +512,16 @@ function GrantHistory({ grants }: { grants: Grant[] }) {
                 <StatusPill
                   tone={
                     grant.usable
-                      ? 'active'
-                      : grant.status === 'PENDING' && !grant.expired
-                        ? 'attention'
-                        : 'quiet'
+                      ? "positive"
+                      : grant.status === "PENDING" && !grant.expired
+                        ? "attention"
+                        : "quiet"
                   }
                 >
-                  {grant.status === 'REVOKED'
-                    ? t('platform.grant.status.REVOKED')
+                  {grant.status === "REVOKED"
+                    ? t("platform.grant.status.REVOKED")
                     : grant.expired
-                      ? t('platform.grant.status.EXPIRED')
+                      ? t("platform.grant.status.EXPIRED")
                       : t(`platform.grant.status.${grant.status}`)}
                 </StatusPill>
               </Cell>
@@ -558,7 +562,7 @@ function ChangePlan({
 
   const cambiar = async () => {
     await api(`/platform/organizations/${organizationId}/plan`, {
-      method: 'POST',
+      method: "POST",
       withoutOrganization: true,
       body: { planTier: target },
     });
@@ -568,15 +572,15 @@ function ChangePlan({
   return (
     <div className="text-right">
       <label className="mb-1 block text-[12px] font-medium text-ink">
-        {t('platform.plan.change')}
+        {t("platform.plan.change")}
       </label>
       <div className="flex items-center gap-2">
         <select
           value={target}
           onChange={(event) => setTarget(event.target.value as PlanTier)}
-          className="rounded border border-line bg-white px-2.5 py-1.5 text-[13px] outline-none focus:border-gray-500"
+          className="rounded border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
         >
-          {(['FREE', 'PRO', 'ENTERPRISE'] as const).map((plan) => (
+          {(["FREE", "PRO", "ENTERPRISE"] as const).map((plan) => (
             <option key={plan} value={plan}>
               {t(`platform.plan.${plan}`)}
             </option>
@@ -590,16 +594,16 @@ function ChangePlan({
               disabled={target === current}
               onClick={open}
             >
-              {t('platform.plan.apply')}
+              {t("platform.plan.apply")}
             </ActionButton>
           )}
-          title={t('platform.plan.confirmTitle')}
+          title={t("platform.plan.confirmTitle")}
           subject={organizationName}
-          consequence={t('platform.plan.confirmBody', {
+          consequence={t("platform.plan.confirmBody", {
             from: t(`platform.plan.${current}`),
             to: t(`platform.plan.${target}`),
           })}
-          confirmLabel={t('platform.plan.apply')}
+          confirmLabel={t("platform.plan.apply")}
           variant="primary"
           onConfirm={cambiar}
         />

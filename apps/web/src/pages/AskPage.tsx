@@ -9,17 +9,18 @@ import type {
   SentMessage,
 } from '../api/types';
 import {
-  Badge,
   Button,
-  Card,
-  Empty,
   ErrorNote,
-  inputClass,
+  PageHeader,
+  Section,
+  StatusPill,
+  fieldClass,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
-import { useT } from '../i18n';
+import { useT, type TranslationKey } from '../i18n';
 import { useLabels } from '../i18n/labels';
 
 /**
@@ -31,6 +32,17 @@ import { useLabels } from '../i18n/labels';
  * PYME no puede evaluar. Esto sí: se escribe una pregunta en su idioma y se obtiene una
  * respuesta **con las fuentes de las que sale**. Es la diferencia entre "tengo un sistema" y
  * "esto me sirve".
+ *
+ * ## Y por eso, desde la Fase 8, se ve como el producto
+ *
+ * Antes esto era una tarjeta más, del mismo tamaño y del mismo peso visual que la lista de
+ * conversaciones que tenía al lado. La función que justifica todo el sistema entraba con un
+ * campo de texto de una línea perdido debajo de un hilo vacío, y los ejemplos de pregunta eran
+ * viñetas grises que nadie podía pulsar.
+ *
+ * Ahora, cuando no hay conversación, la pantalla ES el cuadro de pregunta: el campo ocupa el
+ * ancho, tiene tamaño de titular y los ejemplos son botones de verdad que preguntan al pulsar.
+ * Alguien que entra por primera vez no tiene que descubrir nada.
  *
  * ## Las citas no son decoración
  *
@@ -57,6 +69,7 @@ import { useLabels } from '../i18n/labels';
  */
 export function AskPage() {
   const t = useT();
+  usePageTitle('nav.ask');
   const conversations = useResource(() => api<Conversation[]>('/conversations'));
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -69,50 +82,73 @@ export function AskPage() {
   }, [activeId, conversations.data]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-      <Card title={t('ask.list.title')}>
-        <ErrorNote error={conversations.error} />
-        <Button
-          className="mb-3 w-full"
-          variant="secondary"
-          onClick={() => setActiveId(null)}
-        >
-          {t('ask.new')}
-        </Button>
+    <>
+      <PageHeader title={t('ask.title')} description={t('ask.subtitle')} />
 
-        {conversations.loading && <Empty>{t('common.loading')}</Empty>}
-        <ul className="space-y-1">
-          {conversations.data?.map((conversation) => (
-            <li key={conversation.id}>
-              <button
-                type="button"
-                onClick={() => setActiveId(conversation.id)}
-                className={`w-full truncate rounded px-2 py-1.5 text-left text-sm ${
-                  conversation.id === activeId
-                    ? 'bg-blue-50 font-medium text-blue-800'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {/* El título es la propia pregunta de la persona: contenido suyo, en su
-                    idioma. Solo se traduce el hueco cuando no hay ninguno. */}
-                {conversation.title ?? t('ask.untitled')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-[1fr_15rem] lg:items-start">
+        <Thread
+          key={activeId ?? 'nueva'}
+          conversationId={activeId}
+          onStarted={(id) => {
+            setActiveId(id);
+            conversations.reload();
+          }}
+        />
 
-      <Thread
-        key={activeId ?? 'nueva'}
-        conversationId={activeId}
-        onStarted={(id) => {
-          setActiveId(id);
-          conversations.reload();
-        }}
-      />
-    </div>
+        {/*
+          La lista va a la DERECHA y en segundo plano. Es historial, no la función: ponerla
+          primero hacía que lo primero que se veía al entrar fuera una columna vacía.
+        */}
+        <Section title={t('ask.list.title')} flush>
+          <div className="px-5 pb-5">
+            <ErrorNote error={conversations.error} />
+            <Button
+              className="w-full"
+              variant="secondary"
+              onClick={() => setActiveId(null)}
+            >
+              {t('ask.new')}
+            </Button>
+          </div>
+
+          {conversations.data?.length === 0 && (
+            <p className="px-5 pb-5 t-small text-muted">{t('ask.emptyList')}</p>
+          )}
+
+          {(conversations.data?.length ?? 0) > 0 && (
+            <ul className="border-t border-line p-2">
+              {conversations.data?.map((conversation) => (
+                <li key={conversation.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveId(conversation.id)}
+                    aria-current={conversation.id === activeId ? 'true' : undefined}
+                    className={`w-full truncate rounded-md px-3 py-2 text-left t-small transition-colors ${
+                      conversation.id === activeId
+                        ? 'bg-accent-soft font-medium text-accent'
+                        : 'text-muted hover:bg-sunken hover:text-ink'
+                    }`}
+                  >
+                    {/* El título es la propia pregunta de la persona: contenido suyo, en su
+                        idioma. Solo se traduce el hueco cuando no hay ninguno. */}
+                    {conversation.title ?? t('ask.untitled')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      </div>
+    </>
   );
 }
+
+/** Los ejemplos que se ofrecen al entrar. Son claves: se traducen con el idioma activo. */
+const EJEMPLOS: TranslationKey[] = [
+  'ask.example1',
+  'ask.example2',
+  'ask.example3',
+];
 
 /**
  * El hilo: historial, pregunta y respuesta.
@@ -134,6 +170,7 @@ function Thread({
   const [answer, setAnswer] = useState<SentMessage | null>(null);
   const action = useAction();
   const bottom = useRef<HTMLDivElement>(null);
+  const campo = useRef<HTMLTextAreaElement>(null);
 
   const history = useResource(
     () =>
@@ -154,8 +191,10 @@ function Thread({
     ? new Set([answer.userMessageId, answer.assistantMessageId])
     : new Set<string>();
 
-  const ask = async () => {
-    const content = question.trim();
+  const virgen = !conversationId && !pending && !answer;
+
+  const ask = async (texto?: string) => {
+    const content = (texto ?? question).trim();
     if (!content) return;
 
     setPending(content);
@@ -189,23 +228,82 @@ function Thread({
     }
   };
 
+  const formulario = (
+    <form
+      className="space-y-3"
+      onSubmit={action.onSubmit(() => ask())}
+    >
+      <label className="block">
+        <span className="sr-only">{t('ask.input.label')}</span>
+        <textarea
+          ref={campo}
+          rows={virgen ? 3 : 2}
+          className={`${fieldClass} w-full resize-none ${virgen ? 't-lead' : ''}`}
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter pregunta; Mayúsculas+Enter salta de línea. Es lo que espera cualquiera
+            // que haya escrito en un chat, y evita que una pregunta larga se envíe a medias.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void action.run(() => ask());
+            }
+          }}
+          placeholder={t('ask.input.placeholder')}
+          required
+        />
+      </label>
+      <div className="flex items-center justify-between gap-3">
+        <p className="t-fine text-muted">{t('ask.noInvent')}</p>
+        <Button type="submit" disabled={action.busy || pending !== null}>
+          {action.busy || pending ? t('ask.sending') : t('ask.send')}
+        </Button>
+      </div>
+    </form>
+  );
+
+  // Conversación nueva: la pantalla es la pregunta. Nada compite con ella.
+  if (virgen) {
+    return (
+      <div className="space-y-6">
+        <ErrorNote error={history.error ?? action.error} />
+
+        <div className="rounded-lg border border-line bg-surface p-5 shadow-card sm:p-6">
+          <p className="mb-3 t-body text-ink-soft">{t('ask.intro')}</p>
+          {formulario}
+        </div>
+
+        <div>
+          <p className="t-micro text-muted">{t('ask.tryThis')}</p>
+          {/*
+            Antes eran viñetas grises. Ahora son botones: pulsar uno pregunta de verdad. Ver
+            la primera respuesta con sus fuentes es lo que explica el producto — y hasta la
+            Fase 8 exigía teclear la pregunta a mano.
+          */}
+          <ul className="mt-2 grid gap-2 sm:grid-cols-3">
+            {EJEMPLOS.map((clave) => (
+              <li key={clave}>
+                <button
+                  type="button"
+                  onClick={() => void action.run(() => ask(t(clave)))}
+                  disabled={action.busy}
+                  className="h-full w-full rounded-md border border-line bg-surface p-3 text-left t-small text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent disabled:opacity-50"
+                >
+                  {t(clave)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Card title={t('ask.title')}>
+    <div className="space-y-4">
       <ErrorNote error={history.error ?? action.error} />
 
-      {!conversationId && !pending && !answer && (
-        <div className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          <p className="font-medium text-gray-800">{t('ask.intro')}</p>
-          <ul className="mt-2 list-inside list-disc space-y-1 text-xs">
-            <li>{t('ask.example1')}</li>
-            <li>{t('ask.example2')}</li>
-            <li>{t('ask.example3')}</li>
-          </ul>
-          <p className="mt-2 text-xs">{t('ask.noInvent')}</p>
-        </div>
-      )}
-
-      <div className="max-h-[28rem] space-y-4 overflow-y-auto">
+      <div className="space-y-5">
         {messages
           .filter((message) => !alreadyShown.has(message.id))
           .map((message) => (
@@ -236,30 +334,30 @@ function Thread({
         {pending && (
           <>
             <Turn role="USER" content={pending} citations={[]} />
-            <p className="text-sm text-gray-500">{t('ask.thinking')}</p>
+            {/*
+              Pensando: no es un texto suelto en gris. Ocupa el sitio de la respuesta que va a
+              llegar y dice QUÉ está haciendo, que es lo que hace tolerable la espera.
+            */}
+            <div
+              className="rounded-lg border border-line bg-surface p-4 shadow-card"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="t-small font-medium text-ink">
+                <span className="bb-pulse">{t('ask.thinking')}</span>
+              </p>
+              <p className="mt-1 t-small text-muted">{t('ask.thinkingHint')}</p>
+            </div>
           </>
         )}
 
         <div ref={bottom} />
       </div>
 
-      <form
-        className="mt-4 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
-        onSubmit={action.onSubmit(ask)}
-      >
-        <input
-          aria-label={t('ask.input.label')}
-          className={`${inputClass} min-w-48 flex-1`}
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder={t('ask.input.placeholder')}
-          required
-        />
-        <Button type="submit" disabled={action.busy || pending !== null}>
-          {action.busy || pending ? t('ask.sending') : t('ask.send')}
-        </Button>
-      </form>
-    </Card>
+      <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+        {formulario}
+      </div>
+    </div>
   );
 }
 
@@ -279,6 +377,14 @@ function pendingOrAnswerQuestion(
   );
 }
 
+/**
+ * Un turno.
+ *
+ * La pregunta se ve como una nota de quien pregunta —discreta, alineada a la derecha— y la
+ * respuesta como el documento que es: tarjeta a ancho completo, con sus fuentes debajo. Antes
+ * las dos eran burbujas del mismo tamaño, lo que sugería una charla; esto no es una charla,
+ * es una consulta con su respuesta documentada.
+ */
 function Turn({
   role,
   content,
@@ -294,34 +400,49 @@ function Turn({
   const labels = useLabels();
   const mine = role === 'USER';
 
-  return (
-    <div className={mine ? 'text-right' : ''}>
-      <div
-        className={`inline-block max-w-[90%] whitespace-pre-wrap rounded-lg px-3 py-2 text-left text-sm ${
-          mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
-        }`}
-      >
-        {content}
+  if (mine) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%]">
+          <p className="mb-1 text-right t-micro text-muted">{t('ask.you')}</p>
+          <p className="whitespace-pre-wrap rounded-lg bg-sunken px-4 py-2.5 t-body text-ink">
+            {content}
+          </p>
+        </div>
       </div>
+    );
+  }
 
-      {!mine && citations.length > 0 && <Sources citations={citations} />}
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4 shadow-card sm:p-5">
+      <p className="mb-2 t-micro text-muted">{t('ask.brain')}</p>
+      <p className="whitespace-pre-wrap t-body text-ink">{content}</p>
+
+      {citations.length > 0 && <Sources citations={citations} />}
 
       {/* Sin citas NO se disimula: una respuesta que no se apoya en nada no vale para tomar
           una decisión, y quien lee tiene derecho a saberlo. */}
-      {!mine && citations.length === 0 && (
-        <p className="mt-1 text-xs text-amber-700">{t('ask.noSources')}</p>
+      {citations.length === 0 && (
+        <p className="mt-3 rounded-md bg-attention-soft px-3 py-2 t-small text-attention">
+          {t('ask.noSources')}
+        </p>
       )}
 
-      {!mine && insightsUsed && insightsUsed.length > 0 && (
-        <ul className="mt-2 space-y-1 text-xs text-gray-500">
+      {insightsUsed && insightsUsed.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t border-line pt-3">
           {insightsUsed.map((insight) => (
-            <li key={insight.id}>
-              <Link className="underline" to={`/insights/${insight.id}`}>
+            <li key={insight.id} className="flex flex-wrap items-center gap-2">
+              <Link
+                className="t-small text-accent underline underline-offset-2"
+                to={`/insights/${insight.id}`}
+              >
                 {insight.summary}
-              </Link>{' '}
-              <Badge tone={insight.freshness === 'FRESH' ? 'good' : 'warn'}>
+              </Link>
+              <StatusPill
+                tone={insight.freshness === 'FRESH' ? 'positive' : 'attention'}
+              >
                 {labels.freshness(insight.freshness)}
-              </Badge>
+              </StatusPill>
             </li>
           ))}
         </ul>
@@ -348,26 +469,29 @@ function Sources({ citations }: { citations: MessageCitation[] }) {
     items.data?.find((item) => item.id === knowledgeItemId)?.title;
 
   return (
-    <div className="mt-2">
-      <p className="text-xs font-medium text-gray-600">{t('ask.sources')}</p>
-      <ol className="mt-1 space-y-1 text-xs text-gray-600">
+    <div className="mt-4 border-t border-line pt-3">
+      <p className="t-micro text-muted">{t('ask.sources')}</p>
+      <ol className="mt-2 space-y-1.5">
         {citations.map((citation) => {
           const item = items.data?.find(
             (candidate) => candidate.id === citation.knowledgeItemId,
           );
           return (
-            <li key={`${citation.ordinal}-${citation.chunkId}`}>
-              <span className="font-medium">[{citation.ordinal}]</span>{' '}
-              {titleOf(citation.knowledgeItemId) ?? citation.label}
+            <li
+              key={`${citation.ordinal}-${citation.chunkId}`}
+              className="flex flex-wrap items-baseline gap-x-2 t-small text-ink-soft"
+            >
+              <span className="t-figure font-medium text-accent">
+                [{citation.ordinal}]
+              </span>
+              <span>{titleOf(citation.knowledgeItemId) ?? citation.label}</span>
               {item?.sourceMissingSince && (
-                <>
-                  {' '}
-                  <Badge tone="warn">{t('ask.sourceMissing')}</Badge>
-                </>
+                <StatusPill tone="attention">
+                  {t('ask.sourceMissing')}
+                </StatusPill>
               )}
               {item && (
-                <span className="text-gray-400">
-                  {' · '}
+                <span className="t-fine text-faint">
                   {t('ask.indexedAt', { date: formatDate(item.indexedAt) })}
                 </span>
               )}

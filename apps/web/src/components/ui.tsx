@@ -2,41 +2,50 @@ import {
   useCallback,
   useEffect,
   useState,
-  type ButtonHTMLAttributes,
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { ApiError } from '../api/client';
 import { useI18n } from '../i18n';
+import { Section, StatusPill, type Tone } from '../ui';
 
 /**
- * Piezas de interfaz compartidas.
+ * Lo que usan las pantallas de cliente.
  *
- * Deliberadamente sobrias: esto es una herramienta de trabajo interna, y la prioridad de esta
- * fase es que el flujo completo funcione, no que sea bonito.
+ * ## Este fichero ya no define aspecto: lo reexporta
+ *
+ * Durante seis fases su cabecera decía que la prioridad era que el flujo funcionara, no que
+ * fuera bonito. Era cierto entonces. Mientras tanto, el panel de plataforma desarrolló un
+ * sistema visual mejor que cubría solo las pantallas más nuevas, y el producto acabó con dos
+ * escalas tipográficas, cinco grises para lo mismo y dos radios de borde.
+ *
+ * Ahora el sistema es `src/ui` y esto es la puerta por la que entran las diez pantallas de
+ * cliente sin reescribirlas de golpe. Lo que queda escrito aquí es lo que NO es aspecto:
+ * cargar datos, enviar un formulario y formatear fechas.
  */
 
-export function Button({
-  variant = 'primary',
-  className = '',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'danger';
-}) {
-  const styles = {
-    primary: 'bg-blue-700 text-white hover:bg-blue-800',
-    secondary: 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-50',
-    danger: 'bg-white text-red-700 border border-red-300 hover:bg-red-50',
-  }[variant];
+export {
+  Button,
+  Section,
+  PageHeader,
+  Metric,
+  StatusPill,
+  Field,
+  fieldClass,
+  fieldClass as inputClass,
+  DataTable,
+  Row,
+  Cell,
+  DataState,
+  EmptyState,
+  ErrorNote,
+  Skeleton,
+  usePageTitle,
+} from '../ui';
 
-  return (
-    <button
-      {...props}
-      className={`rounded px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
-    />
-  );
-}
-
+/**
+ * Alias de compatibilidad: las pantallas de cliente llaman `Card` a lo que el sistema llama
+ * `Section`. Se mantiene el nombre para no tocar diez ficheros por una palabra.
+ */
 export function Card({
   title,
   actions,
@@ -47,68 +56,24 @@ export function Card({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-gray-200 bg-white">
-      {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {actions}
-        </header>
-      )}
-      <div className="p-4">{children}</div>
-    </section>
-  );
-}
-
-export function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-gray-700">
-        {label}
-      </span>
+    <Section title={title} actions={actions}>
       {children}
-      {hint && <span className="mt-1 block text-xs text-gray-500">{hint}</span>}
-    </label>
+    </Section>
   );
 }
 
-export const inputClass =
-  'w-full rounded border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-600';
+/** Vacío de una línea, dentro de una tarjeta que ya explica de qué va. */
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="py-6 text-center t-small text-muted">{children}</p>;
+}
 
 /**
- * Mensaje de error de la API.
+ * Alias del distintivo de estado.
  *
- * Se muestra LITERAL: el backend explica por qué deniega —qué colecciones faltan, por qué un
- * escalado exige curación propia— y reescribirlo aquí perdería justo la parte útil.
+ * Los tonos antiguos (`good`/`warn`/`bad`) se traducen a los del sistema. Renombrarlos en las
+ * diez pantallas habría sido ruido en el diff sin ganar nada: el nombre viejo describe lo
+ * mismo.
  */
-export function ErrorNote({ error }: { error: unknown }) {
-  if (!error) return null;
-
-  const message =
-    error instanceof ApiError
-      ? error.message
-      : error instanceof Error
-        ? error.message
-        : String(error);
-
-  return (
-    <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-      {message}
-    </p>
-  );
-}
-
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-6 text-center text-sm text-gray-500">{children}</p>;
-}
-
 export function Badge({
   children,
   tone = 'neutral',
@@ -116,20 +81,17 @@ export function Badge({
   children: ReactNode;
   tone?: 'neutral' | 'good' | 'warn' | 'bad';
 }) {
-  const styles = {
-    neutral: 'bg-gray-100 text-gray-700',
-    good: 'bg-green-100 text-green-800',
-    warn: 'bg-amber-100 text-amber-800',
-    bad: 'bg-red-100 text-red-800',
-  }[tone];
+  const equivalencia: Record<string, Tone> = {
+    neutral: 'neutral',
+    good: 'positive',
+    warn: 'attention',
+    bad: 'danger',
+  };
 
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${styles}`}>
-      {children}
-    </span>
-  );
+  return <StatusPill tone={equivalencia[tone]}>{children}</StatusPill>;
 }
 
+/** Tabla sencilla de las pantallas de cliente. Misma retícula que la del sistema. */
 export function Table({
   head,
   children,
@@ -138,18 +100,18 @@ export function Table({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+    <div className="-mx-5 overflow-x-auto">
+      <table className="w-full min-w-[32rem] border-collapse text-left">
         <thead>
-          <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
+          <tr className="border-b border-line">
             {head.map((cell) => (
-              <th key={cell} className="px-2 py-2 font-medium">
+              <th key={cell} scope="col" className="px-5 py-2.5 t-fine text-muted">
                 {cell}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody className="divide-y divide-line">{children}</tbody>
       </table>
     </div>
   );
@@ -231,11 +193,15 @@ export function useAction(): {
 /**
  * Fechas en el formato del idioma activo.
  *
- * No es un detalle: `04/09/2026` es el 4 de septiembre para una PYME española y el 9 de abril
- * para una inglesa. Una fecha ambigua en un informe de conocimiento es peor que no ponerla.
+ * ## Por qué la fecha va completa
  *
- * Es un hook porque el idioma vive en el contexto. `formatDateIn` queda expuesta aparte para
- * los pocos sitios que formatean fuera de un componente.
+ * Antes se usaba `dateStyle: 'short'`, que en castellano produce `30/8/26`. Un año a dos
+ * cifras y un mes sin ceros parecen una nota a mano, no un producto — y en una traza de
+ * auditoría la ambigüedad importa: `04/09/2026` es el 4 de septiembre para una PYME española
+ * y el 9 de abril para una inglesa.
+ *
+ * Con `medium` el mes va escrito (`30 ago 2026`) y no hay forma de leerlo mal en ningún
+ * idioma.
  */
 export function formatDateIn(
   value: string | null | undefined,
@@ -243,7 +209,7 @@ export function formatDateIn(
 ): string {
   if (!value) return '—';
   return new Date(value).toLocaleString(locale, {
-    dateStyle: 'short',
+    dateStyle: 'medium',
     timeStyle: 'short',
   });
 }

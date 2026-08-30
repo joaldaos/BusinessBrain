@@ -43,12 +43,12 @@ export function PasswordRecoveryPage() {
   if (enviado) {
     return (
       <Marco>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+        <div className="rounded-lg border border-line bg-surface p-4 t-small">
           <p className="font-medium">{t('recovery.sentTitle')}</p>
-          <p className="mt-2 text-gray-600">{t('recovery.sentBody')}</p>
-          <p className="mt-2 text-xs text-gray-500">{t('recovery.sentHint')}</p>
+          <p className="mt-2 text-muted">{t('recovery.sentBody')}</p>
+          <p className="mt-2 t-fine text-muted">{t('recovery.sentHint')}</p>
           <Link
-            className="mt-3 inline-block text-xs text-blue-700 underline"
+            className="mt-3 inline-block t-fine text-accent underline"
             to="/login"
           >
             {t('recovery.backToLogin')}
@@ -61,7 +61,7 @@ export function PasswordRecoveryPage() {
   return (
     <Marco>
       <form
-        className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
+        className="space-y-3 rounded-lg border border-line bg-surface p-4"
         onSubmit={action.onSubmit(async () => {
           await api('/auth/password-reset/request', {
             method: 'POST',
@@ -72,8 +72,8 @@ export function PasswordRecoveryPage() {
         })}
       >
         <div>
-          <p className="text-sm font-medium">{t('recovery.title')}</p>
-          <p className="mt-1 text-xs text-gray-600">{t('recovery.explain')}</p>
+          <p className="t-small font-medium">{t('recovery.title')}</p>
+          <p className="mt-1 t-fine text-muted">{t('recovery.explain')}</p>
         </div>
 
         <Field label={t('login.email')}>
@@ -94,7 +94,7 @@ export function PasswordRecoveryPage() {
         </Button>
 
         <Link
-          className="block text-center text-xs text-gray-500 underline"
+          className="block text-center t-fine text-muted underline"
           to="/login"
         >
           {t('recovery.backToLogin')}
@@ -124,11 +124,11 @@ export function PasswordResetPage() {
   if (!token) {
     return (
       <Marco>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+        <div className="rounded-lg border border-line bg-surface p-4 t-small">
           <p className="font-medium">{t('recovery.incompleteTitle')}</p>
-          <p className="mt-2 text-gray-600">{t('recovery.incompleteBody')}</p>
+          <p className="mt-2 text-muted">{t('recovery.incompleteBody')}</p>
           <Link
-            className="mt-3 inline-block text-xs text-blue-700 underline"
+            className="mt-3 inline-block t-fine text-accent underline"
             to="/recuperar"
           >
             {t('recovery.askNew')}
@@ -141,10 +141,10 @@ export function PasswordResetPage() {
   if (listo) {
     return (
       <Marco>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+        <div className="rounded-lg border border-line bg-surface p-4 t-small">
           <p className="font-medium">{t('recovery.doneTitle')}</p>
-          <p className="mt-2 text-gray-600">{t('recovery.doneBody')}</p>
-          <Link className="mt-3 inline-block text-blue-700 underline" to="/login">
+          <p className="mt-2 text-muted">{t('recovery.doneBody')}</p>
+          <Link className="mt-3 inline-block text-accent underline" to="/login">
             {t('login.signIn')}
           </Link>
         </div>
@@ -155,7 +155,7 @@ export function PasswordResetPage() {
   return (
     <Marco>
       <form
-        className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
+        className="space-y-3 rounded-lg border border-line bg-surface p-4"
         onSubmit={action.onSubmit(async () => {
           // Se comprueba antes de llamar: que el servidor rechace una contraseña por no
           // coincidir con otra que no conoce sería imposible, y equivocarse al teclear una
@@ -174,7 +174,7 @@ export function PasswordResetPage() {
           setListo(true);
         })}
       >
-        <p className="text-sm font-medium">{t('recovery.chooseTitle')}</p>
+        <p className="t-small font-medium">{t('recovery.chooseTitle')}</p>
 
         <Field label={t('login.password')} hint={t('recovery.passwordHint')}>
           <input
@@ -200,7 +200,7 @@ export function PasswordResetPage() {
         </Field>
 
         {noCoincide && (
-          <p className="text-xs text-amber-700">{t('recovery.mismatch')}</p>
+          <p className="t-fine text-attention">{t('recovery.mismatch')}</p>
         )}
         <ErrorNote error={action.error} />
 

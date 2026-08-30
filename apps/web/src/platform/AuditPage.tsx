@@ -1,16 +1,17 @@
-import { useCallback, useState } from 'react';
-import { api } from '../api/client';
-import { useResource } from '../components/ui';
-import { useI18n, useT, type TranslationKey } from '../i18n';
-import { Pagination } from './OrganizationsPage';
+import { useCallback, useState } from "react";
+import { api } from "../api/client";
+import { useResource } from "../components/ui";
+import { useI18n, useT, type TranslationKey } from "../i18n";
+import { Pagination } from "./OrganizationsPage";
 import {
   DataState,
   PageHeader,
   Section,
   StatusPill,
   useDateFormat,
-} from './ui';
-import type { AuditEntry, Paged } from './types';
+  usePageTitle,
+} from "./ui";
+import type { AuditEntry, Paged } from "./types";
 
 /**
  * La traza de lo que ha hecho la administración de BusinessBrain.
@@ -41,14 +42,15 @@ import type { AuditEntry, Paged } from './types';
  * quedarían enterradas bajo el ruido de mirarlas.
  */
 export function PlatformAuditPage() {
+  usePageTitle("platform.nav.audit");
   const t = useT();
   const [page, setPage] = useState(1);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState("");
 
   const actions = useResource<string[]>(
     useCallback(
       () =>
-        api<string[]>('/platform/audit/actions', {
+        api<string[]>("/platform/audit/actions", {
           withoutOrganization: true,
         }),
       [],
@@ -59,7 +61,7 @@ export function PlatformAuditPage() {
     useCallback(
       () =>
         api<Paged<AuditEntry>>(
-          `/platform/audit?page=${page}${code ? `&code=${encodeURIComponent(code)}` : ''}`,
+          `/platform/audit?page=${page}${code ? `&code=${encodeURIComponent(code)}` : ""}`,
           { withoutOrganization: true },
         ),
       [page, code],
@@ -70,14 +72,14 @@ export function PlatformAuditPage() {
   return (
     <>
       <PageHeader
-        title={t('platform.audit.title')}
-        description={t('platform.audit.subtitle')}
+        title={t("platform.audit.title")}
+        description={t("platform.audit.subtitle")}
       />
 
       <Section>
         <label className="mb-5 block max-w-sm">
           <span className="mb-1 block text-[12px] font-medium text-ink">
-            {t('platform.audit.filterByAction')}
+            {t("platform.audit.filterByAction")}
           </span>
           <select
             value={code}
@@ -85,9 +87,9 @@ export function PlatformAuditPage() {
               setCode(event.target.value);
               setPage(1);
             }}
-            className="w-full rounded border border-line bg-white px-2.5 py-1.5 text-[13.5px] outline-none focus:border-gray-500"
+            className="w-full rounded border border-line bg-surface px-2.5 py-1.5 text-[13.5px] outline-none focus:border-accent"
           >
-            <option value="">{t('platform.audit.allActions')}</option>
+            <option value="">{t("platform.audit.allActions")}</option>
             {(actions.data ?? []).map((action) => (
               <option key={action} value={action}>
                 {translateAction(t, action)}
@@ -100,7 +102,7 @@ export function PlatformAuditPage() {
           loading={entries.loading}
           error={entries.error}
           empty={(entries.data?.items.length ?? 0) === 0}
-          emptyMessage={t('platform.audit.none')}
+          emptyMessage={t("platform.audit.none")}
           onRetry={entries.reload}
         >
           <ol className="divide-y divide-line">
@@ -132,7 +134,7 @@ function Entry({ entry }: { entry: AuditEntry }) {
     <li className="py-4 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-[13.5px] font-medium text-ink">
-          {entry.actor?.name ?? t('platform.audit.system')}
+          {entry.actor?.name ?? t("platform.audit.system")}
         </span>
         <span className="text-[13.5px] text-ink/80">
           {translateAction(t, entry.code)}
@@ -152,9 +154,7 @@ function Entry({ entry }: { entry: AuditEntry }) {
           {detalles.map(([clave, valor]) => (
             <div key={clave} className="flex gap-1.5">
               <dt className="text-muted">{translateDetail(t, clave)}:</dt>
-              <dd className="text-ink/85">
-                {presentValue(t, locale, valor)}
-              </dd>
+              <dd className="text-ink/85">{presentValue(t, locale, valor)}</dd>
             </div>
           ))}
         </dl>
@@ -171,10 +171,7 @@ function Entry({ entry }: { entry: AuditEntry }) {
  * que alguien lo traduzca. Hay una prueba que impide que un código de plataforma llegue a
  * producción sin traducir en los dos idiomas.
  */
-function translateAction(
-  t: ReturnType<typeof useT>,
-  code: string,
-): string {
+function translateAction(t: ReturnType<typeof useT>, code: string): string {
   const clave = `audit.action.${code}` as TranslationKey;
   const texto = t(clave);
   return texto === clave ? code : texto;
@@ -197,11 +194,11 @@ function presentValue(
   locale: string,
   value: unknown,
 ): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') {
-    return t(value ? 'common.yes' : 'common.no');
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") {
+    return t(value ? "common.yes" : "common.no");
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const clave = `audit.value.${value}` as TranslationKey;
     const texto = t(clave);
     if (texto !== clave) return texto;
@@ -210,6 +207,6 @@ function presentValue(
       ? new Date(value).toLocaleString(locale)
       : value;
   }
-  if (typeof value === 'number') return String(value);
+  if (typeof value === "number") return String(value);
   return JSON.stringify(value);
 }

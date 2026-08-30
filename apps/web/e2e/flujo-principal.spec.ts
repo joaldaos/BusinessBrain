@@ -108,8 +108,8 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await page.getByRole('button', { name: 'Entrar' }).click();
 
   await expect(
-    page.getByRole('combobox', { name: /organización activa/i }),
-  ).toHaveValue(/.+/);
+    page.getByRole('link', { name: 'Conocimiento', exact: true }),
+  ).toBeVisible();
 
   // ── 2. CONOCIMIENTO: colección ────────────────────────────────────────────
   await page.getByRole('link', { name: 'Conocimiento', exact: true }).click();
@@ -209,8 +209,8 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   // el navegador conserva la cookie y la renueva sola.
   await page.reload();
   await expect(
-    page.getByRole('combobox', { name: /organización activa/i }),
-  ).toHaveValue(/.+/);
+    page.getByRole('link', { name: 'Conocimiento', exact: true }),
+  ).toBeVisible();
 
   // ── 14. AUTOMATIZACIÓN que lo encadena todo sin nadie delante ─────────────
   await page.getByRole('link', { name: 'Automatizaciones', exact: true }).click();

@@ -1,22 +1,23 @@
-import { useCallback, useRef, useState } from 'react';
-import { api } from '../api/client';
-import { useAuth } from '../auth';
-import { useResource } from '../components/ui';
-import { useT, type TranslationKey } from '../i18n';
+import { useCallback, useRef, useState } from "react";
+import { api } from "../api/client";
+import { useAuth } from "../auth";
+import { useResource } from "../components/ui";
+import { useT, type TranslationKey } from "../i18n";
 import {
   ActionButton,
   DataState,
   PageHeader,
   Section,
   StatusPill,
-} from './ui';
-import type { MyGrant } from './types';
+  usePageTitle,
+} from "./ui";
+import type { MyGrant } from "./types";
 
 interface Capability {
   name: string;
   purpose: string;
   /** Código estable del alcance que hace falta, o `null`. La interfaz lo traduce. */
-  requires: 'METADATA' | 'DIAGNOSTICS' | 'CONTENT' | null;
+  requires: "METADATA" | "DIAGNOSTICS" | "CONTENT" | null;
 }
 
 interface Answer {
@@ -51,9 +52,10 @@ interface Exchange {
  * y desde dónde se pide.
  */
 export function PlatformAssistantPage() {
+  usePageTitle("platform.nav.assistant");
   const t = useT();
   const { user } = useAuth();
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [busy, setBusy] = useState(false);
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -61,7 +63,7 @@ export function PlatformAssistantPage() {
   const capabilities = useResource<Capability[]>(
     useCallback(
       () =>
-        api<Capability[]>('/platform/assistant/capabilities', {
+        api<Capability[]>("/platform/assistant/capabilities", {
           withoutOrganization: true,
         }),
       [],
@@ -70,7 +72,7 @@ export function PlatformAssistantPage() {
 
   const grants = useResource<MyGrant[]>(
     useCallback(
-      () => api<MyGrant[]>('/platform/access', { withoutOrganization: true }),
+      () => api<MyGrant[]>("/platform/access", { withoutOrganization: true }),
       [],
     ),
   );
@@ -81,7 +83,7 @@ export function PlatformAssistantPage() {
     const limpio = texto.trim();
     if (limpio.length < 2 || busy) return;
 
-    setQuestion('');
+    setQuestion("");
     setBusy(true);
     const indice = exchanges.length;
     setExchanges((previos) => [
@@ -90,8 +92,8 @@ export function PlatformAssistantPage() {
     ]);
 
     try {
-      const answer = await api<Answer>('/platform/assistant/ask', {
-        method: 'POST',
+      const answer = await api<Answer>("/platform/assistant/ask", {
+        method: "POST",
         withoutOrganization: true,
         body: { question: limpio },
       });
@@ -111,25 +113,25 @@ export function PlatformAssistantPage() {
   };
 
   const ejemplos: TranslationKey[] = [
-    'platform.assistant.example.health',
-    'platform.assistant.example.quiet',
-    'platform.assistant.example.recent',
+    "platform.assistant.example.health",
+    "platform.assistant.example.quiet",
+    "platform.assistant.example.recent",
   ];
 
   return (
     <>
       <PageHeader
-        title={t('platform.assistant.title')}
-        description={t('platform.assistant.subtitle')}
+        title={t("platform.assistant.title")}
+        description={t("platform.assistant.subtitle")}
       />
 
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* ── La conversación ────────────────────────────────────────────── */}
         <div className="space-y-4">
           {exchanges.length === 0 ? (
-            <Section title={t('platform.assistant.startHere')}>
+            <Section title={t("platform.assistant.startHere")}>
               <p className="mb-4 text-[13px] leading-relaxed text-muted">
-                {t('platform.assistant.startHint')}
+                {t("platform.assistant.startHint")}
               </p>
               <ul className="space-y-2">
                 {ejemplos.map((clave) => (
@@ -137,7 +139,7 @@ export function PlatformAssistantPage() {
                     <button
                       type="button"
                       onClick={() => void preguntar(t(clave))}
-                      className="w-full rounded border border-line px-3 py-2 text-left text-[13px] transition hover:border-gray-400"
+                      className="w-full rounded border border-line px-3 py-2 text-left text-[13px] transition hover:border-line-strong"
                     >
                       {t(clave)}
                     </button>
@@ -156,7 +158,7 @@ export function PlatformAssistantPage() {
 
                     {exchange.failed ? (
                       <p role="alert" className="text-[13px] text-red-700">
-                        {t('platform.assistant.failed')}
+                        {t("platform.assistant.failed")}
                       </p>
                     ) : exchange.answer ? (
                       <>
@@ -175,7 +177,7 @@ export function PlatformAssistantPage() {
                         aria-live="polite"
                         className="text-[13px] text-muted"
                       >
-                        {t('platform.assistant.thinking')}
+                        {t("platform.assistant.thinking")}
                       </p>
                     )}
                   </Section>
@@ -186,7 +188,7 @@ export function PlatformAssistantPage() {
 
           <Section>
             <label htmlFor="pregunta" className="sr-only">
-              {t('platform.assistant.ask')}
+              {t("platform.assistant.ask")}
             </label>
             <textarea
               id="pregunta"
@@ -195,25 +197,25 @@ export function PlatformAssistantPage() {
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
                 // Enter envía, Mayús+Enter salta de línea: lo que espera cualquiera.
-                if (event.key === 'Enter' && !event.shiftKey) {
+                if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   void preguntar(question);
                 }
               }}
               rows={3}
-              placeholder={t('platform.assistant.placeholder')}
-              className="w-full rounded border border-line bg-white px-3 py-2 text-[13.5px] outline-none focus:border-gray-500"
+              placeholder={t("platform.assistant.placeholder")}
+              className="w-full rounded border border-line bg-surface px-3 py-2 text-[13.5px] outline-none focus:border-accent"
             />
             <div className="mt-2 flex items-center justify-between">
               <p className="text-[11.5px] text-muted">
-                {t('platform.assistant.neverExecutes')}
+                {t("platform.assistant.neverExecutes")}
               </p>
               <ActionButton
                 variant="primary"
                 onClick={() => void preguntar(question)}
                 disabled={busy || question.trim().length < 2}
               >
-                {busy ? t('common.moment') : t('platform.assistant.ask')}
+                {busy ? t("common.moment") : t("platform.assistant.ask")}
               </ActionButton>
             </div>
           </Section>
@@ -222,14 +224,14 @@ export function PlatformAssistantPage() {
         {/* ── El contexto: qué puede, y con qué permisos ──────────────────── */}
         <aside className="space-y-4">
           <Section
-            title={t('platform.assistant.currentAccess')}
-            description={t('platform.assistant.currentAccessHint')}
+            title={t("platform.assistant.currentAccess")}
+            description={t("platform.assistant.currentAccessHint")}
           >
             <DataState
               loading={grants.loading}
               error={grants.error}
               empty={abiertos.length === 0}
-              emptyMessage={t('platform.assistant.noAccess')}
+              emptyMessage={t("platform.assistant.noAccess")}
               onRetry={grants.reload}
             >
               <ul className="space-y-2">
@@ -238,7 +240,7 @@ export function PlatformAssistantPage() {
                     key={grant.id}
                     className="flex flex-wrap items-center gap-2 text-[13px]"
                   >
-                    <StatusPill tone="active">
+                    <StatusPill tone="positive">
                       {t(`platform.scope.${grant.scope}.name`)}
                     </StatusPill>
                     <span>{grant.organization.name}</span>
@@ -248,7 +250,7 @@ export function PlatformAssistantPage() {
             </DataState>
           </Section>
 
-          <Section title={t('platform.assistant.canConsult')}>
+          <Section title={t("platform.assistant.canConsult")}>
             <DataState
               loading={capabilities.loading}
               error={capabilities.error}
@@ -262,7 +264,7 @@ export function PlatformAssistantPage() {
                     </p>
                     {capability.requires && (
                       <p className="mt-0.5 text-[11.5px] text-muted">
-                        {t('platform.assistant.needsScope', {
+                        {t("platform.assistant.needsScope", {
                           scope: t(
                             `platform.scope.${capability.requires}.name`,
                           ),
@@ -275,15 +277,15 @@ export function PlatformAssistantPage() {
             </DataState>
           </Section>
 
-          <Section title={t('platform.assistant.cannot')}>
+          <Section title={t("platform.assistant.cannot")}>
             <p className="text-[13px] leading-relaxed text-muted">
-              {t('platform.assistant.cannotHint')}
+              {t("platform.assistant.cannotHint")}
             </p>
           </Section>
 
           {user && (
             <p className="px-1 text-[11.5px] text-muted">
-              {t('platform.assistant.asWho', { who: user.name })}
+              {t("platform.assistant.asWho", { who: user.name })}
             </p>
           )}
         </aside>
@@ -308,7 +310,7 @@ function Consulted({
   if (consulted.length === 0) {
     return (
       <p className="mt-3 border-t border-line pt-2 text-[11.5px] text-muted">
-        {t('platform.assistant.consultedNothing')}
+        {t("platform.assistant.consultedNothing")}
       </p>
     );
   }
@@ -316,22 +318,23 @@ function Consulted({
   return (
     <div className="mt-3 border-t border-line pt-2">
       <p className="text-[11.5px] uppercase tracking-[0.06em] text-muted">
-        {t('platform.assistant.consulted')}
+        {t("platform.assistant.consulted")}
       </p>
       <ul className="mt-1 space-y-1">
         {consulted.map((item, indice) => (
-          <li key={indice} className="flex flex-wrap items-center gap-2 text-[12px]">
-            <span className="text-ink/80">
-              {toolLabel(t, item.tool)}
-            </span>
-            {item.outcome === 'NEEDS_GRANT' && (
+          <li
+            key={indice}
+            className="flex flex-wrap items-center gap-2 text-[12px]"
+          >
+            <span className="text-ink/80">{toolLabel(t, item.tool)}</span>
+            {item.outcome === "NEEDS_GRANT" && (
               <StatusPill tone="attention">
-                {t('platform.assistant.outcome.NEEDS_GRANT')}
+                {t("platform.assistant.outcome.NEEDS_GRANT")}
               </StatusPill>
             )}
-            {item.outcome === 'UNKNOWN_TOOL' && (
+            {item.outcome === "UNKNOWN_TOOL" && (
               <StatusPill tone="quiet">
-                {t('platform.assistant.outcome.UNKNOWN_TOOL')}
+                {t("platform.assistant.outcome.UNKNOWN_TOOL")}
               </StatusPill>
             )}
           </li>

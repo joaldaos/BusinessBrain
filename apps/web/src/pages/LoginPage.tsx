@@ -49,7 +49,7 @@ export function LoginPage() {
   const [name, setName] = useState('');
   const action = useAction();
 
-  if (loading) return <p className="p-8 text-sm text-gray-500">{t('common.loading')}</p>;
+  if (loading) return <p className="p-8 t-small text-muted">{t('common.loading')}</p>;
   // `!action.busy` no es cosmético: al entrar con invitación, la sesión queda lista ANTES de
   // aceptarla, y navegar en ese instante llevaría a la pantalla de "crea tu empresa" a alguien
   // que acaba de ser invitado a una. Se retiene aquí hasta que el turno entero termina.
@@ -103,9 +103,9 @@ export function LoginPage() {
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-4 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">BusinessBrain</h1>
-        <p className="mt-1 text-sm text-gray-600">{t('login.tagline')}</p>
+        <p className="mt-1 t-small text-muted">{t('login.tagline')}</p>
         {invitation && (
-          <p className="mt-2 text-sm text-blue-800">{t('login.invited')}</p>
+          <p className="mt-2 t-small text-accent">{t('login.invited')}</p>
         )}
       </div>
 
@@ -117,11 +117,11 @@ export function LoginPage() {
       {mfaToken ? (
         <form
           onSubmit={submitMfa}
-          className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
+          className="space-y-3 rounded-lg border border-line bg-surface p-4"
         >
           <div>
-            <h2 className="text-sm font-semibold">{t('mfa.login.title')}</h2>
-            <p className="mt-1 text-xs text-gray-600">
+            <h2 className="t-small font-semibold">{t('mfa.login.title')}</h2>
+            <p className="mt-1 t-fine text-muted">
               {t('mfa.login.explain')}
             </p>
           </div>
@@ -139,7 +139,7 @@ export function LoginPage() {
           </Field>
 
           {/* Quien ha perdido el móvil no debería tener que buscar dónde meter su código. */}
-          <p className="text-xs text-gray-500">{t('mfa.login.hint')}</p>
+          <p className="t-fine text-muted">{t('mfa.login.hint')}</p>
 
           <ErrorNote error={action.error} />
 
@@ -148,7 +148,7 @@ export function LoginPage() {
           </Button>
         </form>
       ) : (
-      <form onSubmit={submit} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+      <form onSubmit={submit} className="space-y-3 rounded-lg border border-line bg-surface p-4">
         {mode === 'register' && (
           <Field label={t('login.name')}>
             <input
@@ -186,7 +186,7 @@ export function LoginPage() {
 
         <ErrorNote error={action.error} />
         {invitationError && (
-          <p className="text-xs text-amber-700">
+          <p className="t-fine text-attention">
             {t('login.invitationFailed', { reason: invitationError })}
           </p>
         )}
@@ -201,7 +201,7 @@ export function LoginPage() {
 
         <button
           type="button"
-          className="w-full text-center text-xs text-gray-500 underline"
+          className="w-full text-center t-fine text-muted underline"
           onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
         >
           {mode === 'login' ? t('login.toRegister') : t('login.toLogin')}
@@ -211,7 +211,7 @@ export function LoginPage() {
         {mode === 'login' && (
           <Link
             to="/recuperar"
-            className="block text-center text-xs text-gray-500 underline"
+            className="block text-center t-fine text-muted underline"
           >
             {t('login.forgot')}
           </Link>

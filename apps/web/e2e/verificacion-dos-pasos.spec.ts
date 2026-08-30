@@ -89,7 +89,7 @@ test('una PYME activa la verificación en dos pasos y vuelve a entrar con el có
   await crearCuentaYEmpresa(page, email, password);
 
   // ── La encuentra en Configuración, explicada en su idioma ─────────────────
-  await page.getByRole('link', { name: /configuración/i }).click();
+  await page.getByRole('link', { name: 'Mi cuenta', exact: true }).click();
 
   const tarjeta = page.getByRole('heading', {
     name: 'Verificación en dos pasos',
@@ -162,7 +162,7 @@ test('confirmar la identidad antes de una acción delicada, sin vocabulario inte
   const password = 'contrasena-de-prueba';
 
   await crearCuentaYEmpresa(page, email, password);
-  await page.getByRole('link', { name: /configuración/i }).click();
+  await page.getByRole('link', { name: 'Mi cuenta', exact: true }).click();
 
   // Cambiar la contraseña es una acción delicada: la primera vez pide confirmar identidad.
   await page.getByLabel('Contraseña nueva').fill('la-nueva-1234');

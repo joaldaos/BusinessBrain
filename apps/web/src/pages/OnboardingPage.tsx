@@ -27,7 +27,7 @@ export function OnboardingPage() {
       <h1 className="text-xl font-semibold tracking-tight">
         {t('onboarding.title')}
       </h1>
-      <p className="mt-2 text-sm text-gray-600">
+      <p className="mt-2 t-small text-muted">
         {/* Dos frases y no una con un trozo pegado delante: en otro idioma el nombre puede no
             ir al principio, y una frase partida por concatenación no se puede traducir bien. */}
         {user?.name
@@ -77,7 +77,7 @@ export function OnboardingPage() {
         </div>
       </form>
 
-      <p className="mt-6 text-xs text-gray-500">
+      <p className="mt-6 t-fine text-muted">
         {t('onboarding.alreadyInside')}
       </p>
     </main>

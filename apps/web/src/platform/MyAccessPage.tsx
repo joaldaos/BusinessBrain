@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api/client';
-import { useResource } from '../components/ui';
-import { useT } from '../i18n';
-import { ConfirmAction } from './ConfirmAction';
+import { useCallback } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import { useResource } from "../components/ui";
+import { useT } from "../i18n";
+import { ConfirmAction } from "./ConfirmAction";
 import {
   ActionButton,
   DataState,
@@ -12,8 +12,9 @@ import {
   StatusPill,
   useDateFormat,
   useRelativeDeadline,
-} from './ui';
-import type { MyGrant } from './types';
+  usePageTitle,
+} from "./ui";
+import type { MyGrant } from "./types";
 
 /**
  * "¿Qué tengo abierto ahora mismo?"
@@ -34,19 +35,20 @@ import type { MyGrant } from './types';
  * permisos temporales de lectura sobre datos ajenos.
  */
 export function PlatformMyAccessPage() {
+  usePageTitle("platform.nav.access");
   const t = useT();
   const { dateTime } = useDateFormat();
   const restante = useRelativeDeadline();
 
   const grants = useResource<MyGrant[]>(
     useCallback(
-      () => api<MyGrant[]>('/platform/access', { withoutOrganization: true }),
+      () => api<MyGrant[]>("/platform/access", { withoutOrganization: true }),
       [],
     ),
   );
 
   const vigentes = (grants.data ?? []).filter(
-    (grant) => grant.usable || (grant.status === 'PENDING' && !grant.expired),
+    (grant) => grant.usable || (grant.status === "PENDING" && !grant.expired),
   );
   const terminadas = (grants.data ?? []).filter(
     (grant) => !vigentes.includes(grant),
@@ -55,7 +57,7 @@ export function PlatformMyAccessPage() {
   const revocar = async (grant: MyGrant) => {
     await api(
       `/platform/organizations/${grant.organizationId}/access/${grant.id}/revoke`,
-      { method: 'POST', withoutOrganization: true },
+      { method: "POST", withoutOrganization: true },
     );
     grants.reload();
   };
@@ -63,20 +65,20 @@ export function PlatformMyAccessPage() {
   return (
     <>
       <PageHeader
-        title={t('platform.myAccess.title')}
-        description={t('platform.myAccess.subtitle')}
+        title={t("platform.myAccess.title")}
+        description={t("platform.myAccess.subtitle")}
       />
 
       <p className="mb-5 rounded border border-line bg-white px-4 py-3 text-[12.5px] leading-relaxed text-muted">
-        {t('platform.myAccess.notMembership')}
+        {t("platform.myAccess.notMembership")}
       </p>
 
-      <Section title={t('platform.myAccess.open')}>
+      <Section title={t("platform.myAccess.open")}>
         <DataState
           loading={grants.loading}
           error={grants.error}
           empty={vigentes.length === 0}
-          emptyMessage={t('platform.myAccess.noneOpen')}
+          emptyMessage={t("platform.myAccess.noneOpen")}
           onRetry={grants.reload}
         >
           <ul className="space-y-3">
@@ -92,30 +94,30 @@ export function PlatformMyAccessPage() {
                   >
                     {grant.organization.name}
                   </Link>
-                  <StatusPill tone={grant.usable ? 'active' : 'attention'}>
+                  <StatusPill tone={grant.usable ? "positive" : "attention"}>
                     {t(`platform.scope.${grant.scope}.name`)}
                   </StatusPill>
                   {!grant.usable && (
                     <span className="text-[12.5px] text-amber-800">
-                      {t('platform.scope.awaitingOwner')}
+                      {t("platform.scope.awaitingOwner")}
                     </span>
                   )}
                   <span className="ml-auto text-[12.5px] text-muted">
-                    {t('platform.myAccess.expires', {
+                    {t("platform.myAccess.expires", {
                       when: restante(grant.expiresAt),
                     })}
                   </span>
                 </div>
 
                 <p className="mt-1.5 text-[12.5px] text-muted">
-                  {t('platform.scope.reasonGiven', { reason: grant.reason })}
+                  {t("platform.scope.reasonGiven", { reason: grant.reason })}
                 </p>
                 <p className="mt-0.5 text-[11.5px] text-muted">
-                  {t('platform.myAccess.requestedAt', {
+                  {t("platform.myAccess.requestedAt", {
                     when: dateTime(grant.createdAt),
                   })}
                   {grant.approvedBy &&
-                    ` · ${t('platform.myAccess.approvedBy', {
+                    ` · ${t("platform.myAccess.approvedBy", {
                       who: grant.approvedBy.name,
                     })}`}
                 </p>
@@ -124,15 +126,15 @@ export function PlatformMyAccessPage() {
                   <ConfirmAction
                     trigger={(open) => (
                       <ActionButton onClick={open}>
-                        {t('platform.scope.revoke')}
+                        {t("platform.scope.revoke")}
                       </ActionButton>
                     )}
-                    title={t('platform.scope.revokeTitle')}
+                    title={t("platform.scope.revokeTitle")}
                     subject={grant.organization.name}
-                    consequence={t('platform.scope.revokeConsequence', {
+                    consequence={t("platform.scope.revokeConsequence", {
                       scope: t(`platform.scope.${grant.scope}.name`),
                     })}
-                    confirmLabel={t('platform.scope.revoke')}
+                    confirmLabel={t("platform.scope.revoke")}
                     onConfirm={() => revocar(grant)}
                   />
                 </div>
@@ -145,8 +147,8 @@ export function PlatformMyAccessPage() {
       {terminadas.length > 0 && (
         <div className="mt-6">
           <Section
-            title={t('platform.myAccess.finished')}
-            description={t('platform.myAccess.finishedHint')}
+            title={t("platform.myAccess.finished")}
+            description={t("platform.myAccess.finishedHint")}
           >
             <ul className="space-y-2">
               {terminadas.map((grant) => (
@@ -154,16 +156,14 @@ export function PlatformMyAccessPage() {
                   key={grant.id}
                   className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-muted"
                 >
-                  <span className="text-ink/70">
-                    {grant.organization.name}
-                  </span>
+                  <span className="text-ink/70">{grant.organization.name}</span>
                   <StatusPill tone="quiet">
                     {t(`platform.scope.${grant.scope}.name`)}
                   </StatusPill>
                   <span>
-                    {grant.status === 'REVOKED'
-                      ? t('platform.grant.status.REVOKED')
-                      : t('platform.grant.status.EXPIRED')}
+                    {grant.status === "REVOKED"
+                      ? t("platform.grant.status.REVOKED")
+                      : t("platform.grant.status.EXPIRED")}
                   </span>
                   <span className="ml-auto text-[12px]">
                     {dateTime(grant.revokedAt ?? grant.expiresAt)}

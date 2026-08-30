@@ -36,8 +36,8 @@ async function crearCuentaYEmpresa(page: import('@playwright/test').Page) {
   await page.getByLabel('Nombre de tu empresa').fill(`Bilingüe ${unique()}`);
   await page.getByRole('button', { name: /crear mi empresa/i }).click();
   await expect(
-    page.getByRole('combobox', { name: /organización activa/i }),
-  ).toHaveValue(/.+/);
+    page.getByRole('link', { name: 'Conocimiento', exact: true }),
+  ).toBeVisible();
 }
 
 test('una PYME cambia el idioma, y se le queda', async ({ page }) => {
@@ -47,7 +47,7 @@ test('una PYME cambia el idioma, y se le queda', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Conocimiento' })).toBeVisible();
 
   // ── CAMBIAR A INGLÉS DESDE CONFIGURACIÓN ──────────────────────────────────
-  await page.getByRole('link', { name: 'Configuración' }).click();
+  await page.getByRole('link', { name: 'Mi cuenta', exact: true }).click();
 
   const guardado = page.waitForResponse(
     (response) =>
@@ -97,7 +97,7 @@ test('una PYME cambia el idioma, y se le queda', async ({ page }) => {
   //
   // Los idiomas se ofrecen en su propia lengua justamente para esto: quien se lo cambió por
   // error tiene que reconocer el suyo.
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'My account', exact: true }).click();
   await page
     .getByRole('combobox', { name: /language/i })
     .selectOption('es');

@@ -16,8 +16,10 @@ import {
   ErrorNote,
   Field,
   inputClass,
+  PageHeader,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT, type TranslationKey } from '../i18n';
@@ -47,6 +49,7 @@ const SCHEDULES: { label: TranslationKey; cron: string }[] = [
 export function AutomationsPage() {
   const { role } = useAuth();
   const t = useT();
+  usePageTitle('nav.automations');
   const canAdmin = hasRole(role, 'ADMIN');
 
   const automations = useResource(() => api<Automation[]>('/automations'));
@@ -61,6 +64,8 @@ export function AutomationsPage() {
 
   return (
     <>
+      <PageHeader title={t('nav.automations')} description={t('page.automations.subtitle')} />
+
       {canAdmin && (
         <CreateCard
           reports={reports.data ?? []}
@@ -183,11 +188,11 @@ function CreateCard({
         </div>
 
         <fieldset className="space-y-1">
-          <legend className="text-xs font-medium text-gray-700">
+          <legend className="t-fine font-medium text-ink-soft">
             {t('automations.new.whatItDoes')}
           </legend>
           {sources.length > 0 && (
-            <label className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex flex-wrap items-center gap-2 t-small">
               <span>{t('automations.new.reread')}</span>
               <select
                 aria-label={t('automations.new.sourceLabel')}
@@ -204,7 +209,7 @@ function CreateCard({
               </select>
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 t-small">
             <input
               type="checkbox"
               checked={analyze}
@@ -212,7 +217,7 @@ function CreateCard({
             />
             {t('automations.new.analyze')}
           </label>
-          <label className="flex flex-wrap items-center gap-2 text-sm">
+          <label className="flex flex-wrap items-center gap-2 t-small">
             <span>{t('automations.new.andReport')}</span>
             <select
               className={`${inputClass} max-w-64`}
@@ -227,7 +232,7 @@ function CreateCard({
               ))}
             </select>
           </label>
-          <p className="text-xs text-gray-500">
+          <p className="t-fine text-muted">
             {t('automations.new.governance')}
           </p>
         </fieldset>
@@ -281,11 +286,11 @@ function AutomationRow({
   };
 
   return (
-    <li className="rounded border border-gray-200 p-3">
+    <li className="rounded border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{automation.name}</span>
+        <span className="t-small font-medium">{automation.name}</span>
         <Badge tone={tone}>{labels.automationStatus(automation.status)}</Badge>
-        <span className="text-xs text-gray-500">
+        <span className="t-fine text-muted">
           {automation.actions.map((a) => describeAction(a.type)).join(' → ')}
         </span>
 
@@ -340,7 +345,7 @@ function AutomationRow({
         </div>
       </div>
 
-      <p className="mt-1 text-xs text-gray-500">
+      <p className="mt-1 t-fine text-muted">
         {automation.triggerConfig.cron
           ? t('automations.scheduled', {
               cron: automation.triggerConfig.cron,
@@ -354,30 +359,30 @@ function AutomationRow({
       <ErrorNote error={action.error} />
 
       {open && (
-        <div className="mt-3 border-t border-gray-100 pt-2">
+        <div className="mt-3 border-t border-line pt-2">
           {runs.loading && <Empty>{t('common.loading')}</Empty>}
           {!runs.loading && (runs.data?.length ?? 0) === 0 && (
             <Empty>{t('automations.runs.empty')}</Empty>
           )}
           <ul className="space-y-2">
             {runs.data?.map((run) => (
-              <li key={run.id} className="text-xs">
+              <li key={run.id} className="t-fine">
                 <span className="flex flex-wrap items-center gap-2">
                   <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
                     {labels.runStatus(run.status)}
                   </Badge>
-                  <span className="text-gray-500">
+                  <span className="text-muted">
                     {formatDate(run.startedAt)}
                   </span>
                 </span>
-                <ul className="mt-1 space-y-0.5 pl-2 text-gray-600">
+                <ul className="mt-1 space-y-0.5 pl-2 text-muted">
                   {run.logs?.map((log, index) => (
                     <li key={index}>
                       {describeAction(log.action)}: {log.detail}
                     </li>
                   ))}
                 </ul>
-                {run.error && <p className="text-red-700">{run.error}</p>}
+                {run.error && <p className="text-danger">{run.error}</p>}
               </li>
             ))}
           </ul>

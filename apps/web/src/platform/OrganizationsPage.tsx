@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
-import { useResource } from '../components/ui';
-import { useT } from '../i18n';
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../api/client";
+import { useResource } from "../components/ui";
+import { useT } from "../i18n";
 import {
   Cell,
   DataState,
@@ -12,8 +12,9 @@ import {
   Section,
   StatusPill,
   useDateFormat,
-} from './ui';
-import type { Paged, PlanTier, PlatformOrganization } from './types';
+  usePageTitle,
+} from "./ui";
+import type { Paged, PlanTier, PlatformOrganization } from "./types";
 
 /**
  * La cartera de clientes.
@@ -36,13 +37,14 @@ import type { Paged, PlanTier, PlatformOrganization } from './types';
  * ni una línea de texto. Para eso hace falta abrir la ficha y pedir acceso.
  */
 export function PlatformOrganizationsPage() {
+  usePageTitle("platform.nav.organizations");
   const t = useT();
   const navigate = useNavigate();
   const { date } = useDateFormat();
 
   const [page, setPage] = useState(1);
-  const [query, setQuery] = useState('');
-  const [plan, setPlan] = useState<PlanTier | ''>('');
+  const [query, setQuery] = useState("");
+  const [plan, setPlan] = useState<PlanTier | "">("");
 
   const organizations = useResource<Paged<PlatformOrganization>>(
     useCallback(
@@ -65,46 +67,46 @@ export function PlatformOrganizationsPage() {
         buscado.length === 0 ||
         org.name.toLowerCase().includes(buscado) ||
         org.slug.toLowerCase().includes(buscado);
-      return coincide && (plan === '' || org.planTier === plan);
+      return coincide && (plan === "" || org.planTier === plan);
     });
   }, [organizations.data, query, plan]);
 
-  const filtrando = query.trim().length > 0 || plan !== '';
+  const filtrando = query.trim().length > 0 || plan !== "";
   const hayMasPaginas = (organizations.data?.pages ?? 1) > 1;
 
   return (
     <>
       <PageHeader
-        title={t('platform.organizations.title')}
-        description={t('platform.organizations.subtitle')}
+        title={t("platform.organizations.title")}
+        description={t("platform.organizations.subtitle")}
       />
 
       <Section>
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[200px]">
             <span className="mb-1 block text-[12px] font-medium text-ink">
-              {t('platform.organizations.search')}
+              {t("platform.organizations.search")}
             </span>
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('platform.organizations.searchPlaceholder')}
-              className="w-full rounded border border-line bg-white px-2.5 py-1.5 text-[13.5px] outline-none focus:border-gray-500"
+              placeholder={t("platform.organizations.searchPlaceholder")}
+              className="w-full rounded border border-line bg-surface px-2.5 py-1.5 text-[13.5px] outline-none focus:border-accent"
             />
           </label>
 
           <label>
             <span className="mb-1 block text-[12px] font-medium text-ink">
-              {t('platform.organizations.plan')}
+              {t("platform.organizations.plan")}
             </span>
             <select
               value={plan}
-              onChange={(event) => setPlan(event.target.value as PlanTier | '')}
-              className="rounded border border-line bg-white px-2.5 py-1.5 text-[13.5px] outline-none focus:border-gray-500"
+              onChange={(event) => setPlan(event.target.value as PlanTier | "")}
+              className="rounded border border-line bg-surface px-2.5 py-1.5 text-[13.5px] outline-none focus:border-accent"
             >
-              <option value="">{t('platform.organizations.allPlans')}</option>
-              {(['FREE', 'PRO', 'ENTERPRISE'] as const).map((option) => (
+              <option value="">{t("platform.organizations.allPlans")}</option>
+              {(["FREE", "PRO", "ENTERPRISE"] as const).map((option) => (
                 <option key={option} value={option}>
                   {t(`platform.plan.${option}`)}
                 </option>
@@ -119,7 +121,7 @@ export function PlatformOrganizationsPage() {
         */}
         {filtrando && hayMasPaginas && (
           <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
-            {t('platform.organizations.searchScope')}
+            {t("platform.organizations.searchScope")}
           </p>
         )}
 
@@ -129,19 +131,19 @@ export function PlatformOrganizationsPage() {
           empty={visibles.length === 0}
           emptyMessage={
             filtrando
-              ? t('platform.organizations.noMatches')
-              : t('platform.organizations.none')
+              ? t("platform.organizations.noMatches")
+              : t("platform.organizations.none")
           }
           onRetry={organizations.reload}
         >
           <DataTable
             head={[
-              t('platform.organizations.column.name'),
-              t('platform.organizations.column.plan'),
-              t('platform.organizations.column.people'),
-              t('platform.organizations.column.documents'),
-              t('platform.organizations.column.sources'),
-              t('platform.organizations.column.since'),
+              t("platform.organizations.column.name"),
+              t("platform.organizations.column.plan"),
+              t("platform.organizations.column.people"),
+              t("platform.organizations.column.documents"),
+              t("platform.organizations.column.sources"),
+              t("platform.organizations.column.since"),
             ]}
           >
             {visibles.map((org) => (
@@ -156,7 +158,9 @@ export function PlatformOrganizationsPage() {
                   </span>
                 </Cell>
                 <Cell>
-                  <StatusPill tone={org.planTier === 'FREE' ? 'quiet' : 'neutral'}>
+                  <StatusPill
+                    tone={org.planTier === "FREE" ? "quiet" : "neutral"}
+                  >
                     {t(`platform.plan.${org.planTier}`)}
                   </StatusPill>
                 </Cell>
@@ -194,27 +198,27 @@ export function Pagination({
 
   return (
     <nav
-      aria-label={t('platform.pagination.label')}
+      aria-label={t("platform.pagination.label")}
       className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[12.5px]"
     >
       <button
         type="button"
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
-        className="rounded border border-line px-2.5 py-1 transition hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line"
+        className="rounded border border-line px-2.5 py-1 transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line"
       >
-        {t('platform.pagination.previous')}
+        {t("platform.pagination.previous")}
       </button>
       <span className="text-muted">
-        {t('platform.pagination.position', { page, pages })}
+        {t("platform.pagination.position", { page, pages })}
       </span>
       <button
         type="button"
         onClick={() => onChange(page + 1)}
         disabled={page >= pages}
-        className="rounded border border-line px-2.5 py-1 transition hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line"
+        className="rounded border border-line px-2.5 py-1 transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line"
       >
-        {t('platform.pagination.next')}
+        {t("platform.pagination.next")}
       </button>
     </nav>
   );

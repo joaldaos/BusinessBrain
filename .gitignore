@@ -14,3 +14,6 @@ apps/web/playwright-report/
 
 # Copias de seguridad: llevan los documentos de todos los clientes en claro.
 backups/
+
+# Ajustes locales de la herramienta, no del producto.
+.claude/

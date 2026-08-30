@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api/client';
-import { useAuth } from '../auth';
-import { useT } from '../i18n';
-import { ConfirmAction } from './ConfirmAction';
+import { useEffect, useState } from "react";
+import { api } from "../api/client";
+import { useAuth } from "../auth";
+import { useT } from "../i18n";
+import { ConfirmAction } from "./ConfirmAction";
 import {
   ActionButton,
   DataState,
@@ -10,8 +10,8 @@ import {
   StatusPill,
   useDateFormat,
   useRelativeDeadline,
-} from './ui';
-import type { Grant, GrantScope } from './types';
+} from "./ui";
+import type { Grant, GrantScope } from "./types";
 
 /**
  * Un alcance de acceso a una empresa: qué permite, si está abierto y cómo se pide.
@@ -54,12 +54,12 @@ export function ScopePanel({
   const restante = useRelativeDeadline();
 
   const abierto = grant?.usable ?? false;
-  const pendiente = grant?.status === 'PENDING' && !grant.expired;
-  const esContenido = scope === 'CONTENT';
+  const pendiente = grant?.status === "PENDING" && !grant.expired;
+  const esContenido = scope === "CONTENT";
 
   const pedir = async (reason: string) => {
     await api(`/platform/organizations/${organizationId}/access`, {
-      method: 'POST',
+      method: "POST",
       withoutOrganization: true,
       body: { scope, reason },
     });
@@ -70,7 +70,7 @@ export function ScopePanel({
     if (!grant) return;
     await api(
       `/platform/organizations/${organizationId}/access/${grant.id}/revoke`,
-      { method: 'POST', withoutOrganization: true },
+      { method: "POST", withoutOrganization: true },
     );
     onChanged();
   };
@@ -81,13 +81,13 @@ export function ScopePanel({
       description={t(`platform.scope.${scope}.explains`)}
       actions={
         abierto ? (
-          <StatusPill tone="active">{t('platform.scope.open')}</StatusPill>
+          <StatusPill tone="positive">{t("platform.scope.open")}</StatusPill>
         ) : pendiente ? (
           <StatusPill tone="attention">
-            {t('platform.scope.awaitingOwner')}
+            {t("platform.scope.awaitingOwner")}
           </StatusPill>
         ) : (
-          <StatusPill tone="quiet">{t('platform.scope.closed')}</StatusPill>
+          <StatusPill tone="quiet">{t("platform.scope.closed")}</StatusPill>
         )
       }
     >
@@ -95,12 +95,14 @@ export function ScopePanel({
         <>
           <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
             <span>
-              {t('platform.scope.expires', { when: restante(grant.expiresAt) })}
+              {t("platform.scope.expires", { when: restante(grant.expiresAt) })}
             </span>
             <span aria-hidden>·</span>
             <span>{dateTime(grant.expiresAt)}</span>
             <span aria-hidden>·</span>
-            <span>{t('platform.scope.reasonGiven', { reason: grant.reason })}</span>
+            <span>
+              {t("platform.scope.reasonGiven", { reason: grant.reason })}
+            </span>
           </p>
 
           <div className="mb-4">{children}</div>
@@ -108,15 +110,15 @@ export function ScopePanel({
           <ConfirmAction
             trigger={(open) => (
               <ActionButton onClick={open}>
-                {t('platform.scope.revoke')}
+                {t("platform.scope.revoke")}
               </ActionButton>
             )}
-            title={t('platform.scope.revokeTitle')}
+            title={t("platform.scope.revokeTitle")}
             subject={organizationName}
-            consequence={t('platform.scope.revokeConsequence', {
+            consequence={t("platform.scope.revokeConsequence", {
               scope: t(`platform.scope.${scope}.name`),
             })}
-            confirmLabel={t('platform.scope.revoke')}
+            confirmLabel={t("platform.scope.revoke")}
             onConfirm={retirar}
           />
         </>
@@ -124,11 +126,11 @@ export function ScopePanel({
 
       {pendiente && grant && (
         <p className="text-[13px] leading-relaxed text-ink/80">
-          {t('platform.scope.pendingExplain', {
+          {t("platform.scope.pendingExplain", {
             organization: organizationName,
           })}
           <span className="mt-1 block text-[12.5px] text-muted">
-            {t('platform.scope.pendingExpires', {
+            {t("platform.scope.pendingExpires", {
               when: restante(grant.expiresAt),
             })}
           </span>
@@ -139,7 +141,7 @@ export function ScopePanel({
         <ConfirmAction
           trigger={(open) => (
             <ActionButton
-              variant={esContenido ? 'grave' : 'default'}
+              variant={esContenido ? "danger" : "secondary"}
               onClick={open}
             >
               {t(`platform.scope.${scope}.request`)}
@@ -153,13 +155,13 @@ export function ScopePanel({
             tiempo, y quién lo está solicitando.
           */
           consequence={t(`platform.scope.${scope}.confirmBody`, {
-            who: user?.name ?? '',
+            who: user?.name ?? "",
           })}
           confirmLabel={t(`platform.scope.${scope}.request`)}
-          variant={esContenido ? 'grave' : 'primary'}
+          variant={esContenido ? "danger" : "primary"}
           requiresReason
-          reasonLabel={t('platform.scope.reasonLabel')}
-          reasonHint={t('platform.scope.reasonHint')}
+          reasonLabel={t("platform.scope.reasonLabel")}
+          reasonHint={t("platform.scope.reasonHint")}
           onConfirm={pedir}
         />
       )}

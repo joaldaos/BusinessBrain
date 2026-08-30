@@ -190,8 +190,8 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
   await page.getByLabel('Contraseña').fill(PASSWORD);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(
-    page.getByRole('combobox', { name: /organización activa/i }),
-  ).toHaveValue(/.+/);
+    page.getByRole('link', { name: 'Conocimiento', exact: true }),
+  ).toBeVisible();
 
   // ── 2. COLECCIÓN de destino ─────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Conocimiento', exact: true }).click();
@@ -209,7 +209,11 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
   await page.getByRole('button', { name: /conectar gmail/i }).click();
   await page.waitForURL(/google=conectado/, { timeout: 30_000 });
 
-  const gmailCard = page.locator('section', { hasText: 'Gmail' }).first();
+  // Por su ENCABEZADO, no por contener la palabra: desde que Conocimiento explica la cadena,
+  // 'Gmail' aparece también en el texto que describe de dónde llega el material.
+  const gmailCard = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Gmail', exact: true }) });
   await expect(gmailCard.getByText('activa')).toBeVisible();
   // Dice QUÉ cuenta, no solo que hay una conectada.
   await expect(page.getByText('comercial@empresa.test')).toBeVisible();

@@ -9,8 +9,10 @@ import {
   Card,
   Empty,
   ErrorNote,
+  PageHeader,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT } from '../i18n';
@@ -45,6 +47,7 @@ import { useLabels } from '../i18n/labels';
 export function RecommendationsPage() {
   const { role } = useAuth();
   const t = useT();
+  usePageTitle('nav.recommendations');
   const labels = useLabels();
   const formatDate = useFormatDate();
   const canDecide = hasRole(role, 'MEMBER');
@@ -67,10 +70,12 @@ export function RecommendationsPage() {
 
   return (
     <>
+      <PageHeader title={t('nav.recommendations')} description={t('page.recommendations.subtitle')} />
+
       <Card
         title={t('recs.pending.title', { count: pending.data?.length ?? 0 })}
       >
-        <p className="mb-3 text-xs text-gray-500">
+        <p className="mb-3 t-fine text-muted">
           {t('recs.pending.governance')}
         </p>
 
@@ -114,7 +119,7 @@ export function RecommendationsPage() {
               {decided.map((recommendation) => (
                 <li
                   key={recommendation.id}
-                  className="flex flex-wrap items-baseline gap-2 border-b border-gray-100 pb-2 text-sm last:border-0"
+                  className="flex flex-wrap items-baseline gap-2 border-b border-line pb-2 t-small last:border-0"
                 >
                   <Badge
                     tone={
@@ -124,7 +129,7 @@ export function RecommendationsPage() {
                     {labels.recommendationStatus(recommendation.status)}
                   </Badge>
                   <span>{recommendation.title}</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="t-fine text-muted">
                     {recommendation.resolvedBy?.name ?? t('recs.someone')} ·{' '}
                     {formatDate(recommendation.resolvedAt)}
                   </span>
@@ -162,9 +167,9 @@ function RecommendationCard({
       .then(onDecided);
 
   return (
-    <li className="rounded-lg border border-gray-200 p-4">
+    <li className="rounded-lg border border-line p-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h3 className="text-sm font-semibold">{recommendation.title}</h3>
+        <h3 className="t-small font-semibold">{recommendation.title}</h3>
         {/* De quién es el criterio. Una propuesta del sistema y una de un compañero no se
             leen igual. */}
         <Badge tone={recommendation.createdById ? 'neutral' : 'good'}>
@@ -172,12 +177,12 @@ function RecommendationCard({
             ? t('recs.author.person')
             : t('recs.author.system')}
         </Badge>
-        <span className="text-xs text-gray-500">
+        <span className="t-fine text-muted">
           {formatDate(recommendation.createdAt)}
         </span>
       </div>
 
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+      <dl className="mt-3 grid gap-3 t-small sm:grid-cols-2">
         <Field
           label={t('recs.field.detected')}
           value={recommendation.detected}
@@ -230,17 +235,17 @@ function RecommendationCard({
           </>
         )}
         {!canDecide && (
-          <span className="text-xs text-gray-500">{t('recs.readOnly')}</span>
+          <span className="t-fine text-muted">{t('recs.readOnly')}</span>
         )}
       </div>
 
       <ErrorNote error={action.error} />
 
       {showEvidence && (
-        <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3 text-xs">
-          <p className="font-medium text-gray-700">{t('recs.evidence.why')}</p>
+        <div className="mt-3 rounded border border-line bg-sunken p-3 t-fine">
+          <p className="font-medium text-ink-soft">{t('recs.evidence.why')}</p>
           {recommendation.sourceInsight ? (
-            <p className="mt-1 text-gray-600">
+            <p className="mt-1 text-muted">
               {t('recs.evidence.from')}{' '}
               <Link
                 className="underline"
@@ -248,7 +253,7 @@ function RecommendationCard({
               >
                 {recommendation.sourceInsight.summary}
               </Link>{' '}
-              <span className="text-gray-500">
+              <span className="text-muted">
                 {t('recs.evidence.openIt', {
                   confidence:
                     recommendation.sourceInsight.confidence.toFixed(2),
@@ -256,7 +261,7 @@ function RecommendationCard({
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-amber-700">{t('recs.evidence.gone')}</p>
+            <p className="mt-1 text-attention">{t('recs.evidence.gone')}</p>
           )}
         </div>
       )}
@@ -269,8 +274,8 @@ function Field({ label, value }: { label: string; value: string | null }) {
 
   return (
     <div>
-      <dt className="text-xs uppercase text-gray-500">{label}</dt>
-      <dd className="mt-0.5 text-gray-800">{value}</dd>
+      <dt className="t-micro uppercase text-muted">{label}</dt>
+      <dd className="mt-0.5 text-ink">{value}</dd>
     </div>
   );
 }

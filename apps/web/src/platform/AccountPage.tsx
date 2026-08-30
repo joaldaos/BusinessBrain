@@ -1,6 +1,6 @@
-import { SecurityCard } from '../components/SecurityCard';
-import { useT } from '../i18n';
-import { PageHeader } from './ui';
+import { SecurityCard } from "../components/SecurityCard";
+import { useT } from "../i18n";
+import { PageHeader, usePageTitle } from "./ui";
 
 /**
  * La seguridad de la propia cuenta de operación.
@@ -24,13 +24,14 @@ import { PageHeader } from './ui';
  * discrepen, una de las dos dejará de exigir algo.
  */
 export function PlatformAccountPage() {
+  usePageTitle("platform.nav.account");
   const t = useT();
 
   return (
     <>
       <PageHeader
-        title={t('platform.account.title')}
-        description={t('platform.account.subtitle')}
+        title={t("platform.account.title")}
+        description={t("platform.account.subtitle")}
       />
       <SecurityCard />
     </>

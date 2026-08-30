@@ -8,10 +8,12 @@ import {
   Empty,
   ErrorNote,
   Field,
+  PageHeader,
   Table,
   inputClass,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT } from '../i18n';
@@ -31,6 +33,7 @@ import { useT } from '../i18n';
  */
 export function ObjectivesPage() {
   const t = useT();
+  usePageTitle('nav.objectives');
   const formatDate = useFormatDate();
   const objectives = useResource(() =>
     api<BusinessObjective[]>('/business-objectives'),
@@ -41,8 +44,10 @@ export function ObjectivesPage() {
 
   return (
     <>
+      <PageHeader title={t('nav.objectives')} description={t('page.objectives.subtitle')} />
+
       <Card title={t('objectives.declare.title')}>
-        <p className="mb-3 text-xs text-gray-500">{t('objectives.declare.why')}</p>
+        <p className="mb-3 t-fine text-muted">{t('objectives.declare.why')}</p>
 
         <form
           className="flex flex-wrap items-end gap-2"
@@ -96,7 +101,7 @@ export function ObjectivesPage() {
             {objectives.data?.map((objective) => (
               <tr
                 key={objective.id}
-                className="border-b border-gray-100 last:border-0"
+                className="border-b border-line last:border-0"
               >
                 <td className="px-2 py-2">{objective.statement}</td>
                 <td className="px-2 py-2">
@@ -110,12 +115,12 @@ export function ObjectivesPage() {
                         : objective.status}
                   </Badge>
                 </td>
-                <td className="px-2 py-2 text-xs text-gray-600">
+                <td className="px-2 py-2 t-fine text-muted">
                   {objective.origin === 'MANUAL_DECLARATION'
                     ? t('objectives.origin.person')
                     : t('objectives.origin.inferred')}
                 </td>
-                <td className="px-2 py-2 text-xs text-gray-600">
+                <td className="px-2 py-2 t-fine text-muted">
                   {formatDate(objective.createdAt)}
                 </td>
                 <td className="px-2 py-2 text-right">

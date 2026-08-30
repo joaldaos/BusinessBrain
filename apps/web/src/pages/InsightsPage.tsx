@@ -6,7 +6,9 @@ import {
   Card,
   Empty,
   ErrorNote,
+  PageHeader,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT } from '../i18n';
@@ -27,44 +29,52 @@ import { useLabels } from '../i18n/labels';
 export function InsightsPage() {
   const insights = useResource(() => api<Insight[]>('/insights?limit=50'));
   const t = useT();
+  usePageTitle('nav.insights');
   const labels = useLabels();
   const formatDate = useFormatDate();
 
   return (
-    <Card title={t('insights.title', { count: insights.data?.length ?? 0 })}>
-      <ErrorNote error={insights.error} />
-      {insights.loading && <Empty>{t('common.loading')}</Empty>}
-      {!insights.loading && (insights.data?.length ?? 0) === 0 && (
-        <Empty>{t('insights.empty')}</Empty>
-      )}
+    <>
+      <PageHeader
+        title={t('nav.insights')}
+        description={t('page.insights.subtitle')}
+      />
 
-      <ul className="space-y-3">
-        {insights.data?.map((insight) => (
-          <li key={insight.id} className="rounded border border-gray-200 p-3">
-            <Link
-              to={`/insights/${insight.id}`}
-              className="text-sm font-medium text-blue-700 underline"
-            >
-              {insight.summary}
-            </Link>
+      <Card title={t('insights.title', { count: insights.data?.length ?? 0 })}>
+        <ErrorNote error={insights.error} />
+        {insights.loading && <Empty>{t('common.loading')}</Empty>}
+        {!insights.loading && (insights.data?.length ?? 0) === 0 && (
+          <Empty>{t('insights.empty')}</Empty>
+        )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-              <Badge>{labels.insightType(insight.type)}</Badge>
-              <span>
-                {t('common.confidence', {
-                  value: insight.confidence.toFixed(2),
-                })}
-              </span>
-              <FreshnessBadge insight={insight} />
-              <CurationBadge insight={insight} />
-              <span className="text-gray-400">
-                {formatDate(insight.createdAt)}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
+        <ul className="space-y-3">
+          {insights.data?.map((insight) => (
+            <li key={insight.id} className="rounded-md border border-line p-3">
+              <Link
+                to={`/insights/${insight.id}`}
+                className="t-body font-medium text-accent underline underline-offset-2"
+              >
+                {insight.summary}
+              </Link>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 t-fine text-muted">
+                <Badge>{labels.insightType(insight.type)}</Badge>
+                <span>
+                  {t('common.confidence', {
+                    value: insight.confidence.toFixed(2),
+                  })}
+                </span>
+                <FreshnessBadge insight={insight} />
+                <CurationBadge insight={insight} />
+                <span className="text-faint">
+                  {formatDate(insight.createdAt)}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </>
   );
 }
 

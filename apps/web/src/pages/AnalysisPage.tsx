@@ -9,9 +9,11 @@ import {
   Card,
   Empty,
   ErrorNote,
+  PageHeader,
   Table,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT } from '../i18n';
@@ -27,6 +29,7 @@ import { useLabels } from '../i18n/labels';
 export function AnalysisPage() {
   const { role } = useAuth();
   const t = useT();
+  usePageTitle('nav.analysis');
   const labels = useLabels();
   const formatDate = useFormatDate();
   const canTrigger = hasRole(role, 'ADMIN');
@@ -47,6 +50,8 @@ export function AnalysisPage() {
 
   return (
     <>
+      <PageHeader title={t('nav.analysis')} description={t('page.analysis.subtitle')} />
+
       <Card
         title={t('analysis.run.title')}
         actions={
@@ -68,18 +73,18 @@ export function AnalysisPage() {
           </Button>
         }
       >
-        <p className="text-xs text-gray-500">{t('analysis.run.explain')}</p>
+        <p className="t-fine text-muted">{t('analysis.run.explain')}</p>
 
         <ErrorNote error={trigger.error} />
 
         {last && (
-          <p className="mt-3 rounded bg-gray-50 px-3 py-2 text-sm">
+          <p className="mt-3 rounded bg-sunken px-3 py-2 t-small">
             {t('analysis.result.summary', {
               created: last.insightsCreated ?? 0,
               known: last.insightsAlreadyKnown ?? 0,
               candidates: last.candidatesGenerated ?? 0,
             })}{' '}
-            <Link className="text-blue-700 underline" to="/insights">
+            <Link className="text-accent underline" to="/insights">
               {t('analysis.result.seeInsights')}
             </Link>
             {(last.recommendationsProposed ?? 0) > 0 && (
@@ -88,7 +93,7 @@ export function AnalysisPage() {
               <>
                 {' · '}
                 <Link
-                  className="font-medium text-blue-700 underline"
+                  className="font-medium text-accent underline"
                   to="/recomendaciones"
                 >
                   {t('analysis.result.proposals', {
@@ -120,22 +125,22 @@ export function AnalysisPage() {
             {runs.data?.map((run) => (
               <tr
                 key={run.id ?? run.analysisRunId}
-                className="border-b border-gray-100 last:border-0"
+                className="border-b border-line last:border-0"
               >
                 <td className="px-2 py-2">
                   <Badge tone={run.status === 'SUCCESS' ? 'good' : 'warn'}>
                     {labels.runStatus(run.status)}
                   </Badge>
                 </td>
-                <td className="px-2 py-2 text-xs text-gray-600">
+                <td className="px-2 py-2 t-fine text-muted">
                   {run.trigger === 'PERIODIC_SWEEP'
                     ? t('analysis.trigger.automatic')
                     : t('analysis.trigger.manual')}
                 </td>
-                <td className="px-2 py-2 text-xs text-gray-600">
+                <td className="px-2 py-2 t-fine text-muted">
                   {formatDate(run.startedAt ?? run.createdAt)}
                 </td>
-                <td className="px-2 py-2 text-xs text-gray-600">
+                <td className="px-2 py-2 t-fine text-muted">
                   {formatDate(run.finishedAt)}
                 </td>
               </tr>

@@ -1,10 +1,17 @@
-import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api/client';
-import { useResource } from '../components/ui';
-import { useT } from '../i18n';
-import { DataState, Metric, PageHeader, Section, StatusPill } from './ui';
-import type { MyGrant, PlatformOverview } from './types';
+import { useCallback } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import { useResource } from "../components/ui";
+import { useT } from "../i18n";
+import {
+  DataState,
+  Metric,
+  PageHeader,
+  Section,
+  StatusPill,
+  usePageTitle,
+} from "./ui";
+import type { MyGrant, PlatformOverview } from "./types";
 
 /**
  * Lo primero que se ve al entrar a operar.
@@ -24,12 +31,13 @@ import type { MyGrant, PlatformOverview } from './types';
  * bloque.
  */
 export function PlatformOverviewPage() {
+  usePageTitle("platform.nav.overview");
   const t = useT();
 
   const overview = useResource<PlatformOverview>(
     useCallback(
       () =>
-        api<PlatformOverview>('/platform/overview', {
+        api<PlatformOverview>("/platform/overview", {
           withoutOrganization: true,
         }),
       [],
@@ -38,33 +46,33 @@ export function PlatformOverviewPage() {
 
   const grants = useResource<MyGrant[]>(
     useCallback(
-      () => api<MyGrant[]>('/platform/access', { withoutOrganization: true }),
+      () => api<MyGrant[]>("/platform/access", { withoutOrganization: true }),
       [],
     ),
   );
 
   const vigentes = (grants.data ?? []).filter((grant) => grant.usable);
   const pendientes = (grants.data ?? []).filter(
-    (grant) => grant.status === 'PENDING' && !grant.expired,
+    (grant) => grant.status === "PENDING" && !grant.expired,
   );
 
   return (
     <>
       <PageHeader
-        title={t('platform.overview.title')}
-        description={t('platform.overview.subtitle')}
+        title={t("platform.overview.title")}
+        description={t("platform.overview.subtitle")}
       />
 
       {/* Lo que está abierto AHORA, antes que cualquier total. */}
       <Section
-        title={t('platform.overview.openAccess')}
-        description={t('platform.overview.openAccessHint')}
+        title={t("platform.overview.openAccess")}
+        description={t("platform.overview.openAccessHint")}
         actions={
           <Link
             to="/platform/access"
             className="text-[12.5px] font-medium text-accent underline"
           >
-            {t('platform.overview.seeAll')}
+            {t("platform.overview.seeAll")}
           </Link>
         }
       >
@@ -72,7 +80,7 @@ export function PlatformOverviewPage() {
           loading={grants.loading}
           error={grants.error}
           empty={vigentes.length === 0 && pendientes.length === 0}
-          emptyMessage={t('platform.overview.noOpenAccess')}
+          emptyMessage={t("platform.overview.noOpenAccess")}
           onRetry={grants.reload}
         >
           <ul className="space-y-2">
@@ -81,7 +89,7 @@ export function PlatformOverviewPage() {
                 key={grant.id}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]"
               >
-                <StatusPill tone="active">
+                <StatusPill tone="positive">
                   {t(`platform.scope.${grant.scope}.name`)}
                 </StatusPill>
                 <span className="font-medium">{grant.organization.name}</span>
@@ -94,7 +102,7 @@ export function PlatformOverviewPage() {
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]"
               >
                 <StatusPill tone="attention">
-                  {t('platform.grant.status.PENDING')}
+                  {t("platform.grant.status.PENDING")}
                 </StatusPill>
                 <span className="font-medium">{grant.organization.name}</span>
                 <span className="text-muted">
@@ -116,25 +124,25 @@ export function PlatformOverviewPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Metric
-                  label={t('platform.overview.organizations')}
+                  label={t("platform.overview.organizations")}
                   value={overview.data.totalOrganizations}
                 />
                 <Metric
-                  label={t('platform.overview.people')}
+                  label={t("platform.overview.people")}
                   value={overview.data.totalUsers}
                 />
                 <Metric
-                  label={t('platform.overview.blocked')}
+                  label={t("platform.overview.blocked")}
                   value={overview.data.bannedUsers}
-                  hint={t('platform.overview.blockedHint')}
-                  tone="warn"
+                  hint={t("platform.overview.blockedHint")}
+                  emptyHint={t("platform.overview.blockedHint")}
                 />
               </div>
 
               <div className="mt-6">
-                <Section title={t('platform.overview.byPlan')}>
+                <Section title={t("platform.overview.byPlan")}>
                   <ul className="flex flex-wrap gap-x-8 gap-y-3">
-                    {(['FREE', 'PRO', 'ENTERPRISE'] as const).map((plan) => (
+                    {(["FREE", "PRO", "ENTERPRISE"] as const).map((plan) => (
                       <li key={plan}>
                         <p className="text-[12px] uppercase tracking-[0.06em] text-muted">
                           {t(`platform.plan.${plan}`)}

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, session } from '../api/client';
 import { useAuth } from '../auth';
 import {
@@ -17,10 +18,12 @@ import {
   Empty,
   ErrorNote,
   Field,
+  PageHeader,
   Table,
   inputClass,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT, type TranslationKey } from '../i18n';
@@ -50,6 +53,7 @@ export function KnowledgePage() {
   const labels = useLabels();
   const formatDate = useFormatDate();
   const canAdmin = hasRole(role, 'ADMIN');
+  usePageTitle('nav.knowledge');
 
   const collections = useResource(() =>
     api<KnowledgeCollection[]>('/knowledge-collections'),
@@ -71,8 +75,25 @@ export function KnowledgePage() {
     (integration) => integration.provider === 'GMAIL',
   );
 
+  const indexados = (items.data ?? []).filter(
+    (item) => item.status === 'INDEXED',
+  ).length;
+
   return (
     <>
+      <PageHeader
+        title={t('knowledge.title')}
+        description={t('knowledge.subtitle')}
+      />
+
+      <Chain
+        sources={sources.data?.length ?? 0}
+        documents={items.data?.length ?? 0}
+        understood={indexados}
+      />
+
+      <h2 className="mb-2 mt-6 t-micro text-muted">{t('knowledge.step.origin')}</h2>
+
       <CollectionsCard
         collections={collections.data ?? []}
         loading={collections.loading}
@@ -110,6 +131,10 @@ export function KnowledgePage() {
         }}
       />
 
+      <h2 className="mb-2 mt-6 t-micro text-muted">
+        {t('knowledge.step.material')}
+      </h2>
+
       <Card title={t('knowledge.items.title', { count: items.data?.length ?? 0 })}>
         {items.loading && <Empty>{t('common.loading')}</Empty>}
         <ErrorNote error={items.error} />
@@ -127,10 +152,12 @@ export function KnowledgePage() {
             ]}
           >
             {items.data?.map((item) => (
-              <tr key={item.id} className="border-b border-gray-100 last:border-0">
-                <td className="px-2 py-2">{item.title}</td>
-                <td className="px-2 py-2 text-gray-600">{item.businessArea}</td>
-                <td className="px-2 py-2">
+              <tr key={item.id}>
+                <td className="px-5 py-3 t-body">{item.title}</td>
+                <td className="px-5 py-3 t-small text-muted">
+                  {item.businessArea}
+                </td>
+                <td className="px-5 py-3">
                   <span className="flex flex-wrap items-center gap-1">
                     <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
                       {labels.knowledgeItemStatus(item.status)}
@@ -144,10 +171,10 @@ export function KnowledgePage() {
                     )}
                   </span>
                 </td>
-                <td className="px-2 py-2 text-gray-600">
+                <td className="px-5 py-3 t-figure t-small text-muted">
                   {item.confidenceScore?.toFixed(2) ?? '—'}
                 </td>
-                <td className="px-2 py-2 text-gray-600">
+                <td className="px-5 py-3 t-small text-muted">
                   {formatDate(item.indexedAt)}
                 </td>
               </tr>
@@ -155,7 +182,104 @@ export function KnowledgePage() {
           </Table>
         )}
       </Card>
+
+      {/*
+        El final de la cadena. Tener documentos indexados y no saber que ya se puede preguntar
+        era el hueco más caro de esta pantalla: la persona terminaba de subir y se quedaba
+        mirando una tabla, sin ninguna señal de que el trabajo ya servía para algo.
+      */}
+      {indexados > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sunken px-5 py-4">
+          <p className="t-small text-ink-soft">
+            {t('knowledge.chain.answersHint')}
+          </p>
+          <Link
+            to="/preguntar"
+            className="rounded-md bg-ink px-3.5 py-2 t-small font-medium text-canvas transition-colors hover:bg-ink-soft"
+          >
+            {t('knowledge.goAsk')}
+          </Link>
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * La cadena: fuentes → documentos → comprensión → respuestas.
+ *
+ * ## Por qué esto está en la pantalla y no en un manual
+ *
+ * Hasta la Fase 8, Conocimiento era una pila de seis tarjetas —colecciones, Drive, Gmail,
+ * fuentes, documentos— sin ningún hilo entre ellas. Quien entraba veía formularios y no
+ * entendía **para qué** servía nada de aquello: por qué hace falta una colección, qué relación
+ * tiene una fuente con lo que sale al preguntar, ni en qué momento el sistema "ya sabe".
+ *
+ * Esta tira lo dice en una línea y con los números reales de la empresa. Si hay tres fuentes y
+ * cero documentos, se ve el punto exacto donde se rompió la cadena — que es justo lo que
+ * antes obligaba a mirar cinco tarjetas para deducir.
+ */
+function Chain({
+  sources,
+  documents,
+  understood,
+}: {
+  sources: number;
+  documents: number;
+  understood: number;
+}) {
+  const t = useT();
+
+  const pasos: { label: TranslationKey; hint: TranslationKey; value: number | null }[] =
+    [
+      {
+        label: 'knowledge.chain.sources',
+        hint: 'knowledge.chain.sourcesHint',
+        value: sources,
+      },
+      {
+        label: 'knowledge.chain.documents',
+        hint: 'knowledge.chain.documentsHint',
+        value: documents,
+      },
+      {
+        label: 'knowledge.chain.understanding',
+        hint: 'knowledge.chain.understandingHint',
+        value: understood,
+      },
+      // Las respuestas no llevan número: no son un almacén, son lo que se obtiene. Poner un
+      // contador aquí sugeriría que hay una cantidad limitada de respuestas disponibles.
+      {
+        label: 'knowledge.chain.answers',
+        hint: 'knowledge.chain.answersHint',
+        value: null,
+      },
+    ];
+
+  return (
+    <section
+      aria-label={t('knowledge.chain.title')}
+      className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {pasos.map((paso, indice) => (
+        <div key={paso.label} className="bg-surface p-4">
+          <div className="flex items-baseline gap-2">
+            <span className="t-micro text-faint">{indice + 1}</span>
+            <span className="t-small font-medium text-ink">{t(paso.label)}</span>
+            {paso.value !== null && (
+              <span
+                className={`ml-auto t-figure t-title ${
+                  paso.value === 0 ? 'text-faint' : 'text-ink'
+                }`}
+              >
+                {paso.value}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 t-fine text-muted">{t(paso.hint)}</p>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -178,7 +302,7 @@ function CollectionsCard({
 
   return (
     <Card title={t('knowledge.collections.title')}>
-      <p className="mb-3 text-xs text-gray-500">
+      <p className="mb-3 t-fine text-muted">
         {t('knowledge.collections.why')}
       </p>
 
@@ -192,7 +316,7 @@ function CollectionsCard({
           </li>
         ))}
         {!loading && collections.length === 0 && (
-          <li className="text-sm text-gray-500">
+          <li className="t-small text-muted">
             {t('knowledge.collections.empty')}
           </li>
         )}
@@ -256,7 +380,7 @@ function GoogleDriveCard({
       {drive ? (
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone="good">{t('knowledge.drive.connected')}</Badge>
-          <span className="text-xs text-gray-600">
+          <span className="t-fine text-muted">
             {t('knowledge.drive.folders', {
               count: drive._count?.knowledgeSources ?? 0,
             })}
@@ -276,7 +400,7 @@ function GoogleDriveCard({
         </div>
       ) : (
         <>
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 t-fine text-muted">
             {t('knowledge.drive.permission')}
           </p>
           <Button
@@ -328,10 +452,10 @@ function GmailCard({
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone="good">{t('knowledge.gmail.active')}</Badge>
           {/* La dirección de correo es de la empresa: se muestra tal cual. */}
-          <span className="text-xs text-gray-600">
+          <span className="t-fine text-muted">
             {gmail?.accountLabel ?? t('knowledge.gmail.unknownAccount')}
           </span>
-          <span className="text-xs text-gray-500">
+          <span className="t-fine text-muted">
             {t('knowledge.gmail.labels', {
               count: gmail?._count?.knowledgeSources ?? 0,
             })}
@@ -358,7 +482,7 @@ function GmailCard({
               vuelve a ser conectar. Presentar solo "revocada" con un boton de desconectar
               dejaba a la empresa sin ninguna forma de volver a conectar su buzon. */}
           {gmail && (
-            <p className="mb-2 flex items-center gap-2 text-xs text-gray-600">
+            <p className="mb-2 flex items-center gap-2 t-fine text-muted">
               <Badge tone="warn">{t('knowledge.gmail.revoked')}</Badge>
               {t('knowledge.gmail.revokedExplain', {
                 account:
@@ -366,7 +490,7 @@ function GmailCard({
               })}
             </p>
           )}
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 t-fine text-muted">
             {t('knowledge.gmail.permission')}
           </p>
           <Button
@@ -444,14 +568,14 @@ function SourcesCard({
           <SourceRow key={source.id} source={source} onSynced={onChanged} />
         ))}
         {!loading && sources.length === 0 && (
-          <li className="text-sm text-gray-500">
+          <li className="t-small text-muted">
             {t('knowledge.sources.empty')}
           </li>
         )}
       </ul>
 
       <form
-        className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+        className="flex flex-wrap items-end gap-2 border-t border-line pt-3"
         onSubmit={create.onSubmit(async () => {
           const connectorKey = {
             FILE_UPLOAD: 'file_upload_v1',
@@ -748,24 +872,24 @@ function SourceRow({
     });
 
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded border border-gray-200 px-3 py-2">
-      <span className="text-sm font-medium">{source.name}</span>
+    <li className="flex flex-wrap items-center gap-2 rounded border border-line px-3 py-2">
+      <span className="t-small font-medium">{source.name}</span>
       <Badge tone={source.status === 'CONNECTED' ? 'good' : 'neutral'}>
         {labels.connectionStatus(source.status)}
       </Badge>
       {source.syncScope && (
         // QUE se esta sincronizando: la etiqueta, la carpeta o la direccion. Sin esto, dos
         // fuentes del mismo tipo son indistinguibles. Es un nombre de sus sistemas: sin tocar.
-        <span className="text-xs text-gray-600">{source.syncScope}</span>
+        <span className="t-fine text-muted">{source.syncScope}</span>
       )}
-      <span className="text-xs text-gray-500">
+      <span className="t-fine text-muted">
         {t('knowledge.source.lastSync', {
           date: formatDate(source.lastSyncedAt),
         })}
       </span>
       {source.lastSync?.stats && (
         // Lo que trajo de verdad. "Sincronizado" no distingue traer 40 mensajes de ninguno.
-        <span className="text-xs text-gray-600">
+        <span className="t-fine text-muted">
           {t('knowledge.source.stats', {
             created: source.lastSync.stats.itemsCreated ?? 0,
             updated: source.lastSync.stats.itemsUpdated ?? 0,
@@ -779,19 +903,19 @@ function SourceRow({
       {(source.lastSync?.stats?.itemsNotRetrievable ?? 0) > 0 && (
         // El documento está aquí y se ve en la lista, pero NO aparece al preguntar. Callarlo
         // dejaría a la persona creyendo que el sistema ignoró su documento.
-        <span className="text-xs text-amber-700">
+        <span className="t-fine text-attention">
           {t('knowledge.source.notRetrievable', {
             count: source.lastSync?.stats?.itemsNotRetrievable ?? 0,
           })}
         </span>
       )}
       {source.lastError && (
-        <span className="text-xs text-red-700">{source.lastError}</span>
+        <span className="t-fine text-danger">{source.lastError}</span>
       )}
 
       {resultado && (
         <span
-          className={`text-xs ${resultado.ok ? 'text-green-700' : 'text-amber-700'}`}
+          className={`t-fine ${resultado.ok ? 'text-positive' : 'text-attention'}`}
         >
           {t(resultado.key, { file: resultado.file })}
         </span>
@@ -799,7 +923,7 @@ function SourceRow({
 
       <div className="ml-auto flex items-center gap-2">
         {action.error instanceof Error && (
-          <span className="text-xs text-red-700">{action.error.message}</span>
+          <span className="t-fine text-danger">{action.error.message}</span>
         )}
 
         {source.type === 'WEBSITE' ||

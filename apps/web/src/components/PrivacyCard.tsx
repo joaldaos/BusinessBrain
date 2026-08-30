@@ -62,19 +62,19 @@ export function PrivacyCard({
       {notice.data && (
         <>
           <section className="mb-4">
-            <p className="text-sm font-medium">{t('privacy.outgoing.title')}</p>
-            <p className="mt-1 text-xs text-gray-600">
+            <p className="t-small font-medium">{t('privacy.outgoing.title')}</p>
+            <p className="mt-1 t-fine text-muted">
               {t('privacy.outgoing.explain')}
             </p>
-            <ul className="mt-2 space-y-1.5 text-xs text-gray-700">
+            <ul className="mt-2 space-y-1.5 t-fine text-ink-soft">
               {notice.data.aiProvider.map((flujo) => (
                 <li key={flujo.callSite} className="flex gap-2">
-                  <span aria-hidden className="text-gray-400">
+                  <span aria-hidden className="text-faint">
                     →
                   </span>
                   <span>
                     {traducir(`privacy.flow.${flujo.code}.what`, flujo.what)}{' '}
-                    <span className="text-gray-500">
+                    <span className="text-muted">
                       {traducir(
                         `privacy.flow.${flujo.code}.trigger`,
                         flujo.trigger,
@@ -87,14 +87,14 @@ export function PrivacyCard({
           </section>
 
           <section className="mb-4">
-            <p className="text-sm font-medium">{t('privacy.stored.title')}</p>
-            <ul className="mt-2 space-y-1.5 text-xs text-gray-700">
+            <p className="t-small font-medium">{t('privacy.stored.title')}</p>
+            <ul className="mt-2 space-y-1.5 t-fine text-ink-soft">
               {notice.data.stored.map((dato) => (
                 <li key={dato.code}>
                   <span className="font-medium">
                     {traducir(`privacy.stored.${dato.code}.what`, dato.what)}.
                   </span>{' '}
-                  <span className="text-gray-600">
+                  <span className="text-muted">
                     {traducir(
                       `privacy.stored.${dato.code}.detail`,
                       dato.detail,
@@ -108,11 +108,11 @@ export function PrivacyCard({
           {/* Lo que todavía no está resuelto se dice. Un cliente que pregunta por el contrato
               de encargado de tratamiento y recibe silencio se lleva peor impresión que uno
               que recibe "todavía no, y lo sabemos". */}
-          <section className="mb-4 rounded border border-amber-200 bg-amber-50 p-3">
-            <p className="text-xs font-medium text-amber-900">
+          <section className="mb-4 rounded border border-attention/30 bg-attention-soft p-3">
+            <p className="t-fine font-medium text-attention">
               {t('privacy.pending.title')}
             </p>
-            <ul className="mt-1 space-y-1 text-xs text-amber-900">
+            <ul className="mt-1 space-y-1 t-fine text-attention">
               {notice.data.pending.map((punto) => (
                 <li key={punto.code}>
                   {traducir(`privacy.pending.${punto.code}`, punto.text)}
@@ -151,9 +151,9 @@ function ExportSection({
   const action = useAction();
 
   return (
-    <section className="mb-4 border-t border-gray-100 pt-3">
-      <p className="text-sm font-medium">{t('privacy.export.title')}</p>
-      <p className="mt-1 text-xs text-gray-600">{t('privacy.export.explain')}</p>
+    <section className="mb-4 border-t border-line pt-3">
+      <p className="t-small font-medium">{t('privacy.export.title')}</p>
+      <p className="mt-1 t-fine text-muted">{t('privacy.export.explain')}</p>
 
       <ErrorNote error={action.error} />
 
@@ -208,11 +208,11 @@ function EraseSection({
   const action = useAction();
 
   return (
-    <section className="border-t border-gray-100 pt-3">
-      <p className="text-sm font-medium text-red-800">
+    <section className="border-t border-line pt-3">
+      <p className="t-small font-medium text-danger">
         {t('privacy.erase.title')}
       </p>
-      <p className="mt-1 text-xs text-gray-600">{t('privacy.erase.explain')}</p>
+      <p className="mt-1 t-fine text-muted">{t('privacy.erase.explain')}</p>
 
       {!abierto ? (
         <Button

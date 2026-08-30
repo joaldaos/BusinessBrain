@@ -10,8 +10,10 @@ import {
   ErrorNote,
   Field,
   inputClass,
+  PageHeader,
   useAction,
   useFormatDate,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { useT } from '../i18n';
@@ -35,11 +37,14 @@ import { useLabels } from '../i18n/labels';
 export function ReportsPage() {
   const { role } = useAuth();
   const t = useT();
+  usePageTitle('nav.reports');
   const canAdmin = hasRole(role, 'ADMIN');
   const reports = useResource(() => api<Report[]>('/reports'));
 
   return (
     <>
+      <PageHeader title={t('nav.reports')} description={t('page.reports.subtitle')} />
+
       {canAdmin && <CreateCard onCreated={reports.reload} />}
 
       <Card title={t('reports.title', { count: reports.data?.length ?? 0 })}>
@@ -190,10 +195,10 @@ function ReportRow({ report }: { report: Report }) {
     });
 
   return (
-    <li className="rounded border border-gray-200 p-3">
+    <li className="rounded border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{report.name}</span>
-        <span className="text-xs text-gray-500">
+        <span className="t-small font-medium">{report.name}</span>
+        <span className="t-fine text-muted">
           {t('reports.sections', {
             count: report.template?.sections?.length ?? 0,
           })}{' '}
@@ -210,27 +215,27 @@ function ReportRow({ report }: { report: Report }) {
         </div>
       </div>
 
-      <p className="mt-1 text-xs text-gray-500">{t('reports.scopeWarning')}</p>
+      <p className="mt-1 t-fine text-muted">{t('reports.scopeWarning')}</p>
 
       <ErrorNote error={action.error} />
 
       {open && (
-        <div className="mt-3 border-t border-gray-100 pt-2">
+        <div className="mt-3 border-t border-line pt-2">
           {runs.loading && <Empty>{t('common.loading')}</Empty>}
           {!runs.loading && (runs.data?.length ?? 0) === 0 && (
             <Empty>{t('reports.runs.empty')}</Empty>
           )}
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1 t-fine">
             {runs.data?.map((run) => (
               <li key={run.id} className="flex flex-wrap items-center gap-2">
                 <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
                   {labels.runStatus(run.status)}
                 </Badge>
-                <span className="text-gray-500">
+                <span className="text-muted">
                   {formatDate(run.generatedAt)}
                 </span>
-                <span className="text-gray-400">{t('reports.notStored')}</span>
-                {run.error && <span className="text-red-700">{run.error}</span>}
+                <span className="text-faint">{t('reports.notStored')}</span>
+                {run.error && <span className="text-danger">{run.error}</span>}
               </li>
             ))}
           </ul>

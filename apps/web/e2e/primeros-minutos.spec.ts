@@ -134,8 +134,8 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
 
   // Y a partir de aquí sí hay producto: la navegación aparece con la empresa activa.
   await expect(
-    page.getByRole('combobox', { name: /organización activa/i }),
-  ).toHaveValue(/.+/);
+    page.getByRole('link', { name: 'Conocimiento', exact: true }),
+  ).toBeVisible();
 
   // El panel dice qué falta, con el estado real de la cuenta. No se afirma QUÉ paso concreto
   // pide: si el despliegue trae una IA incluida, ese ya está hecho, y la prueba no debe
@@ -151,14 +151,22 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   // empresa suba no se puede preguntar.
   await page.getByRole('link', { name: 'Configuración', exact: true }).click();
   // El título de la tarjeta, no cualquier mención: el texto explicativo también la nombra.
-  // `exact`: la pantalla tiene además "Tus datos y la inteligencia artificial", que explica
-  // qué sale hacia el proveedor. Son dos tarjetas distintas y las dos deben estar.
+  // `exact`: el producto tiene además "Tus datos y la inteligencia artificial", que explica
+  // qué sale hacia el proveedor. Son dos tarjetas distintas y las dos deben estar — desde la
+  // Fase 8, cada una en su sección: la clave es un ajuste, el aviso de privacidad es un
+  // derecho, y apilarlos hacía que nadie leyera el segundo.
   await expect(
     page.getByRole('heading', { name: 'Inteligencia artificial', exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Privacidad y datos', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: /tus datos y la inteligencia/i }),
   ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Inteligencia artificial', exact: true })
+    .click();
 
   await page
     .getByLabel(/clave de openai/i)
@@ -262,7 +270,9 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
 
   // ── 8. Y EL PANEL YA NO PIDE LO QUE ESTÁ HECHO ────────────────────────────
   await page.getByRole('link', { name: 'Panel', exact: true }).click();
-  await expect(page.getByText('Documentos')).toBeVisible();
+  // El rótulo de la métrica, exacto: el panel también explica en una frase qué va a deducir
+  // por su cuenta a partir de 'tus documentos'.
+  await expect(page.getByText('Documentos', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('link', { name: /conecta una fuente/i }),
   ).toHaveCount(0);
@@ -279,6 +289,9 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   // listón y produce una señal determinista. Es un escenario real —una asesoría o una clínica
   // pondrían el listón así— y no depende de que el modelo razone.
   await page.getByRole('link', { name: 'Configuración', exact: true }).click();
+  // La exigencia de fiabilidad es un parámetro de la EMPRESA: vive en su sección, no en la
+  // primera pantalla de Configuración.
+  await page.getByRole('button', { name: 'Empresa', exact: true }).click();
   await page.getByLabel(/exigencia de fiabilidad/i).fill('0.95');
   await page.getByRole('button', { name: /guardar exigencia/i }).click();
   await expect(page.getByText(/exigencia guardada/i)).toBeVisible();

@@ -57,22 +57,22 @@ export function InsightDetailPage() {
   return (
     <>
       <Card title={t('insight.title')}>
-        <p className="text-sm">{data.summary}</p>
+        <p className="t-small">{data.summary}</p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+        <div className="mt-3 flex flex-wrap items-center gap-2 t-fine text-muted">
           <Badge>{labels.insightType(data.type)}</Badge>
           <span>
             {t('common.confidence', { value: data.confidence.toFixed(2) })}
           </span>
           <FreshnessBadge insight={data} />
           <CurationBadge insight={data} />
-          <span className="text-gray-400">{formatDate(data.createdAt)}</span>
+          <span className="text-faint">{formatDate(data.createdAt)}</span>
         </div>
 
-        <p className="mt-2 text-xs text-gray-500">{data.freshnessRationale}</p>
+        <p className="mt-2 t-fine text-muted">{data.freshnessRationale}</p>
 
         {data.curation && (
-          <p className="mt-2 text-xs text-gray-600">
+          <p className="mt-2 t-fine text-muted">
             {data.curation.origin === 'OWN'
               ? t('insight.curatedOwn')
               : t('insight.curatedInherited')}{' '}
@@ -83,17 +83,17 @@ export function InsightDetailPage() {
         )}
 
         {data.businessObjectives.length > 0 && (
-          <p className="mt-2 text-xs text-gray-600">
+          <p className="mt-2 t-fine text-muted">
             {t('insight.mattersBecause')}{' '}
             {data.businessObjectives.map((o) => o.statement).join(' · ')}
           </p>
         )}
 
         <div className="mt-3">
-          <p className="text-xs font-medium text-gray-700">
+          <p className="t-fine font-medium text-ink-soft">
             {t('insight.evidence', { count: data.evidence.length })}
           </p>
-          <ul className="mt-1 space-y-1 text-xs text-gray-600">
+          <ul className="mt-1 space-y-1 t-fine text-muted">
             {data.evidence.map((piece, index) => (
               <li key={`${piece.refId}-${index}`}>
                 {piece.role} · {piece.kind} · {piece.refId}
@@ -137,7 +137,7 @@ function CurateCard({
 
   return (
     <Card title={t('insight.decide.title')}>
-      <p className="mb-3 text-xs text-gray-500">{t('insight.decide.explain')}</p>
+      <p className="mb-3 t-fine text-muted">{t('insight.decide.explain')}</p>
 
       <form
         className="flex flex-wrap items-end gap-2"
@@ -180,7 +180,7 @@ function CurateCard({
 
       <ErrorNote error={action.error} />
       {done && !action.error && (
-        <p className="mt-2 text-xs text-green-700">{t('insight.decide.done')}</p>
+        <p className="mt-2 t-fine text-positive">{t('insight.decide.done')}</p>
       )}
     </Card>
   );
@@ -220,9 +220,9 @@ function HistoryCard({
             {history.versions.map((version, index) => {
               const transition = history.transitions[index - 1];
               return (
-                <li key={version.id} className="border-l-2 border-gray-200 pl-3">
-                  <p className="text-sm">{version.summary}</p>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <li key={version.id} className="border-l-2 border-line pl-3">
+                  <p className="t-small">{version.summary}</p>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 t-fine text-muted">
                     <Badge tone={version.status === 'ACTIVE' ? 'good' : 'neutral'}>
                       {version.status === 'ACTIVE'
                         ? t('insight.history.current')
@@ -238,13 +238,13 @@ function HistoryCard({
                         count: version.evidenceCount,
                       })}
                     </span>
-                    <span className="text-gray-400">
+                    <span className="text-faint">
                       {formatDate(version.createdAt)}
                     </span>
                   </p>
 
                   {transition && (
-                    <div className="mt-2 rounded bg-gray-50 px-2 py-1.5 text-xs text-gray-700">
+                    <div className="mt-2 rounded bg-sunken px-2 py-1.5 t-fine text-ink-soft">
                       {/* Dos frases enteras y no una con "subió"/"bajó" incrustado: en otro
                           idioma el verbo puede no ir en ese hueco. */}
                       <p>
@@ -267,7 +267,7 @@ function HistoryCard({
                         ))}
                       </ul>
                       {transition.changesOutOfScope > 0 && (
-                        <p className="mt-1 text-gray-500">
+                        <p className="mt-1 text-muted">
                           {t('insight.history.outOfScope', {
                             count: transition.changesOutOfScope,
                           })}
@@ -281,7 +281,7 @@ function HistoryCard({
           </ol>
 
           {history.hiddenVersionCount > 0 && (
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-3 t-fine text-muted">
               {t('insight.history.hiddenVersions', {
                 count: history.hiddenVersionCount,
               })}

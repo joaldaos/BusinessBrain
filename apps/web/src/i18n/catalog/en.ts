@@ -246,20 +246,37 @@ export const en: Catalog = {
   'insight.badge.curated': 'approved by a person',
 
   // ── Analysis ─────────────────────────────────────────────────────────────
-  'analysis.title': 'Analysis',
-  'analysis.needsAdmin':
-    'Running and viewing analyses needs administrator permissions in this organisation.',
-  'analysis.run.title': 'Run an analysis',
+  'analysis.last.title': 'Latest analysis',
+  'analysis.last.created': 'new conclusions',
+  'analysis.last.updated': 'conclusions updated',
+  'analysis.last.proposals': 'recommendations to review',
+  'analysis.last.when': 'Analysed on {date}',
+  'analysis.last.running': 'Analysing right now…',
+  'analysis.last.failed': 'The latest analysis did not finish.',
+  'analysis.last.nothingNew':
+    'It found nothing new. That is normal if no new knowledge has come in since the last analysis.',
+  'analysis.seeInsights': 'See the understanding',
+  'analysis.seeRecommendations': 'See the recommendations',
+  'analysis.needs.title': 'What it needs in order to analyse',
+  'analysis.needs.knowledge': 'Documents from your company',
+  'analysis.needs.knowledgeWhy':
+    'That is what it reasons over. With nothing read, there is nothing to analyse.',
+  'analysis.needs.objectives': 'At least one objective',
+  'analysis.needs.objectivesWhy':
+    'Without objectives it can describe what happens, but not tell you whether it is a risk or an opportunity.',
+  'analysis.needs.go': 'Go to Knowledge',
+  'analysis.needs.goObjectives': 'Go to Objectives',
+  'analysis.empty.title': 'BusinessBrain has not analysed your company yet',
+  'analysis.empty.body':
+    'It goes through everything it has read on its own and looks for risks, deviations and opportunities. Conclusions and recommendations come from there.',
+  'analysis.history.title': 'Previous analyses',
+  'analysis.history.summary': '{created} new · {updated} updated',
+  'analysis.needsAdmin.title': 'Only an administrator can start an analysis',
+  'analysis.needsAdmin.body':
+    'An analysis reads all the company knowledge and spends the artificial intelligence key the company pays for. Ask whoever administers BusinessBrain in your company; you will still see the understanding it produces.',
   'analysis.run.button': 'Analyse now',
   'analysis.run.busy': 'Analysing…',
-  'analysis.run.explain':
-    'The engine goes through the indexed knowledge, works out conclusions and reconciles them with what it already believed. If a conclusion changes, the previous one is not deleted: it stays as a superseded version.',
-  'analysis.result.summary':
-    '{created} new conclusion(s) · {known} already known · {candidates} candidate(s) evaluated.',
-  'analysis.result.seeInsights': 'See understanding',
-  'analysis.result.proposals': '{count} recommendation(s) to review',
   'analysis.runs.title': 'Runs',
-  'analysis.runs.empty': 'No analysis has been run yet.',
   'analysis.runs.column.status': 'Status',
   'analysis.runs.column.origin': 'Origin',
   'analysis.runs.column.started': 'Started',
@@ -268,6 +285,25 @@ export const en: Catalog = {
   'analysis.trigger.manual': 'manual',
 
   // ── Objectives ───────────────────────────────────────────────────────────
+  'objectives.pending.title': 'Waiting for your confirmation',
+  'objectives.pending.why':
+    'BusinessBrain believes it worked this out from your documents. Until you confirm it, it is not used to decide what matters.',
+  'objectives.active.title': 'Objectives in progress',
+  'objectives.active.why':
+    'With these objectives, BusinessBrain can tell you whether what it finds is a risk or an opportunity, instead of just describing it.',
+  'objectives.new.open': 'Create objective',
+  'objectives.new.cancel': 'Cancel',
+  'objectives.declaredBy': 'A person said so',
+  'objectives.deducedBy': 'BusinessBrain worked it out',
+  'objectives.since': 'since {date}',
+  'objectives.created': 'Objective created. It already counts for the next analysis.',
+  'objectives.confirmed': 'Confirmed. BusinessBrain now takes it into account.',
+  'objectives.discarded': 'Discarded. It no longer counts towards analyses.',
+  'objectives.empty.title': 'You have not yet told BusinessBrain what you want to achieve',
+  'objectives.empty.body':
+    'It is a short sentence about what you want to achieve: keep the margin, reduce returns, get paid sooner.',
+  'objectives.empty.example':
+    'For example: "The commercial margin must not fall below 30%".',
   'objectives.declare.title': 'Declare an objective',
   'objectives.declare.why':
     'Without a confirmed objective, the system can tell you what is happening, but not whether it is a risk or an opportunity for your company.',
@@ -275,11 +311,6 @@ export const en: Catalog = {
   'objectives.placeholder': 'Commercial margin must not fall below 30%.',
   'objectives.declare': 'Declare',
   'objectives.title': 'Objectives ({count})',
-  'objectives.empty': 'None declared yet.',
-  'objectives.column.statement': 'Objective',
-  'objectives.column.status': 'Status',
-  'objectives.column.origin': 'Origin',
-  'objectives.column.declared': 'Declared',
   'objectives.status.confirmed': 'confirmed',
   'objectives.status.inferred': 'proposed by the system',
   'objectives.origin.person': 'a person',
@@ -385,8 +416,21 @@ export const en: Catalog = {
   'insight.change.SUPERSEDED_EVIDENCE': 'its source was replaced',
 
   // ── Reports ──────────────────────────────────────────────────────────────
+  'reports.new.open': 'Create report',
+  'reports.new.cancel': 'Cancel',
+  'reports.contains': 'What it contains',
+  'reports.section.insights': 'What BusinessBrain has understood ({limit} at most)',
+  'reports.section.search': 'Whatever it finds about "{query}"',
+  'reports.generatedTimes': 'Generated {count} time(s)',
+  'reports.neverGenerated': 'You have not generated it yet',
+  'reports.empty.title': 'You have not created any report yet',
+  'reports.empty.body':
+    'It gathers into a PDF what BusinessBrain has understood, with the sources for every statement. To take to a meeting or send to your accountant.',
+  'reports.empty.needsKnowledge':
+    'You need at least one document read for the report to have something to say.',
+  'reports.empty.needsAdmin':
+    'Ask whoever administers BusinessBrain to create the first one.',
   'reports.title': 'Reports ({count})',
-  'reports.empty': 'None yet.',
   'reports.new.title': 'New report',
   'reports.new.name': 'Report name',
   'reports.new.namePlaceholder': 'Weekly summary',
@@ -398,8 +442,7 @@ export const en: Catalog = {
     'It will search your documents and cite what it finds.',
   'reports.new.searchPlaceholder': 'discount policy',
   'reports.new.searchSection': 'About: {query}',
-  'reports.new.submit': 'Create report',
-  'reports.sections': '{count} section(s)',
+  'reports.new.submit': 'Save report',
   'reports.runs': 'Generations',
   'reports.runs.hide': 'Hide',
   'reports.runs.empty': 'No generations yet.',
@@ -411,9 +454,22 @@ export const en: Catalog = {
     'the file is not kept; it is regenerated whenever it is needed',
 
   // ── Automations ──────────────────────────────────────────────────────────
+  'automations.new.open': 'Create automation',
+  'automations.new.submit': 'Save automation',
+  'automations.new.cancel': 'Cancel',
+  'automations.does': 'What it does',
+  'automations.next': 'Next time',
+  'automations.never': 'It has not run yet',
+  'automations.ranTimes': 'It has run {count} time(s)',
+  'automations.lastResultAt': 'Last time on {date}',
+  'automations.paused.hint': 'Paused: it will not run until you resume it.',
+  'automations.error.hint': 'The last run failed. Check the runs to see what happened.',
+  'automations.empty.title': 'Nothing runs on its own yet',
+  'automations.empty.body':
+    'It repeats on its own, at the time you choose, what you now do by hand: re-read a web page, analyse and generate a report. It never sends anything outside.',
+  'automations.empty.needsAdmin':
+    'Ask whoever administers BusinessBrain to create the first one.',
   'automations.title': 'Automations ({count})',
-  'automations.empty':
-    'None yet. Create one so the system analyses your knowledge on its own.',
   'automations.new.title': 'New automation',
   'automations.new.name': 'Name',
   'automations.new.namePlaceholder': 'Weekly sweep',
@@ -440,8 +496,6 @@ export const en: Catalog = {
   'automations.resume': 'Resume',
   'automations.scheduled': 'Scheduled ({cron} · {timezone})',
   'automations.manual': 'Manual',
-  'automations.lastRun': 'last run {date}',
-  'automations.nextRun': 'next {date}',
   'automations.action.SYNC_KNOWLEDGE_SOURCE': 'read the source again',
   'automations.action.RUN_ANALYSIS': 'analyse',
   'automations.action.GENERATE_REPORT': 'generate report',

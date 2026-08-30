@@ -73,18 +73,22 @@ export function EmptyState({
   title,
   children,
   action,
+  footnote,
 }: {
   title: string;
   children?: ReactNode;
   action?: ReactNode;
+  /** Un ejemplo o un matiz, debajo de la acción. Nunca información necesaria. */
+  footnote?: ReactNode;
 }) {
   return (
     <div className="mx-auto max-w-md px-6 py-10 text-center">
-      <p className="t-body font-medium text-ink">{title}</p>
+      <p className="t-title text-ink">{title}</p>
       {children && (
-        <p className="mx-auto mt-1.5 t-small text-muted">{children}</p>
+        <p className="mx-auto mt-2 t-small text-muted">{children}</p>
       )}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
+      {footnote && <p className="mt-4 t-fine text-faint">{footnote}</p>}
     </div>
   );
 }
@@ -180,7 +184,20 @@ export function DataState({
 }) {
   const t = useT();
 
-  if (loading) return <Skeleton lines={skeleton ?? 3} className="py-2" />;
+  /*
+   * La silueta es para la PRIMERA carga, no para cada refresco.
+   *
+   * Al volver a pedir los datos —después de crear algo, de ejecutar algo— `loading` vuelve a
+   * ser cierto durante un instante. Sustituir el contenido por la silueta en ese momento hace
+   * dos cosas malas: la pantalla entera parpadea, y todo lo que estuviera desplegado se
+   * desmonta y pierde su estado. En Automatizaciones se veía claro: pulsabas "Ejecutar ahora",
+   * la lista se recargaba, y el panel de ejecuciones que se acababa de abrir se cerraba solo.
+   *
+   * Con datos en pantalla, un refresco no se nota. Que es justo lo que debe pasar.
+   */
+  if (loading && (empty ?? true)) {
+    return <Skeleton lines={skeleton ?? 3} className="py-2" />;
+  }
 
   if (error) {
     const tipo = clasificar(error);

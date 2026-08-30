@@ -24,7 +24,7 @@ export function OnboardingPage() {
 
   return (
     <main className="mx-auto max-w-lg p-8">
-      <h1 className="text-xl font-semibold tracking-tight">
+      <h1 className="t-display text-ink">
         {t('onboarding.title')}
       </h1>
       <p className="mt-2 t-small text-muted">

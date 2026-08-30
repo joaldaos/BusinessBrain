@@ -28,9 +28,40 @@
   --color-ink: #14161a;
   /* Prosa larga: negro puro cansa a partir de tres líneas. */
   --color-ink-soft: #3d4552;
-  --color-muted: #697280;
+  --color-muted: #5b6270;
   /* Lo accesorio: metadatos, marcas de tiempo. */
-  --color-faint: #98a0ac;
+  --color-faint: #6b727e;
+
+  /*
+   * ── Los grises de texto están MEDIDOS, no elegidos a ojo ─────────────────
+   *
+   * Sobre `surface` / `canvas` / `sunken`, con la fórmula de WCAG 2.1:
+   *
+   *   ink       18.11 / 16.90 / 17.24
+   *   ink-soft   9.67 /  9.03 /  9.18
+   *   muted      6.13 /  5.72 /  5.82
+   *   faint      4.85 /  4.52 /  4.60
+   *
+   * Los cuatro pasan AA (4.5:1) para texto normal.
+   *
+   * `faint` era `#98a0ac` y daba **2.64:1**: media pantalla de metadatos, fechas y textos de
+   * marcador de posición estaba por debajo de lo legible, y se veía bien solo si tienes buena
+   * vista y un buen monitor. `muted` estaba en 4.86/4.54 — pasaba por dos centésimas, sin
+   * ningún margen ante un fondo ligeramente distinto.
+   *
+   * El precio de cumplir es que `faint` y `muted` quedan cerca. No hay forma de evitarlo:
+   * por debajo de 4.5:1 no hay sitio para un tercer gris más claro. Si hace falta más
+   * distancia visual, se consigue con tamaño y peso, no bajando el contraste.
+   */
+
+  /*
+   * Borde de lo que se rellena.
+   *
+   * Un campo de texto sobre una tarjeta blanca no tiene fondo propio: su borde es lo ÚNICO
+   * que dice dónde hay que escribir. Con `--color-line` daba 1.44:1 —invisible— y el
+   * formulario parecía texto suelto. WCAG 1.4.11 pide 3:1 para eso; esto da 3.29:1.
+   */
+  --color-field-line: #888e99;
 
   /* ── Superficies ───────────────────────────────────────────────────────── */
   --color-canvas: #f6f7f9;

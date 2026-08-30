@@ -102,7 +102,7 @@ export function LoginPage() {
   return (
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-4 p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">BusinessBrain</h1>
+        <h1 className="t-display text-ink">BusinessBrain</h1>
         <p className="mt-1 t-small text-muted">{t('login.tagline')}</p>
         {invitation && (
           <p className="mt-2 t-small text-accent">{t('login.invited')}</p>

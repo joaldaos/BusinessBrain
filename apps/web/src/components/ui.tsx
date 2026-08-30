@@ -221,3 +221,24 @@ export function useFormatDate(): (value: string | null | undefined) => string {
     [locale],
   );
 }
+
+/**
+ * Solo el día, sin la hora.
+ *
+ * Para lo que ocurrió una vez y no vuelve a ocurrir: cuándo se declaró un objetivo, cuándo se
+ * creó algo. "30 ago 2026, 15:47" en un objetivo pone en pantalla dos datos de los que uno no
+ * le importa a nadie — y la hora exacta de una decisión de negocio no significa nada.
+ *
+ * Donde SÍ importa la hora es en una traza: una ejecución, una descarga, un acceso. Ahí sigue
+ * usándose `useFormatDate`.
+ */
+export function useFormatDay(): (value: string | null | undefined) => string {
+  const { locale } = useI18n();
+  return useCallback(
+    (value: string | null | undefined) =>
+      value
+        ? new Date(value).toLocaleDateString(locale, { dateStyle: 'medium' })
+        : '—',
+    [locale],
+  );
+}

@@ -255,20 +255,37 @@ export const es = {
   'insight.badge.curated': 'validado por una persona',
 
   // ── Análisis ─────────────────────────────────────────────────────────────
-  'analysis.title': 'Análisis',
-  'analysis.needsAdmin':
-    'Lanzar y consultar análisis requiere permisos de administración en esta organización.',
-  'analysis.run.title': 'Lanzar un análisis',
+  'analysis.last.title': 'Último análisis',
+  'analysis.last.created': 'conclusiones nuevas',
+  'analysis.last.updated': 'conclusiones actualizadas',
+  'analysis.last.proposals': 'recomendaciones para revisar',
+  'analysis.last.when': 'Analizado el {date}',
+  'analysis.last.running': 'Analizando ahora mismo…',
+  'analysis.last.failed': 'El último análisis no llegó a terminar.',
+  'analysis.last.nothingNew':
+    'No ha encontrado nada nuevo. Es normal si desde el último análisis no ha entrado conocimiento nuevo.',
+  'analysis.seeInsights': 'Ver la comprensión',
+  'analysis.seeRecommendations': 'Ver las recomendaciones',
+  'analysis.needs.title': 'Qué necesita para poder analizar',
+  'analysis.needs.knowledge': 'Documentos de tu empresa',
+  'analysis.needs.knowledgeWhy':
+    'Es sobre lo que razona. Sin nada leído, no hay nada que analizar.',
+  'analysis.needs.objectives': 'Al menos un objetivo',
+  'analysis.needs.objectivesWhy':
+    'Sin objetivos puede describir lo que pasa, pero no decirte si es un riesgo o una oportunidad.',
+  'analysis.needs.go': 'Ir a Conocimiento',
+  'analysis.needs.goObjectives': 'Ir a Objetivos',
+  'analysis.empty.title': 'BusinessBrain todavía no ha analizado tu empresa',
+  'analysis.empty.body':
+    'Recorre por su cuenta todo lo que ha leído y busca riesgos, desviaciones y oportunidades. De ahí salen las conclusiones y las recomendaciones.',
+  'analysis.history.title': 'Análisis anteriores',
+  'analysis.history.summary': '{created} nuevas · {updated} actualizadas',
+  'analysis.needsAdmin.title': 'Solo un administrador puede lanzar un análisis',
+  'analysis.needsAdmin.body':
+    'Un análisis lee todo el conocimiento de la empresa y consume la clave de inteligencia artificial que ella paga. Pídeselo a quien administre BusinessBrain en tu empresa; la comprensión que produzca sí la verás tú.',
   'analysis.run.button': 'Analizar ahora',
   'analysis.run.busy': 'Analizando…',
-  'analysis.run.explain':
-    'El motor recorre el conocimiento indexado, deriva conclusiones y las reconcilia con lo que ya creía. Si una conclusión cambia, la anterior no se borra: queda como versión superada.',
-  'analysis.result.summary':
-    '{created} conclusión(es) nueva(s) · {known} ya conocida(s) · {candidates} candidato(s) evaluado(s).',
-  'analysis.result.seeInsights': 'Ver comprensión',
-  'analysis.result.proposals': '{count} recomendación(es) para revisar',
   'analysis.runs.title': 'Ejecuciones',
-  'analysis.runs.empty': 'Todavía no se ha ejecutado ningún análisis.',
   'analysis.runs.column.status': 'Estado',
   'analysis.runs.column.origin': 'Origen',
   'analysis.runs.column.started': 'Inicio',
@@ -277,6 +294,24 @@ export const es = {
   'analysis.trigger.manual': 'manual',
 
   // ── Objetivos ────────────────────────────────────────────────────────────
+  'objectives.pending.title': 'Esperando tu confirmación',
+  'objectives.pending.why':
+    'BusinessBrain cree haber deducido esto de tus documentos. Hasta que lo confirmes no lo usa para decidir qué es importante.',
+  'objectives.active.title': 'Objetivos en marcha',
+  'objectives.active.why':
+    'Con estos objetivos, BusinessBrain puede decirte si lo que encuentra es un riesgo o una oportunidad, y no solo describirlo.',
+  'objectives.new.open': 'Crear objetivo',
+  'objectives.new.cancel': 'Cancelar',
+  'objectives.declaredBy': 'Lo dijo una persona',
+  'objectives.deducedBy': 'Lo dedujo BusinessBrain',
+  'objectives.since': 'desde el {date}',
+  'objectives.created': 'Objetivo creado. Ya cuenta para el próximo análisis.',
+  'objectives.confirmed': 'Confirmado. BusinessBrain ya lo tiene en cuenta.',
+  'objectives.discarded': 'Descartado. Deja de contar para los análisis.',
+  'objectives.empty.title': 'Todavía no le has dicho a BusinessBrain qué quieres conseguir',
+  'objectives.empty.body':
+    'Es una frase corta con lo que quieres lograr: mantener el margen, reducir las devoluciones, cobrar antes.',
+  'objectives.empty.example': 'Por ejemplo: «El margen comercial no debe bajar del 30 %».',
   'objectives.declare.title': 'Declarar un objetivo',
   'objectives.declare.why':
     'Sin un objetivo confirmado, el sistema puede decirte qué está pasando, pero no si eso es un riesgo o una oportunidad para tu empresa.',
@@ -284,11 +319,6 @@ export const es = {
   'objectives.placeholder': 'El margen comercial no debe bajar del 30 %.',
   'objectives.declare': 'Declarar',
   'objectives.title': 'Objetivos ({count})',
-  'objectives.empty': 'Ninguno declarado todavía.',
-  'objectives.column.statement': 'Objetivo',
-  'objectives.column.status': 'Estado',
-  'objectives.column.origin': 'Origen',
-  'objectives.column.declared': 'Declarado',
   'objectives.status.confirmed': 'confirmado',
   'objectives.status.inferred': 'propuesto por el sistema',
   'objectives.origin.person': 'una persona',
@@ -392,8 +422,21 @@ export const es = {
   'insight.change.SUPERSEDED_EVIDENCE': 'su fuente fue reemplazada',
 
   // ── Informes ─────────────────────────────────────────────────────────────
+  'reports.new.open': 'Crear informe',
+  'reports.new.cancel': 'Cancelar',
+  'reports.contains': 'Qué lleva dentro',
+  'reports.section.insights': 'Lo que BusinessBrain ha comprendido ({limit} como mucho)',
+  'reports.section.search': 'Lo que encuentre sobre «{query}»',
+  'reports.generatedTimes': 'Generado {count} vez/veces',
+  'reports.neverGenerated': 'Todavía no lo has generado',
+  'reports.empty.title': 'Todavía no has creado ningún informe',
+  'reports.empty.body':
+    'Reúne en un PDF lo que BusinessBrain ha comprendido, con las fuentes de cada afirmación. Para llevarlo a una reunión o enviárselo a tu gestoría.',
+  'reports.empty.needsKnowledge':
+    'Necesitas al menos un documento leído para que el informe tenga algo que contar.',
+  'reports.empty.needsAdmin':
+    'Pídele a quien administre BusinessBrain que cree el primero.',
   'reports.title': 'Informes ({count})',
-  'reports.empty': 'Ninguno todavía.',
   'reports.new.title': 'Nuevo informe',
   'reports.new.name': 'Nombre del informe',
   'reports.new.namePlaceholder': 'Resumen semanal',
@@ -405,8 +448,7 @@ export const es = {
     'Se buscará en tus documentos y se citará lo encontrado.',
   'reports.new.searchPlaceholder': 'política de descuentos',
   'reports.new.searchSection': 'Sobre: {query}',
-  'reports.new.submit': 'Crear informe',
-  'reports.sections': '{count} sección(es)',
+  'reports.new.submit': 'Guardar informe',
   'reports.runs': 'Generaciones',
   'reports.runs.hide': 'Ocultar',
   'reports.runs.empty': 'Sin generaciones todavía.',
@@ -418,9 +460,23 @@ export const es = {
     'el fichero no se conserva; se regenera cuando hace falta',
 
   // ── Automatizaciones ─────────────────────────────────────────────────────
+  'automations.new.open': 'Crear automatización',
+  'automations.new.submit': 'Guardar automatización',
+  'automations.new.cancel': 'Cancelar',
+  'automations.does': 'Qué hace',
+  'automations.next': 'Siguiente vez',
+  'automations.never': 'Todavía no se ha ejecutado',
+  'automations.ranTimes': 'Se ha ejecutado {count} vez/veces',
+  'automations.lastResultAt': 'Última vez el {date}',
+  'automations.paused.hint': 'En pausa: no se ejecutará hasta que la reanudes.',
+  'automations.error.hint':
+    'La última ejecución falló. Revisa las ejecuciones para ver qué pasó.',
+  'automations.empty.title': 'Todavía no hay nada que se haga solo',
+  'automations.empty.body':
+    'Repite sola, a la hora que le digas, lo que ahora haces a mano: volver a leer una web, analizar y generar un informe. Nunca envía nada al exterior.',
+  'automations.empty.needsAdmin':
+    'Pídele a quien administre BusinessBrain que cree la primera.',
   'automations.title': 'Automatizaciones ({count})',
-  'automations.empty':
-    'Ninguna todavía. Crea una para que el sistema analice tu conocimiento por su cuenta.',
   'automations.new.title': 'Nueva automatización',
   'automations.new.name': 'Nombre',
   'automations.new.namePlaceholder': 'Barrido semanal',
@@ -447,8 +503,6 @@ export const es = {
   'automations.resume': 'Reanudar',
   'automations.scheduled': 'Programada ({cron} · {timezone})',
   'automations.manual': 'Manual',
-  'automations.lastRun': 'última ejecución {date}',
-  'automations.nextRun': 'próxima {date}',
   'automations.action.SYNC_KNOWLEDGE_SOURCE': 'volver a leer la fuente',
   'automations.action.RUN_ANALYSIS': 'analizar',
   'automations.action.GENERATE_REPORT': 'generar informe',

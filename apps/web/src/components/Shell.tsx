@@ -164,10 +164,17 @@ export function Shell() {
           </div>
         </div>
 
-        {/* Escritorio: todo a la vista. */}
+        {/*
+          Escritorio: todo a la vista, y en dos filas si hace falta.
+
+          Once secciones no caben en una sola línea a 1024 px —el ancho de un portátil normal—
+          y sin `flex-wrap` la última se salía 21 px por la derecha, arrastrando la barra de
+          desplazamiento horizontal a TODAS las pantallas. No se veía a 1440 ni a 375, que son
+          los dos anchos que se estaban mirando.
+        */}
         <nav
           aria-label={t('shell.menu')}
-          className="mx-auto hidden max-w-6xl gap-0.5 px-4 pb-2 sm:px-6 lg:flex"
+          className="mx-auto hidden max-w-6xl flex-wrap gap-0.5 px-4 pb-2 sm:px-6 lg:flex"
         >
           {[...NAV, ...CUENTA].map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={enlace}>

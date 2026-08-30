@@ -24,7 +24,7 @@ function Marco({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-4 p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">BusinessBrain</h1>
+        <h1 className="t-display text-ink">BusinessBrain</h1>
       </div>
       {children}
       {/* También aquí: se llega sin haber entrado, y quien no entiende la pantalla necesita

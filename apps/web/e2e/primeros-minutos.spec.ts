@@ -298,13 +298,13 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
 
   await page.getByRole('link', { name: 'Análisis', exact: true }).click();
   await page.getByRole('button', { name: /analizar ahora/i }).click();
-  await expect(page.getByText(/conclusión\(es\) nueva\(s\)/i)).toBeVisible({
+  await expect(page.getByText('conclusiones nuevas')).toBeVisible({
     timeout: 60_000,
   });
 
   // ── 10. LA RECOMENDACIÓN, como resultado del análisis ─────────────────────
   const enlacePropuestas = page.getByRole('link', {
-    name: /recomendación\(es\) para revisar/i,
+    name: 'Ver las recomendaciones',
   });
   await expect(enlacePropuestas).toBeVisible({ timeout: 30_000 });
   await enlacePropuestas.click();

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PrismaClient } from '@businessbrain/database';
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +49,44 @@ const unique = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 const PASSWORD = 'contrasena-de-prueba';
+
+/**
+ * El código de seis dígitos, calculado como lo calcularía el móvil de quien administra.
+ *
+ * RFC 6238 sobre el secreto en base32. Se implementa aquí en vez de importar el del backend
+ * a propósito: si la prueba usara la misma función que el producto, un error compartido las
+ * pondría de acuerdo a las dos.
+ */
+function totp(secretBase32: string): string {
+  const alfabeto = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const limpio = secretBase32.toUpperCase().replace(/[\s=]/g, '');
+  const bytes: number[] = [];
+  let bits = 0;
+  let valor = 0;
+  for (const caracter of limpio) {
+    valor = (valor << 5) | alfabeto.indexOf(caracter);
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((valor >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+
+  const contador = Math.floor(Date.now() / 1000 / 30);
+  const mensaje = Buffer.alloc(8);
+  mensaje.writeUInt32BE(0, 0);
+  mensaje.writeUInt32BE(contador >>> 0, 4);
+
+  const digest = createHmac('sha1', Buffer.from(bytes)).update(mensaje).digest();
+  const desplazamiento = digest[digest.length - 1] & 15;
+  const truncado =
+    ((digest[desplazamiento] & 127) << 24) |
+    ((digest[desplazamiento + 1] & 255) << 16) |
+    ((digest[desplazamiento + 2] & 255) << 8) |
+    (digest[desplazamiento + 3] & 255);
+
+  return String(truncado % 1_000_000).padStart(6, '0');
+}
 
 /** Una PYME recién creada, con su empresa, desde la interfaz. */
 async function empresaNueva(page: Page): Promise<{ empresa: string }> {
@@ -231,6 +270,67 @@ test('en un teléfono no hay ninguna sección escondida', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
   await expect(menu).toBeFocused();
+});
+
+/**
+ * Las siete pantallas del panel de operación, con su encabezado y su título de pestaña.
+ *
+ * La suite de la Fase 8 comprobó esto en el producto de cliente y dejó el panel fuera. No es
+ * una pantalla interna sin consecuencias: es donde se administra la plataforma entera, quien
+ * la usa la tiene abierta todo el día en varias pestañas, y `/platform/account` es además la
+ * única puerta para activar el segundo factor.
+ */
+test('el panel de operación también dice dónde estás en cada una de sus pantallas', async ({
+  page,
+}) => {
+  const email = `panel-${unique()}@test.local`;
+
+  await page.goto('/login');
+  await page.getByRole('button', { name: /crear una/i }).click();
+  await page.getByLabel('Nombre').fill('Operación BusinessBrain');
+  await page.getByLabel('Correo').fill(email);
+  await page.getByLabel('Contraseña').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Crear cuenta' }).click();
+  await expect(
+    page.getByRole('heading', { name: /bienvenido a businessbrain/i }),
+  ).toBeVisible();
+
+  // No existe ruta para concederse el rol de plataforma, y no debe existir.
+  await prisma.user.update({
+    where: { email },
+    data: { platformRole: 'SUPERADMIN' },
+  });
+
+  // Sin segundo factor solo se llega a la cuenta, así que se activa primero: es la puerta.
+  await page.goto('/platform/account');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Mi cuenta' }),
+  ).toBeVisible();
+  await expect(page).toHaveTitle('Mi cuenta · BusinessBrain');
+
+  await page.getByRole('button', { name: 'Activar', exact: true }).click();
+  const clave = (await page.locator('code').first().innerText()).trim();
+  await page.getByLabel('Código de 6 dígitos').fill(totp(clave));
+  await page.getByRole('button', { name: /confirmar y activar/i }).click();
+  await page.getByRole('button', { name: /los he guardado/i }).click();
+
+  for (const [enlace, encabezado, titulo] of [
+    ['Inicio', 'Estado de la plataforma', 'Inicio · BusinessBrain'],
+    ['Asistente', 'Asistente de operación', 'Asistente · BusinessBrain'],
+    ['Empresas', 'Empresas', 'Empresas · BusinessBrain'],
+    ['Personas', 'Personas', 'Personas · BusinessBrain'],
+    ['Mis accesos', 'Mis accesos', 'Mis accesos · BusinessBrain'],
+    ['Registro', 'Registro de administración', 'Registro · BusinessBrain'],
+    ['Mi cuenta', 'Mi cuenta', 'Mi cuenta · BusinessBrain'],
+  ] as const) {
+    await page.getByRole('link', { name: enlace, exact: true }).click();
+
+    const h1 = page.getByRole('heading', { level: 1 });
+    await expect(h1).toHaveCount(1);
+    await expect(h1).toHaveText(encabezado);
+    await expect(page).toHaveTitle(titulo);
+    await expect(page.getByRole('main')).toBeVisible();
+  }
 });
 
 test('a quien administra la plataforma sin segundo factor se le explica, no se le da un error', async ({

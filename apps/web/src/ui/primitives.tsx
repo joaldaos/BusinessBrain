@@ -231,7 +231,7 @@ export function StatusPill({
  * definiciones parecidas acaban divergiendo en el borde de foco, que es justo lo que se nota.
  */
 export const fieldClass =
-  'w-full rounded-md border border-line bg-surface px-3 py-2 t-body text-ink outline-none transition-colors placeholder:text-faint hover:border-line-strong focus:border-accent disabled:bg-sunken disabled:text-muted';
+  'w-full rounded-md border border-field-line bg-surface px-3 py-2 t-body text-ink outline-none transition-colors placeholder:text-faint hover:border-ink-soft focus:border-accent focus:ring-1 focus:ring-accent disabled:border-line disabled:bg-sunken disabled:text-muted';
 
 export function Field({
   label,

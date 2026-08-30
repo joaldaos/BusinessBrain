@@ -154,6 +154,9 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
 
   // ── 6. OBJETIVO ───────────────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Objetivos', exact: true }).click();
+  // Declarar un objetivo es una acción, no el contenido de la pantalla: el formulario está
+  // detrás de su botón desde que Objetivos enseña primero los objetivos que ya existen.
+  await page.getByRole('button', { name: 'Crear objetivo' }).click();
   await page.getByLabel('Objetivo').fill('El margen comercial no debe bajar del 30 %.');
   await page.getByRole('button', { name: 'Declarar' }).click();
   await expect(page.getByText('confirmado')).toBeVisible();
@@ -161,9 +164,12 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   // ── 7. ANÁLISIS ───────────────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Análisis', exact: true }).click();
   await page.getByRole('button', { name: /analizar ahora/i }).click();
-  await expect(page.getByText(/conclusión\(es\) nueva\(s\)/i)).toBeVisible({
+  // El resultado, como cifra y con lo que significa debajo: era una frase de una línea que
+  // desaparecía al recargar, y ahora es lo primero de la pantalla.
+  await expect(page.getByText('conclusiones nuevas')).toBeVisible({
     timeout: 60_000,
   });
+  await expect(page.getByRole('link', { name: 'Ver la comprensión' })).toBeVisible();
 
   // ── 8. COMPRENSIÓN visible ────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Comprensión', exact: true }).click();
@@ -183,9 +189,10 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
 
   // ── 11. INFORME ───────────────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Informes', exact: true }).click();
+  await page.getByRole('button', { name: 'Crear informe' }).click();
   await page.getByLabel('Nombre del informe').fill('Resumen semanal');
-  await page.getByRole('button', { name: /crear informe/i }).click();
-  await expect(page.getByText('Informes (1)')).toBeVisible();
+  await page.getByRole('button', { name: 'Guardar informe' }).click();
+  await expect(page.getByText('Resumen semanal')).toBeVisible();
 
   // ── 12. PDF descargado de verdad ──────────────────────────────────────────
   const download = page.waitForEvent('download', { timeout: 60_000 });
@@ -214,11 +221,12 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
 
   // ── 14. AUTOMATIZACIÓN que lo encadena todo sin nadie delante ─────────────
   await page.getByRole('link', { name: 'Automatizaciones', exact: true }).click();
+  await page.getByRole('button', { name: 'Crear automatización' }).click();
   await page.getByLabel('Nombre').fill('Barrido semanal');
   await page
     .getByLabel('Fuente a sincronizar')
     .selectOption({ label: 'Política de descuentos' });
-  await page.getByRole('button', { name: 'Crear', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar automatización' }).click();
   await expect(page.getByText('Barrido semanal')).toBeVisible();
   await expect(
     // Lo que hará la automatización, dicho en castellano. Antes esta prueba afirmaba
@@ -229,7 +237,8 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
 
   // Y se ejecuta: conocimiento, comprensión e informe, sin intervención.
   await page.getByRole('button', { name: /ejecutar ahora/i }).click();
-  await page.getByRole('button', { name: 'Ejecuciones' }).click();
+  // Las ejecuciones se abren solas al lanzarla: pulsar "Ejecutar ahora" y que no cambie nada
+  // en pantalla dejaba dudando de si había pasado algo.
   // En castellano: la pantalla ya no pinta la constante interna del backend.
   await expect(page.getByText('correcto').first()).toBeVisible({
     timeout: 60_000,

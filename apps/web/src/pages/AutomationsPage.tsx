@@ -9,14 +9,15 @@ import {
   type Report,
 } from '../api/types';
 import {
-  Badge,
   Button,
-  Card,
-  Empty,
+  DataState,
+  EmptyState,
   ErrorNote,
   Field,
-  inputClass,
+  fieldClass,
   PageHeader,
+  Section,
+  StatusPill,
   useAction,
   useFormatDate,
   usePageTitle,
@@ -45,12 +46,24 @@ const SCHEDULES: { label: TranslationKey; cron: string }[] = [
  * escribir un plan libre** a propósito: si aceptara JSON arbitrario, el usuario podría
  * componer algo que la API rechaza, y peor aún, daría a entender que se puede automatizar
  * cualquier cosa. Una automatización solo orquesta capacidades internas que ya existen.
+ *
+ * ## Qué cambió en la Fase 8.1
+ *
+ * La pantalla abría con el formulario de crear —seis campos— y debajo una lista donde cada
+ * automatización se resumía en una línea con `0 8 * * 1` escrito tal cual. Un dueño de
+ * panadería no tiene por qué saber leer una expresión de cron, y ese texto era literalmente
+ * la única indicación de cuándo iba a pasar algo.
+ *
+ * Ahora cada automatización dice en castellano qué hace, cuándo lo vuelve a hacer y cómo le
+ * fue la última vez. El formulario está detrás de la acción de cabecera: crear una es algo
+ * que se hace una vez, no cada vez que se entra.
  */
 export function AutomationsPage() {
   const { role } = useAuth();
   const t = useT();
   usePageTitle('nav.automations');
   const canAdmin = hasRole(role, 'ADMIN');
+  const [creando, setCreando] = useState(false);
 
   const automations = useResource(() => api<Automation[]>('/automations'));
   const reports = useResource(() => api<Report[]>('/reports'));
@@ -62,31 +75,55 @@ export function AutomationsPage() {
     (source) => source.type === 'WEBSITE',
   );
 
+  const lista = automations.data ?? [];
+
+  const crear = canAdmin ? (
+    <Button variant="primary" onClick={() => setCreando(true)}>
+      {t('automations.new.open')}
+    </Button>
+  ) : undefined;
+
   return (
     <>
-      <PageHeader title={t('nav.automations')} description={t('page.automations.subtitle')} />
+      <PageHeader
+        title={t('nav.automations')}
+        description={t('page.automations.subtitle')}
+        actions={lista.length > 0 && !creando ? crear : undefined}
+      />
 
-      {canAdmin && (
-        <CreateCard
-          reports={reports.data ?? []}
-          sources={syncable}
-          onCreated={automations.reload}
-        />
+      {creando && (
+        <div className="mb-4">
+          <CreateCard
+            reports={reports.data ?? []}
+            sources={syncable}
+            onCancel={() => setCreando(false)}
+            onCreated={() => {
+              setCreando(false);
+              automations.reload();
+            }}
+          />
+        </div>
       )}
 
-      <Card
-        title={t('automations.title', {
-          count: automations.data?.length ?? 0,
-        })}
+      <DataState
+        loading={automations.loading}
+        error={automations.error}
+        empty={lista.length === 0 && !creando}
+        onRetry={automations.reload}
+        emptyState={
+          <Section>
+            <EmptyState
+              title={t('automations.empty.title')}
+              action={crear}
+              footnote={canAdmin ? undefined : t('automations.empty.needsAdmin')}
+            >
+              {t('automations.empty.body')}
+            </EmptyState>
+          </Section>
+        }
       >
-        <ErrorNote error={automations.error} />
-        {automations.loading && <Empty>{t('common.loading')}</Empty>}
-        {!automations.loading && (automations.data?.length ?? 0) === 0 && (
-          <Empty>{t('automations.empty')}</Empty>
-        )}
-
-        <ul className="space-y-3">
-          {automations.data?.map((automation) => (
+        <ul className="space-y-4">
+          {lista.map((automation) => (
             <AutomationRow
               key={automation.id}
               automation={automation}
@@ -95,7 +132,7 @@ export function AutomationsPage() {
             />
           ))}
         </ul>
-      </Card>
+      </DataState>
     </>
   );
 }
@@ -103,10 +140,12 @@ export function AutomationsPage() {
 function CreateCard({
   reports,
   sources,
+  onCancel,
   onCreated,
 }: {
   reports: Report[];
   sources: KnowledgeSource[];
+  onCancel: () => void;
   onCreated: () => void;
 }) {
   const t = useT();
@@ -120,9 +159,12 @@ function CreateCard({
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return (
-    <Card title={t('automations.new.title')}>
+    <Section
+      title={t('automations.new.title')}
+      description={t('automations.new.governance')}
+    >
       <form
-        className="space-y-3"
+        className="space-y-4"
         onSubmit={action.onSubmit(async () => {
           const actions: {
             type: string;
@@ -155,48 +197,45 @@ function CreateCard({
           onCreated();
         })}
       >
-        <div className="flex flex-wrap gap-2">
-          <div className="min-w-56 flex-1">
-            <Field label={t('automations.new.name')}>
-              <input
-                className={inputClass}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('automations.new.namePlaceholder')}
-                required
-              />
-            </Field>
-          </div>
-          <div className="min-w-56">
-            <Field
-              label={t('automations.new.when')}
-              hint={t('automations.new.timezone', { timezone })}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t('automations.new.name')}>
+            <input
+              className={fieldClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('automations.new.namePlaceholder')}
+              autoFocus
+              required
+            />
+          </Field>
+          <Field
+            label={t('automations.new.when')}
+            hint={t('automations.new.timezone', { timezone })}
+          >
+            <select
+              className={fieldClass}
+              value={cron}
+              onChange={(e) => setCron(e.target.value)}
             >
-              <select
-                className={inputClass}
-                value={cron}
-                onChange={(e) => setCron(e.target.value)}
-              >
-                {SCHEDULES.map((schedule) => (
-                  <option key={schedule.cron} value={schedule.cron}>
-                    {t(schedule.label)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+              {SCHEDULES.map((schedule) => (
+                <option key={schedule.cron} value={schedule.cron}>
+                  {t(schedule.label)}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
 
-        <fieldset className="space-y-1">
-          <legend className="t-fine font-medium text-ink-soft">
+        <fieldset className="space-y-2.5 rounded-md bg-sunken p-4">
+          <legend className="t-micro text-muted">
             {t('automations.new.whatItDoes')}
           </legend>
           {sources.length > 0 && (
-            <label className="flex flex-wrap items-center gap-2 t-small">
+            <label className="flex flex-wrap items-center gap-2 t-small text-ink-soft">
               <span>{t('automations.new.reread')}</span>
               <select
                 aria-label={t('automations.new.sourceLabel')}
-                className={`${inputClass} max-w-64`}
+                className={`${fieldClass} max-w-64`}
                 value={sourceId}
                 onChange={(e) => setSourceId(e.target.value)}
               >
@@ -209,18 +248,19 @@ function CreateCard({
               </select>
             </label>
           )}
-          <label className="flex items-center gap-2 t-small">
+          <label className="flex items-center gap-2 t-small text-ink-soft">
             <input
               type="checkbox"
+              className="h-4 w-4 accent-accent"
               checked={analyze}
               onChange={(e) => setAnalyze(e.target.checked)}
             />
             {t('automations.new.analyze')}
           </label>
-          <label className="flex flex-wrap items-center gap-2 t-small">
+          <label className="flex flex-wrap items-center gap-2 t-small text-ink-soft">
             <span>{t('automations.new.andReport')}</span>
             <select
-              className={`${inputClass} max-w-64`}
+              className={`${fieldClass} max-w-64`}
               value={reportId}
               onChange={(e) => setReportId(e.target.value)}
             >
@@ -232,20 +272,24 @@ function CreateCard({
               ))}
             </select>
           </label>
-          <p className="t-fine text-muted">
-            {t('automations.new.governance')}
-          </p>
         </fieldset>
 
         <ErrorNote error={action.error} />
-        <Button
-          type="submit"
-          disabled={action.busy || (!analyze && !reportId && !sourceId)}
-        >
-          {t('common.create')}
-        </Button>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={action.busy || (!analyze && !reportId && !sourceId)}
+          >
+            {t('automations.new.submit')}
+          </Button>
+          <Button type="button" onClick={onCancel}>
+            {t('automations.new.cancel')}
+          </Button>
+        </div>
       </form>
-    </Card>
+    </Section>
   );
 }
 
@@ -273,9 +317,9 @@ function AutomationRow({
 
   const tone =
     automation.status === 'ACTIVE'
-      ? 'good'
+      ? 'positive'
       : automation.status === 'ERROR'
-        ? 'bad'
+        ? 'danger'
         : 'neutral';
 
   /** `RUN_ANALYSIS` no le dice nada a nadie. Un tipo desconocido se muestra tal cual. */
@@ -285,19 +329,87 @@ function AutomationRow({
     return texto === clave ? type : texto;
   };
 
-  return (
-    <li className="rounded border border-line p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="t-small font-medium">{automation.name}</span>
-        <Badge tone={tone}>{labels.automationStatus(automation.status)}</Badge>
-        <span className="t-fine text-muted">
-          {automation.actions.map((a) => describeAction(a.type)).join(' → ')}
-        </span>
+  /**
+   * Cuándo se ejecuta, en castellano.
+   *
+   * `0 8 * * 1` es la expresión que entiende el planificador, no una frase. Se busca en los
+   * horarios que ofrece la propia pantalla; solo si alguien creó la automatización por API
+   * con un horario que no está en la lista se enseña la expresión, porque decir "programada"
+   * a secas sería peor que decir algo técnico.
+   */
+  const cuando = () => {
+    const cron = automation.triggerConfig.cron;
+    if (!cron) return t('automations.manual');
+    const conocido = SCHEDULES.find((schedule) => schedule.cron === cron);
+    return conocido
+      ? t(conocido.label)
+      : t('automations.scheduled', {
+          cron,
+          timezone: automation.triggerConfig.timezone ?? '',
+        });
+  };
 
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setOpen(!open)}>
-            {open ? t('automations.runs.hide') : t('automations.runs')}
-          </Button>
+  const veces = automation._count?.runs ?? 0;
+
+  return (
+    <li>
+      <Section
+        title={automation.name}
+        actions={
+          <StatusPill tone={tone}>
+            {labels.automationStatus(automation.status)}
+          </StatusPill>
+        }
+      >
+        {/*
+          Qué hace y cuándo, como dos hechos legibles. Antes era una línea con el estado, la
+          cadena de acciones, la expresión de cron, la última ejecución y la próxima, todo
+          seguido y separado por puntos medios.
+        */}
+        <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+          <div>
+            <dt className="t-micro text-muted">{t('automations.does')}</dt>
+            <dd className="mt-1 t-body text-ink">
+              {automation.actions.map((a) => describeAction(a.type)).join(', ')}
+            </dd>
+          </div>
+          <div>
+            <dt className="t-micro text-muted">{t('automations.next')}</dt>
+            <dd className="mt-1 t-body text-ink">
+              {cuando()}
+              {automation.nextRunAt && (
+                <span className="text-muted">
+                  {' · '}
+                  {formatDate(automation.nextRunAt)}
+                </span>
+              )}
+            </dd>
+          </div>
+        </dl>
+
+        <p className="mt-3 t-fine text-muted">
+          {veces === 0
+            ? t('automations.never')
+            : `${t('automations.ranTimes', { count: veces })} · ${t(
+                'automations.lastResultAt',
+                { date: formatDate(automation.lastRunAt) },
+              )}`}
+        </p>
+
+        {automation.status === 'PAUSED' && (
+          <p className="mt-3 rounded-md bg-sunken px-3 py-2 t-small text-ink-soft">
+            {t('automations.paused.hint')}
+          </p>
+        )}
+        {automation.status === 'ERROR' && (
+          <p className="mt-3 rounded-md border border-danger/25 bg-danger-soft px-3 py-2 t-small text-danger">
+            {t('automations.error.hint')}
+          </p>
+        )}
+
+        <ErrorNote error={action.error} />
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           {canAdmin && (
             <>
               <Button
@@ -312,13 +424,13 @@ function AutomationRow({
                     .then(() => {
                       onChanged();
                       runs.reload();
+                      setOpen(true);
                     })
                 }
               >
                 {t('automations.runNow')}
               </Button>
               <Button
-                variant="secondary"
                 disabled={action.busy}
                 onClick={() =>
                   void action
@@ -342,52 +454,54 @@ function AutomationRow({
               </Button>
             </>
           )}
+          <Button
+            variant="ghost"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? t('automations.runs.hide') : t('automations.runs')}
+          </Button>
         </div>
-      </div>
 
-      <p className="mt-1 t-fine text-muted">
-        {automation.triggerConfig.cron
-          ? t('automations.scheduled', {
-              cron: automation.triggerConfig.cron,
-              timezone: automation.triggerConfig.timezone ?? '',
-            })
-          : t('automations.manual')}{' '}
-        · {t('automations.lastRun', { date: formatDate(automation.lastRunAt) })}{' '}
-        · {t('automations.nextRun', { date: formatDate(automation.nextRunAt) })}
-      </p>
-
-      <ErrorNote error={action.error} />
-
-      {open && (
-        <div className="mt-3 border-t border-line pt-2">
-          {runs.loading && <Empty>{t('common.loading')}</Empty>}
-          {!runs.loading && (runs.data?.length ?? 0) === 0 && (
-            <Empty>{t('automations.runs.empty')}</Empty>
-          )}
-          <ul className="space-y-2">
-            {runs.data?.map((run) => (
-              <li key={run.id} className="t-fine">
-                <span className="flex flex-wrap items-center gap-2">
-                  <Badge tone={run.status === 'SUCCESS' ? 'good' : 'bad'}>
-                    {labels.runStatus(run.status)}
-                  </Badge>
-                  <span className="text-muted">
-                    {formatDate(run.startedAt)}
-                  </span>
-                </span>
-                <ul className="mt-1 space-y-0.5 pl-2 text-muted">
-                  {run.logs?.map((log, index) => (
-                    <li key={index}>
-                      {describeAction(log.action)}: {log.detail}
-                    </li>
-                  ))}
-                </ul>
-                {run.error && <p className="text-danger">{run.error}</p>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {open && (
+          <div className="mt-4 border-t border-line pt-4">
+            <DataState
+              loading={runs.loading}
+              error={runs.error}
+              empty={(runs.data?.length ?? 0) === 0}
+              emptyMessage={t('automations.runs.empty')}
+              skeleton={2}
+            >
+              <ul className="space-y-3">
+                {runs.data?.map((run) => (
+                  <li key={run.id}>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <StatusPill
+                        tone={run.status === 'SUCCESS' ? 'positive' : 'danger'}
+                      >
+                        {labels.runStatus(run.status)}
+                      </StatusPill>
+                      <span className="t-fine text-muted">
+                        {formatDate(run.startedAt)}
+                      </span>
+                    </span>
+                    <ul className="mt-1.5 space-y-0.5 t-fine text-muted">
+                      {run.logs?.map((log, index) => (
+                        <li key={index}>
+                          {describeAction(log.action)}: {log.detail}
+                        </li>
+                      ))}
+                    </ul>
+                    {run.error && (
+                      <p className="mt-1 t-fine text-danger">{run.error}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </DataState>
+          </div>
+        )}
+      </Section>
     </li>
   );
 }

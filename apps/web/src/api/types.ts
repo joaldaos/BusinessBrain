@@ -173,19 +173,37 @@ export interface BusinessObjective {
   createdAt: string;
 }
 
+/**
+ * Una ejecución del motor de análisis.
+ *
+ * ## Dos formas, y por eso casi todo es opcional
+ *
+ * `POST /analysis-runs` devuelve el RESUMEN de lo que acaba de hacer —`analysisRunId`,
+ * `insightsAlreadyKnown`, `recommendationsProposed`— y ninguna fecha. `GET /analysis-runs`
+ * devuelve las FILAS guardadas, que traen fechas y `insightsSuperseded` pero no saben nada de
+ * recomendaciones. Quien lea esto tiene que contar con que el campo que busca puede no venir.
+ *
+ * `finishedAt` no existe y nunca existió: la columna se llama `completedAt`. La pantalla de
+ * Análisis leía `finishedAt` y por eso la columna "Fin" salió vacía desde el primer día sin
+ * que nadie lo notara — el tipo la declaraba opcional y TypeScript no tenía nada que objetar.
+ */
 export interface AnalysisRun {
   id?: string;
   analysisRunId?: string;
   status: string;
   candidatesGenerated?: number;
   insightsCreated?: number;
+  /** Solo en la respuesta del disparo. */
   insightsAlreadyKnown?: number;
+  /** Conclusiones que sustituyeron a una anterior. Solo en las filas guardadas. */
+  insightsSuperseded?: number;
   /** Propuestas creadas en esta ejecución. Ninguna ejecuta nada: esperan decisión humana. */
   recommendationsProposed?: number;
   trigger?: string;
   startedAt?: string;
-  finishedAt?: string;
+  completedAt?: string;
   createdAt?: string;
+  error?: string | null;
 }
 
 export interface Automation {

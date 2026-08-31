@@ -121,6 +121,8 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   ).toBeVisible();
 
   // ── 3. FUENTE WEB con una URL ─────────────────────────────────────────────
+  // El formulario de nueva fuente se abre desde su acción: no está siempre desplegado.
+  await page.getByRole('button', { name: 'Añadir una fuente' }).click();
   await page.getByLabel('Tipo de fuente').selectOption('WEBSITE');
   await page.getByLabel('Nueva fuente').fill('Política de descuentos');
   await page.getByLabel('Dirección web').fill(pageUrl);
@@ -224,7 +226,7 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await page.getByRole('button', { name: 'Crear automatización' }).click();
   await page.getByLabel('Nombre').fill('Barrido semanal');
   await page
-    .getByLabel('Fuente a sincronizar')
+    .getByLabel('Fuente que se volverá a leer')
     .selectOption({ label: 'Política de descuentos' });
   await page.getByRole('button', { name: 'Guardar automatización' }).click();
   await expect(page.getByText('Barrido semanal')).toBeVisible();

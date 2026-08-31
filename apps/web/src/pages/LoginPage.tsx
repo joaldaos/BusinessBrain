@@ -100,10 +100,10 @@ export function LoginPage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-4 p-6">
+    <main className="mx-auto flex min-h-full max-w-sm flex-col justify-center gap-5 p-6">
       <div>
         <h1 className="t-display text-ink">BusinessBrain</h1>
-        <p className="mt-1 t-small text-muted">{t('login.tagline')}</p>
+        <p className="mt-1.5 t-lead text-muted">{t('login.tagline')}</p>
         {invitation && (
           <p className="mt-2 t-small text-accent">{t('login.invited')}</p>
         )}
@@ -117,7 +117,7 @@ export function LoginPage() {
       {mfaToken ? (
         <form
           onSubmit={submitMfa}
-          className="space-y-3 rounded-lg border border-line bg-surface p-4"
+          className="space-y-4 rounded-lg border border-line bg-surface p-6 shadow-card"
         >
           <div>
             <h2 className="t-small font-semibold">{t('mfa.login.title')}</h2>
@@ -143,12 +143,12 @@ export function LoginPage() {
 
           <ErrorNote error={action.error} />
 
-          <Button type="submit" disabled={action.busy} className="w-full">
+          <Button type="submit" variant="primary" disabled={action.busy} className="w-full">
             {action.busy ? t('common.moment') : t('mfa.login.submit')}
           </Button>
         </form>
       ) : (
-      <form onSubmit={submit} className="space-y-3 rounded-lg border border-line bg-surface p-4">
+      <form onSubmit={submit} className="space-y-4 rounded-lg border border-line bg-surface p-6 shadow-card">
         {mode === 'register' && (
           <Field label={t('login.name')}>
             <input
@@ -191,7 +191,7 @@ export function LoginPage() {
           </p>
         )}
 
-        <Button type="submit" disabled={action.busy} className="w-full">
+        <Button type="submit" variant="primary" disabled={action.busy} className="w-full">
           {action.busy
             ? t('common.moment')
             : mode === 'login'
@@ -201,7 +201,7 @@ export function LoginPage() {
 
         <button
           type="button"
-          className="w-full text-center t-fine text-muted underline"
+          className="w-full text-center t-small font-medium text-accent"
           onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
         >
           {mode === 'login' ? t('login.toRegister') : t('login.toLogin')}
@@ -211,7 +211,7 @@ export function LoginPage() {
         {mode === 'login' && (
           <Link
             to="/recuperar"
-            className="block text-center t-fine text-muted underline"
+            className="block text-center t-fine text-muted underline underline-offset-2"
           >
             {t('login.forgot')}
           </Link>

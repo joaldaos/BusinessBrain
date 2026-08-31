@@ -50,7 +50,8 @@ export const es = {
 
   'page.insights.subtitle': 'Lo que BusinessBrain ha entendido de tus documentos. Cada conclusión dice de dónde sale y si sigue vigente.',
   'page.objectives.subtitle': 'Lo que tu empresa quiere conseguir. Sin objetivos, el sistema describe lo que pasa pero no puede decirte si importa.',
-  'page.analysis.subtitle': 'Pídele al motor que razone ahora sobre todo lo que tiene. De aquí salen las conclusiones y las recomendaciones.',
+  'page.analysis.subtitle':
+    'Pídele a BusinessBrain que repase todo lo que ha leído y te diga qué ha encontrado.',
   'page.recommendations.subtitle': 'Qué te conviene hacer, con el porqué delante. Tú decides: aceptar, descartar o dejarlo para más adelante.',
   'page.automations.subtitle': 'Tareas que se ejecutan solas cuando toca. Cada una deja registro de qué hizo y cuándo.',
   'page.reports.subtitle': 'Lo entendido, reunido en un documento que puedes enviar o guardar.',
@@ -88,6 +89,10 @@ export const es = {
   'settings.section.team': 'Equipo y accesos',
 
   // ── Navegación ───────────────────────────────────────────────────────────
+  'nav.group.understand': 'Entender',
+  'nav.group.decide': 'Decidir',
+  'nav.group.execute': 'Ejecutar',
+  'nav.group.account': 'Tu cuenta',
   'nav.dashboard': 'Panel',
   'nav.ask': 'Preguntar',
   'nav.knowledge': 'Conocimiento',
@@ -131,9 +136,9 @@ export const es = {
   'status.run.PARTIAL': 'parcial',
   'status.run.CANCELLED': 'cancelado',
 
-  'status.connection.PENDING': 'sin sincronizar',
+  'status.connection.PENDING': 'sin leer todavía',
   'status.connection.CONNECTED': 'conectada',
-  'status.connection.SYNCING': 'sincronizando',
+  'status.connection.SYNCING': 'leyendo',
   'status.connection.ERROR': 'con problemas',
   'status.connection.DISABLED': 'desconectada',
 
@@ -218,6 +223,23 @@ export const es = {
   'dashboard.metric.conclusions': 'Conclusiones',
   'dashboard.metric.automations': 'Automatizaciones',
   'dashboard.metric.reports': 'Informes',
+  'dashboard.todo.title': 'Lo que espera por ti',
+  'dashboard.todo.recommendations': 'Recomendaciones esperando tu decisión',
+  'dashboard.todo.recommendationsWhy':
+    'BusinessBrain las ha propuesto a partir de tus documentos. Ninguna se ejecuta sola.',
+  'dashboard.todo.disputed': 'Conclusiones que alguien ha puesto en duda',
+  'dashboard.todo.stale': 'Conclusiones cuyo documento ha cambiado',
+  'dashboard.todo.see': 'Revisar',
+  'dashboard.calm.title': 'No hay nada esperando por ti',
+  'dashboard.calm.body':
+    'BusinessBrain sigue vigilando tus documentos. Si algo cambia o encuentra algo que no encaja, aparecerá aquí.',
+  'dashboard.state.title': 'Lo que sabe de tu empresa',
+  'dashboard.state.documents': 'documentos leídos',
+  'dashboard.state.conclusions': 'conclusiones',
+  'dashboard.state.lastAnalysis': 'Último análisis el {date}',
+  'dashboard.state.neverAnalysed': 'Todavía no has lanzado ningún análisis.',
+  'dashboard.state.ask': 'Preguntar',
+  'dashboard.state.analyse': 'Analizar ahora',
   'dashboard.attention.title': 'Requiere tu atención',
   'dashboard.attention.disputedWhy':
     'Alguien validó una versión anterior y la evidencia nueva la contradice.',
@@ -232,7 +254,7 @@ export const es = {
   'dashboard.steps.source.action': 'Conecta una fuente',
   'dashboard.steps.source.why':
     'Sube documentos, una página web, tu Google Drive o una etiqueta de Gmail.',
-  'dashboard.steps.sync.action': 'Sincroniza para que aprenda',
+  'dashboard.steps.sync.action': 'Sube tu primer documento',
   'dashboard.steps.sync.why':
     'Hasta que no entre nada, BusinessBrain no sabe nada de tu empresa.',
   'dashboard.steps.ask.action': 'Hazle una pregunta',
@@ -243,18 +265,26 @@ export const es = {
     'Busca por su cuenta riesgos, anomalías y oportunidades en lo que ya sabe.',
 
   // ── Comprensión ──────────────────────────────────────────────────────────
-  'common.confidence': 'confianza {value}',
+  'common.confidence.low': 'fiabilidad baja',
+  'common.confidence.medium': 'fiabilidad media',
+  'common.confidence.high': 'fiabilidad alta',
   'insights.title': 'Conclusiones ({count})',
   'insights.empty':
     'No hay conclusiones dentro de tu alcance. Puede que no haya análisis todavía, o que no tengas acceso a las colecciones que las sostienen.',
   'insight.badge.freshEvidence': 'evidencia intacta',
   'insight.badge.evidenceChanged': 'su evidencia cambió',
-  'insight.badge.evidenceUnresolvable': 'evidencia irresoluble',
+  'insight.badge.evidenceUnresolvable': 'no se puede comprobar',
   'insight.badge.disputed': 'validación en disputa',
   'insight.badge.inherited': 'validado en una versión anterior',
   'insight.badge.curated': 'validado por una persona',
 
   // ── Análisis ─────────────────────────────────────────────────────────────
+  'analysis.found.title': 'Qué ha descubierto',
+  'analysis.found.none':
+    'Este análisis no ha encontrado nada nuevo. Es normal si desde el anterior no ha entrado conocimiento nuevo.',
+  'analysis.found.seeAll': 'Ver toda la comprensión',
+  'analysis.proposed.title': 'Y qué te propone',
+  'analysis.proposed.seeAll': 'Ver las recomendaciones',
   'analysis.last.title': 'Último análisis',
   'analysis.last.created': 'conclusiones nuevas',
   'analysis.last.updated': 'conclusiones actualizadas',
@@ -264,8 +294,6 @@ export const es = {
   'analysis.last.failed': 'El último análisis no llegó a terminar.',
   'analysis.last.nothingNew':
     'No ha encontrado nada nuevo. Es normal si desde el último análisis no ha entrado conocimiento nuevo.',
-  'analysis.seeInsights': 'Ver la comprensión',
-  'analysis.seeRecommendations': 'Ver las recomendaciones',
   'analysis.needs.title': 'Qué necesita para poder analizar',
   'analysis.needs.knowledge': 'Documentos de tu empresa',
   'analysis.needs.knowledgeWhy':
@@ -350,7 +378,7 @@ export const es = {
   'ask.noSources': 'Sin fuentes: esta respuesta no se apoya en ningún documento tuyo.',
   'ask.sources': 'Fuentes',
   'ask.sourceMissing': 'ya no está en su origen',
-  'ask.indexedAt': 'indexado {date}',
+  'ask.indexedAt': 'añadido el {date}',
 
   // ── Recomendaciones ──────────────────────────────────────────────────────
   'recs.pending.title': 'Pendientes de tu decisión ({count})',
@@ -484,7 +512,7 @@ export const es = {
   'automations.new.timezone': 'Zona horaria: {timezone}',
   'automations.new.whatItDoes': 'Qué hará',
   'automations.new.reread': 'Volver a leer',
-  'automations.new.sourceLabel': 'Fuente a sincronizar',
+  'automations.new.sourceLabel': 'Fuente que se volverá a leer',
   'automations.new.noSource': '(ninguna fuente)',
   'automations.new.analyze': 'Analizar el conocimiento y actualizar la comprensión',
   'automations.new.andReport': 'Y generar el informe',
@@ -510,6 +538,11 @@ export const es = {
   // ── Conocimiento ─────────────────────────────────────────────────────────
   'knowledge.title': 'Conocimiento de tu empresa',
   'knowledge.subtitle': 'Todo lo que BusinessBrain sabe viene de aquí. Nada se inventa: cada respuesta sale de estos documentos.',
+  'knowledge.connect.title': 'Conectar otro origen',
+  'knowledge.connect.why':
+    'Opcional. Además de subir documentos, BusinessBrain puede leer una carpeta de tu Drive o una etiqueta de tu correo.',
+  'knowledge.sources.add': 'Añadir una fuente',
+  'knowledge.sources.cancel': 'Cancelar',
   'knowledge.chain.title': 'Cómo funciona',
   'knowledge.chain.sources': 'Fuentes',
   'knowledge.chain.sourcesHint': 'De dónde llega el material: tu ordenador, una web, Drive o Gmail.',
@@ -531,7 +564,7 @@ export const es = {
 
   'knowledge.drive.title': 'Google Drive',
   'knowledge.drive.connected': 'conectado',
-  'knowledge.drive.folders': '{count} carpeta(s) sincronizándose',
+  'knowledge.drive.folders': 'carpetas conectadas: {count}',
   'knowledge.drive.permission':
     'BusinessBrain pedirá permiso de SOLO LECTURA sobre tu Drive. Nunca escribe ni modifica nada, y puedes retirarlo cuando quieras.',
   'knowledge.drive.connect': 'Conectar Google Drive',
@@ -539,13 +572,13 @@ export const es = {
   'knowledge.gmail.title': 'Gmail',
   'knowledge.gmail.active': 'activa',
   'knowledge.gmail.unknownAccount': 'cuenta no identificada',
-  'knowledge.gmail.labels': '{count} etiqueta(s) sincronizándose',
+  'knowledge.gmail.labels': 'etiquetas conectadas: {count}',
   'knowledge.gmail.revoked': 'revocada',
   'knowledge.gmail.revokedExplain':
     'El acceso a {account} se retiró. Lo que ya se había leído sigue disponible; para volver a recibir correo nuevo, conéctala otra vez.',
   'knowledge.gmail.thatAccount': 'esa cuenta',
   'knowledge.gmail.permission':
-    'BusinessBrain pedirá permiso de SOLO LECTURA sobre tu correo. Nunca envía ni modifica nada. Solo entrará la etiqueta que elijas, y el correo indexado irá a una colección de acceso restringido: conectar Gmail no lo hace visible a toda la organización.',
+    'BusinessBrain pedirá permiso de SOLO LECTURA sobre tu correo. Nunca envía ni modifica nada. Solo entra la etiqueta que elijas, y va a una colección restringida: conectar Gmail no lo abre a toda la empresa.',
   'knowledge.gmail.connect': 'Conectar Gmail',
   'knowledge.disconnect': 'Desconectar',
 
@@ -580,30 +613,30 @@ export const es = {
     'El correo exige una colección RESTRINGIDA: elige una a la que no tenga acceso toda la organización.',
   'knowledge.sources.create': 'Crear fuente',
 
-  'knowledge.source.lastSync': 'última sincronización {date}',
-  'knowledge.source.stats': '{created} nuevo(s), {updated} actualizado(s)',
-  'knowledge.source.statsFailed': ', {failed} con error',
+  'knowledge.source.lastSync': 'última lectura {date}',
+  'knowledge.source.stats': 'nuevos: {created} · actualizados: {updated}',
+  'knowledge.source.statsFailed': ' · no se pudieron leer: {failed}',
   'knowledge.source.notRetrievable':
-    '{count} sin indexar para búsqueda: vuelve a sincronizar',
-  'knowledge.source.syncing': 'Sincronizando…',
+    '{count} no se pueden consultar todavía: vuelve a leer la fuente',
+  'knowledge.source.syncing': 'Leyendo…',
   'knowledge.source.readPage': 'Leer la página',
-  'knowledge.source.sync': 'Sincronizar',
+  'knowledge.source.sync': 'Volver a leer',
   'knowledge.source.uploading': 'Subiendo…',
   'knowledge.source.upload': 'Subir documento',
   'knowledge.upload.failed':
     'No hemos podido subir este documento. Revísalo y vuelve a intentarlo.',
   'knowledge.upload.unreadable':
     'No hemos podido leer {file}. Revísalo y vuelve a intentarlo.',
-  'knowledge.upload.indexed': '{file} indexado y listo para preguntar.',
+  'knowledge.upload.indexed': '{file} ya está dentro y se puede preguntar.',
   'knowledge.upload.duplicate': '{file} ya estaba: no se ha duplicado.',
 
   'knowledge.items.title': 'Documentos ({count})',
-  'knowledge.items.empty': 'Aún no hay documentos indexados.',
+  'knowledge.items.empty': 'Todavía no ha entrado ningún documento.',
   'knowledge.items.column.title': 'Título',
   'knowledge.items.column.area': 'Área',
   'knowledge.items.column.status': 'Estado',
-  'knowledge.items.column.confidence': 'Confianza',
-  'knowledge.items.column.indexed': 'Indexado',
+  'knowledge.items.column.confidence': 'Fiabilidad',
+  'knowledge.items.column.indexed': 'Añadido',
   'knowledge.items.missingAtSource': 'ya no está en su origen',
 
   // ── Configuración: IA ────────────────────────────────────────────────────

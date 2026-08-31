@@ -23,6 +23,7 @@ import {
   inputClass,
   useAction,
   useFormatDate,
+  useFormatDay,
   usePageTitle,
   useResource,
 } from '../components/ui';
@@ -51,7 +52,7 @@ export function KnowledgePage() {
   const { role } = useAuth();
   const t = useT();
   const labels = useLabels();
-  const formatDate = useFormatDate();
+  const formatDay = useFormatDay();
   const canAdmin = hasRole(role, 'ADMIN');
   usePageTitle('nav.knowledge');
 
@@ -78,6 +79,7 @@ export function KnowledgePage() {
   const indexados = (items.data ?? []).filter(
     (item) => item.status === 'INDEXED',
   ).length;
+  const hayArea = (items.data ?? []).some((item) => item.businessArea);
 
   return (
     <>
@@ -102,20 +104,27 @@ export function KnowledgePage() {
         onCreated={collections.reload}
       />
 
+      {/*
+        Drive y Gmail son OPCIONALES, y hasta ahora ocupaban dos tarjetas a ancho completo,
+        con el mismo peso que las colecciones y las fuentes. Quien entraba veía cinco bloques
+        idénticos y no tenía forma de saber cuáles hacen falta y cuáles son un extra.
+      */}
       {canAdmin && (
-        <GoogleDriveCard
-          drive={drive}
-          error={integrations.error}
-          onChanged={integrations.reload}
-        />
-      )}
-
-      {canAdmin && (
-        <GmailCard
-          gmail={gmailAny}
-          error={integrations.error}
-          onChanged={integrations.reload}
-        />
+        <Card title={t('knowledge.connect.title')}>
+          <p className="mb-4 t-small text-muted">{t('knowledge.connect.why')}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <GoogleDriveCard
+              drive={drive}
+              error={integrations.error}
+              onChanged={integrations.reload}
+            />
+            <GmailCard
+              gmail={gmailAny}
+              error={integrations.error}
+              onChanged={integrations.reload}
+            />
+          </div>
+        </Card>
       )}
 
       <SourcesCard
@@ -145,7 +154,9 @@ export function KnowledgePage() {
           <Table
             head={[
               t('knowledge.items.column.title'),
-              t('knowledge.items.column.area'),
+              // "Área" solo cuando alguna la tiene. Una columna entera vacía en la tabla
+              // principal de la pantalla es ruido con encabezado.
+              ...(hayArea ? [t('knowledge.items.column.area')] : []),
               t('knowledge.items.column.status'),
               t('knowledge.items.column.confidence'),
               t('knowledge.items.column.indexed'),
@@ -154,9 +165,11 @@ export function KnowledgePage() {
             {items.data?.map((item) => (
               <tr key={item.id}>
                 <td className="px-5 py-3 t-body">{item.title}</td>
-                <td className="px-5 py-3 t-small text-muted">
-                  {item.businessArea}
-                </td>
+                {hayArea && (
+                  <td className="px-5 py-3 t-small text-muted">
+                    {item.businessArea}
+                  </td>
+                )}
                 <td className="px-5 py-3">
                   <span className="flex flex-wrap items-center gap-1">
                     <Badge tone={item.status === 'INDEXED' ? 'good' : 'neutral'}>
@@ -171,11 +184,12 @@ export function KnowledgePage() {
                     )}
                   </span>
                 </td>
-                <td className="px-5 py-3 t-figure t-small text-muted">
-                  {item.confidenceScore?.toFixed(2) ?? '—'}
+                {/* En palabras: "0.57" no le dice a nadie si puede fiarse del documento. */}
+                <td className="px-5 py-3 t-small text-muted">
+                  {labels.confidence(item.confidenceScore)}
                 </td>
                 <td className="px-5 py-3 t-small text-muted">
-                  {formatDate(item.indexedAt)}
+                  {formatDay(item.indexedAt)}
                 </td>
               </tr>
             ))}
@@ -374,7 +388,10 @@ function GoogleDriveCard({
   const action = useAction();
 
   return (
-    <Card title={t('knowledge.drive.title')}>
+    <div className="rounded-md border border-line p-4">
+      <h3 className="mb-2 t-body font-medium text-ink">
+        {t('knowledge.drive.title')}
+      </h3>
       <ErrorNote error={error ?? action.error} />
 
       {drive ? (
@@ -418,7 +435,7 @@ function GoogleDriveCard({
           </Button>
         </>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -445,7 +462,10 @@ function GmailCard({
   const activa = gmail?.status === 'CONNECTED';
 
   return (
-    <Card title={t('knowledge.gmail.title')}>
+    <div className="rounded-md border border-line p-4">
+      <h3 className="mb-2 t-body font-medium text-ink">
+        {t('knowledge.gmail.title')}
+      </h3>
       <ErrorNote error={error ?? action.error} />
 
       {activa ? (
@@ -508,7 +528,7 @@ function GmailCard({
           </Button>
         </>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -538,6 +558,7 @@ function SourcesCard({
   const [url, setUrl] = useState('');
   const [folderId, setFolderId] = useState('');
   const [labelId, setLabelId] = useState('');
+  const [anadiendo, setAnadiendo] = useState(false);
   const create = useAction();
 
   // Las carpetas se piden solo cuando hacen falta: listar el Drive de alguien sin que lo
@@ -559,7 +580,16 @@ function SourcesCard({
   );
 
   return (
-    <Card title={t('knowledge.sources.title')}>
+    <Card
+      title={t('knowledge.sources.title')}
+      actions={
+        !anadiendo ? (
+          <Button onClick={() => setAnadiendo(true)}>
+            {t('knowledge.sources.add')}
+          </Button>
+        ) : undefined
+      }
+    >
       <ErrorNote error={error ?? create.error} />
       {loading && <Empty>{t('common.loading')}</Empty>}
 
@@ -574,8 +604,9 @@ function SourcesCard({
         )}
       </ul>
 
+      {anadiendo && (
       <form
-        className="flex flex-wrap items-end gap-2 border-t border-line pt-3"
+        className="flex flex-wrap items-end gap-2 border-t border-line pt-4"
         onSubmit={create.onSubmit(async () => {
           const connectorKey = {
             FILE_UPLOAD: 'file_upload_v1',
@@ -623,6 +654,7 @@ function SourcesCard({
           setUrl('');
           setFolderId('');
           setLabelId('');
+          setAnadiendo(false);
           onChanged();
         })}
       >
@@ -770,10 +802,18 @@ function SourcesCard({
             </select>
           </Field>
         </div>
-        <Button type="submit" disabled={create.busy || collections.length === 0}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={create.busy || collections.length === 0}
+        >
           {t('knowledge.sources.create')}
         </Button>
+        <Button type="button" onClick={() => setAnadiendo(false)}>
+          {t('knowledge.sources.cancel')}
+        </Button>
       </form>
+      )}
     </Card>
   );
 }

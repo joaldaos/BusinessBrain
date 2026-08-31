@@ -59,7 +59,27 @@ export function useLabels() {
       /** Si una propuesta está pendiente de decisión o ya se decidió. */
       recommendationStatus: (v: string | null | undefined) =>
         traducir('recommendation', v),
+
+      /**
+       * La fiabilidad, en palabras.
+       *
+       * El motor trabaja con un número entre 0 y 1 y es lo correcto: se compara, se ordena y
+       * se pone un listón. Pero "confianza 0.57" en pantalla no dice nada. ¿0.57 es bueno?
+       * ¿Es malo? ¿Comparado con qué? Nadie lleva en la cabeza la escala de un motor de
+       * comprensión, y la respuesta además depende de la exigencia que haya puesto la propia
+       * empresa.
+       *
+       * Tres tramos: es lo que una persona necesita para decidir si se fía o lo comprueba.
+       * Los cortes son los del propio producto —0.7 es el suelo por defecto de recuperación—
+       * y no una escala inventada aquí.
+       */
+      confidence: (valor: number | null | undefined): string => {
+        if (valor == null) return t('common.none');
+        if (valor >= 0.85) return t('common.confidence.high');
+        if (valor >= 0.7) return t('common.confidence.medium');
+        return t('common.confidence.low');
+      },
     }),
-    [traducir],
+    [traducir, t],
   );
 }

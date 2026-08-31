@@ -272,6 +272,69 @@ test('en un teléfono no hay ninguna sección escondida', async ({ page }) => {
   await expect(menu).toBeFocused();
 });
 
+test('la navegación cuenta el producto: entender, decidir y ejecutar', async ({
+  page,
+}) => {
+  await empresaNueva(page);
+
+  // A 1440 la barra lateral está a la vista y los grupos tienen rótulo. Once entradas
+  // sueltas en una fila no dicen cuáles van antes ni cuáles se usan a diario.
+  for (const grupo of ['Entender', 'Decidir', 'Ejecutar', 'Tu cuenta']) {
+    await expect(page.getByText(grupo, { exact: true })).toBeVisible();
+  }
+
+  // Cada sección vive en su grupo, y eso es lo que se comprueba: que la lista rotulada
+  // "Decidir" contiene exactamente lo que se decide.
+  const decidir = page.getByRole('list', { name: 'Decidir' });
+  for (const seccion of [
+    'Comprensión',
+    'Objetivos',
+    'Análisis',
+    'Recomendaciones',
+  ]) {
+    await expect(decidir.getByRole('link', { name: seccion })).toBeVisible();
+  }
+  await expect(decidir.getByRole('link', { name: 'Informes' })).toHaveCount(0);
+
+  // A 1024 —un portátil normal— la barra sigue a la vista y nada se sale por la derecha.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(page.getByRole('button', { name: 'Menú' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Informes' })).toBeVisible();
+
+  // Por debajo, la misma estructura detrás del botón. La comprobación importa: es donde
+  // media aplicación se volvía invisible sin que nada lo dijera.
+  for (const ancho of [375, 768]) {
+    await page.setViewportSize({ width: ancho, height: 900 });
+    const menu = page.getByRole('button', { name: 'Menú' });
+    await expect(menu).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Informes' })).toHaveCount(0);
+
+    await menu.click();
+    // Dentro del menú, no en la barra lateral: esa sigue en el DOM aunque esté oculta, y
+    // comprobar el rótulo sin acotar aprobaría con el menú cerrado.
+    const desplegado = page.locator('#menu-principal');
+    await expect(desplegado.getByText('Ejecutar', { exact: true })).toBeVisible();
+    await expect(
+      desplegado.getByRole('link', { name: 'Informes' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+  }
+
+  // Y en los cuatro anchos, cero desplazamiento horizontal.
+  for (const ancho of [375, 768, 1024, 1440]) {
+    await page.setViewportSize({ width: ancho, height: 900 });
+    await page.goto('/');
+    const desborde = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(desborde, `se sale por la derecha a ${ancho} px`).toBeLessThanOrEqual(
+      1,
+    );
+  }
+});
+
 /**
  * Las siete pantallas del panel de operación, con su encabezado y su título de pestaña.
  *

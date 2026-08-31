@@ -8,6 +8,7 @@ import type {
   Insight,
   KnowledgeItem,
   KnowledgeSource,
+  Recommendation,
   Report,
 } from '../api/types';
 import {
@@ -17,7 +18,7 @@ import {
   PageHeader,
   Section,
   Skeleton,
-  useFormatDate,
+  useFormatDay,
   usePageTitle,
   useResource,
 } from '../components/ui';
@@ -48,7 +49,7 @@ import { useLabels } from '../i18n/labels';
 export function DashboardPage() {
   const t = useT();
   const labels = useLabels();
-  const formatDate = useFormatDate();
+  const formatDay = useFormatDay();
   const { organizations, organizationId } = useAuth();
   usePageTitle('nav.dashboard');
 
@@ -59,6 +60,11 @@ export function DashboardPage() {
   const sources = useResource(() => api<KnowledgeSource[]>('/knowledge-sources'));
   const ai = useResource(() => api<AiConfiguration>('/ai-configuration'));
   const conversations = useResource(() => api<Conversation[]>('/conversations'));
+  // Lo que el sistema ha propuesto y nadie ha decidido todavía. Mismo endpoint que la
+  // pantalla de Recomendaciones: el panel no puede contar una cifra distinta de la suya.
+  const propuestasPendientes = useResource(() =>
+    api<Recommendation[]>('/recommendations?status=NEW'),
+  );
 
   const disputed =
     insights.data?.filter((insight) => insight.curation?.disputed) ?? [];
@@ -67,7 +73,33 @@ export function DashboardPage() {
 
   const empresa =
     organizations.find((org) => org.id === organizationId)?.name ?? '';
-  const cargando = sources.loading || items.loading || ai.loading;
+  const propuestas = propuestasPendientes.data ?? [];
+  /** Todo lo que espera una decisión humana. Si es cero, no hay nada que hacer hoy. */
+  const pendientes = propuestas.length + disputed.length + stale.length;
+
+  const cargando =
+    sources.loading ||
+    items.loading ||
+    ai.loading ||
+    insights.loading ||
+    propuestasPendientes.loading;
+
+  /*
+   * Los cinco primeros pasos, decididos aquí para que el resto de la pantalla sepa si la
+   * empresa está todavía arrancando.
+   *
+   * Mientras queda algún paso, el panel es un onboarding y nada más: enseñar debajo "no hay
+   * nada esperando por ti" y cuatro contadores a cero es decir tres veces lo mismo, y la
+   * primera vez ya lo dijo mejor la lista de pasos.
+   */
+  const pasos = [
+    ai.data?.ready ?? false,
+    (sources.data?.length ?? 0) > 0,
+    (items.data?.length ?? 0) > 0,
+    (conversations.data?.length ?? 0) > 0,
+    (insights.data?.length ?? 0) > 0,
+  ];
+  const arrancando = !cargando && pasos.some((hecho) => !hecho);
 
   return (
     <>
@@ -77,95 +109,82 @@ export function DashboardPage() {
       />
 
       <FirstSteps
-        aiReady={ai.data?.ready ?? false}
-        connected={(sources.data?.length ?? 0) > 0}
-        learned={(items.data?.length ?? 0) > 0}
-        asked={(conversations.data?.length ?? 0) > 0}
-        understood={(insights.data?.length ?? 0) > 0}
+        aiReady={pasos[0]}
+        connected={pasos[1]}
+        learned={pasos[2]}
+        asked={pasos[3]}
+        understood={pasos[4]}
         loading={cargando}
       />
 
       {/*
-        Las cifras van DESPUÉS de los primeros pasos mientras haya pasos: cuatro ceros no
-        ayudan a nadie que todavía no ha subido nada, y los pasos sí.
+        ── 1. LO QUE ESPERA POR TI ──────────────────────────────────────────
+
+        Antes esto no existía. El panel abría con cuatro contadores de filas —documentos,
+        conclusiones, automatizaciones, informes— que no responden a ninguna pregunta que se
+        haga quien entra por la mañana. Había dos recomendaciones esperando decisión y el
+        panel no las mencionaba.
+
+        Aquí va lo único que el sistema NO puede resolver solo, en orden de urgencia: lo que
+        te ha propuesto, lo que alguien ha puesto en duda, y lo que ha dejado de encajar.
       */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric
-          label={t('dashboard.metric.documents')}
-          value={items.data?.length ?? 0}
-          emptyHint={t('dashboard.metric.documentsEmpty')}
-          href="/conocimiento"
-        />
-        <Metric
-          label={t('dashboard.metric.conclusions')}
-          value={insights.data?.length ?? 0}
-          emptyHint={t('dashboard.metric.conclusionsEmpty')}
-          href="/insights"
-        />
-        <Metric
-          label={t('dashboard.metric.automations')}
-          value={automations.data?.length ?? 0}
-          emptyHint={t('dashboard.metric.automationsEmpty')}
-          href="/automatizaciones"
-        />
-        <Metric
-          label={t('dashboard.metric.reports')}
-          value={reports.data?.length ?? 0}
-          emptyHint={t('dashboard.metric.reportsEmpty')}
-          href="/informes"
-        />
-      </div>
+      {!cargando && !arrancando && (
+        <div className="mt-6">
+          <Section title={t('dashboard.todo.title')}>
+            {pendientes === 0 ? (
+              <div className="py-4">
+                <p className="t-body font-medium text-ink">
+                  {t('dashboard.calm.title')}
+                </p>
+                <p className="mt-1.5 max-w-xl t-small text-muted">
+                  {t('dashboard.calm.body')}
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-line">
+                {propuestas.length > 0 && (
+                  <Espera
+                    cantidad={propuestas.length}
+                    titulo={t('dashboard.todo.recommendations')}
+                    detalle={t('dashboard.todo.recommendationsWhy')}
+                    a="/recomendaciones"
+                    tono="accent"
+                  />
+                )}
+                {disputed.length > 0 && (
+                  <Espera
+                    cantidad={disputed.length}
+                    titulo={t('dashboard.todo.disputed')}
+                    detalle={t('dashboard.attention.disputedWhy')}
+                    a="/insights"
+                    tono="danger"
+                  />
+                )}
+                {stale.length > 0 && (
+                  <Espera
+                    cantidad={stale.length}
+                    titulo={t('dashboard.todo.stale')}
+                    detalle={t('dashboard.attention.subtitle')}
+                    a="/insights"
+                    tono="attention"
+                  />
+                )}
+              </ul>
+            )}
+          </Section>
+        </div>
+      )}
 
       <div className="mt-3">
         <ErrorNote error={insights.error ?? items.error} />
       </div>
 
-      {(disputed.length > 0 || stale.length > 0) && (
-        <div className="mt-6">
-          <Section
-            title={t('dashboard.attention.title')}
-            description={t('dashboard.attention.subtitle')}
-          >
-            <ul className="space-y-4">
-              {disputed.map((insight) => (
-                <li key={`d-${insight.id}`}>
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <Link
-                      className="t-body font-medium text-ink hover:text-accent"
-                      to={`/insights/${insight.id}`}
-                    >
-                      {insight.summary}
-                    </Link>
-                    <Badge tone="bad">{t('insight.badge.disputed')}</Badge>
-                  </div>
-                  <p className="mt-1 t-small text-muted">
-                    {t('dashboard.attention.disputedWhy')}
-                  </p>
-                </li>
-              ))}
-              {stale.map((insight) => (
-                <li key={`s-${insight.id}`}>
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <Link
-                      className="t-body font-medium text-ink hover:text-accent"
-                      to={`/insights/${insight.id}`}
-                    >
-                      {insight.summary}
-                    </Link>
-                    <Badge tone="warn">{labels.freshness(insight.freshness)}</Badge>
-                  </div>
-                  {/* La explicación la redacta el motor a partir de la evidencia de esta
-                      empresa: es contenido suyo y se muestra tal cual. */}
-                  <p className="mt-1 t-small text-muted">
-                    {insight.freshnessRationale}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        </div>
-      )}
-
+      {/*
+        Mientras la empresa está arrancando, esto no se enseña: la lista de primeros pasos ya
+        dice que hace falta un análisis y qué va a buscar. Repetirlo en una tarjeta vacía
+        convierte el panel en tres formas distintas de decir "todavía no hay nada".
+      */}
+      {!arrancando && (
       <div className="mt-6">
         <Section
           title={t('dashboard.latest.title')}
@@ -210,12 +229,10 @@ export function DashboardPage() {
                   <p className="mt-1.5 flex flex-wrap items-center gap-2 t-small text-muted">
                     <Badge>{labels.insightType(insight.type)}</Badge>
                     <span>
-                      {t('common.confidence', {
-                        value: insight.confidence.toFixed(2),
-                      })}
+                      {labels.confidence(insight.confidence)}
                     </span>
                     <span aria-hidden>·</span>
-                    <span>{formatDate(insight.createdAt)}</span>
+                    <span>{formatDay(insight.createdAt)}</span>
                   </p>
                 </li>
               ))}
@@ -223,7 +240,91 @@ export function DashboardPage() {
           )}
         </Section>
       </div>
+      )}
+
+      {/*
+        ── 3. LO QUE SABE, Y CÓMO PREGUNTARLE ────────────────────────────────
+
+        Las cifras van al FINAL y solo cuando hay algo que contar. Cuatro ceros grandes al
+        entrar por primera vez no informan de nada: dicen "aquí no hay nada" cuatro veces, y
+        eso ya lo dicen los primeros pasos, mejor y con qué hacer al respecto.
+      */}
+      {!arrancando && !cargando && (items.data?.length ?? 0) > 0 && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric
+            label={t('dashboard.metric.documents')}
+            value={items.data?.length ?? 0}
+            href="/conocimiento"
+          />
+          <Metric
+            label={t('dashboard.metric.conclusions')}
+            value={insights.data?.length ?? 0}
+            emptyHint={t('dashboard.metric.conclusionsEmpty')}
+            href="/insights"
+          />
+          <Metric
+            label={t('dashboard.metric.automations')}
+            value={automations.data?.length ?? 0}
+            emptyHint={t('dashboard.metric.automationsEmpty')}
+            href="/automatizaciones"
+          />
+          <Metric
+            label={t('dashboard.metric.reports')}
+            value={reports.data?.length ?? 0}
+            emptyHint={t('dashboard.metric.reportsEmpty')}
+            href="/informes"
+          />
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * Una cosa que espera una decisión de una persona.
+ *
+ * La cifra manda: es lo que se lee de un vistazo desde el otro lado del escritorio. El tono
+ * dice cuánto corre, y no hay más de tres tonos en toda la pantalla precisamente para que
+ * signifiquen algo.
+ */
+function Espera({
+  cantidad,
+  titulo,
+  detalle,
+  a,
+  tono,
+}: {
+  cantidad: number;
+  titulo: string;
+  detalle: string;
+  a: string;
+  tono: 'accent' | 'attention' | 'danger';
+}) {
+  const t = useT();
+  const color = {
+    accent: 'text-accent',
+    attention: 'text-attention',
+    danger: 'text-danger',
+  }[tono];
+
+  return (
+    // En el móvil se apila: con todo en una fila, el texto quedaba en una columna de tres
+    // palabras entre el número y el botón, y lo que explica qué hay que hacer es el texto.
+    <li className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-x-4">
+      <span className="flex min-w-0 flex-1 items-baseline gap-3">
+        <span className={`t-figure t-display shrink-0 ${color}`}>{cantidad}</span>
+        <span className="min-w-0">
+          <span className="block t-body font-medium text-ink">{titulo}</span>
+          <span className="mt-0.5 block t-small text-muted">{detalle}</span>
+        </span>
+      </span>
+      <Link
+        to={a}
+        className="shrink-0 rounded-md bg-ink px-3.5 py-2 text-center t-small font-medium text-white transition-colors hover:bg-ink-soft"
+      >
+        {t('dashboard.todo.see')}
+      </Link>
+    </li>
   );
 }
 

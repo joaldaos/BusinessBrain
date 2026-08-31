@@ -47,12 +47,12 @@ export function InsightsPage() {
           <Empty>{t('insights.empty')}</Empty>
         )}
 
-        <ul className="space-y-3">
+        <ul className="divide-y divide-line">
           {insights.data?.map((insight) => (
-            <li key={insight.id} className="rounded-md border border-line p-3">
+            <li key={insight.id} className="py-4 first:pt-0 last:pb-0">
               <Link
                 to={`/insights/${insight.id}`}
-                className="t-body font-medium text-accent underline underline-offset-2"
+                className="block t-body font-medium text-ink transition-colors hover:text-accent"
               >
                 {insight.summary}
               </Link>
@@ -60,9 +60,7 @@ export function InsightsPage() {
               <div className="mt-2 flex flex-wrap items-center gap-2 t-fine text-muted">
                 <Badge>{labels.insightType(insight.type)}</Badge>
                 <span>
-                  {t('common.confidence', {
-                    value: insight.confidence.toFixed(2),
-                  })}
+                  {labels.confidence(insight.confidence)}
                 </span>
                 <FreshnessBadge insight={insight} />
                 <CurationBadge insight={insight} />

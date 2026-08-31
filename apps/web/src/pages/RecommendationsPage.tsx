@@ -216,20 +216,16 @@ function RecommendationCard({
       </dl>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button variant="secondary" onClick={() => setShowEvidence(!showEvidence)}>
-          {showEvidence ? t('recs.evidence.hide') : t('recs.evidence.show')}
-        </Button>
-
         {canDecide && (
           <>
-            <Button disabled={action.busy} onClick={() => decide('accept')}>
+            <Button
+              variant="primary"
+              disabled={action.busy}
+              onClick={() => decide('accept')}
+            >
               {action.busy ? t('common.saving') : t('recs.accept')}
             </Button>
-            <Button
-              variant="secondary"
-              disabled={action.busy}
-              onClick={() => decide('dismiss')}
-            >
+            <Button disabled={action.busy} onClick={() => decide('dismiss')}>
               {t('recs.dismiss')}
             </Button>
           </>
@@ -237,6 +233,19 @@ function RecommendationCard({
         {!canDecide && (
           <span className="t-fine text-muted">{t('recs.readOnly')}</span>
         )}
+
+        {/*
+          Terciaria y al final: comprobar de dónde sale la propuesta es lo que se hace ANTES
+          de decidir, pero no es lo que la pantalla te está pidiendo. Con los tres botones
+          iguales, la decisión no destacaba sobre el "ver más".
+        */}
+        <Button
+          variant="ghost"
+          aria-expanded={showEvidence}
+          onClick={() => setShowEvidence(!showEvidence)}
+        >
+          {showEvidence ? t('recs.evidence.hide') : t('recs.evidence.show')}
+        </Button>
       </div>
 
       <ErrorNote error={action.error} />

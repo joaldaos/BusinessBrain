@@ -126,6 +126,8 @@ async function empresaCliente(page: Page): Promise<{
     page.locator('span').filter({ hasText: /^Comercial$/ }),
   ).toBeVisible();
 
+  // El formulario de nueva fuente se abre desde su acción: no está siempre desplegado.
+  await page.getByRole('button', { name: 'Añadir una fuente' }).click();
   await page.getByLabel('Nueva fuente').fill('Mis documentos');
   await page
     .getByLabel('Colección de destino')
@@ -143,7 +145,7 @@ async function empresaCliente(page: Page): Promise<{
     buffer: Buffer.from(documento, 'utf8'),
   });
   expect((await subida).ok()).toBe(true);
-  await expect(page.getByText(/indexado y listo para preguntar/i)).toBeVisible({
+  await expect(page.getByText(/ya está dentro y se puede preguntar/i)).toBeVisible({
     timeout: 30_000,
   });
 

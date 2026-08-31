@@ -187,6 +187,8 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     page.locator('span').filter({ hasText: new RegExp(`^${COLECCION}$`) }),
   ).toBeVisible();
 
+  // El formulario de nueva fuente se abre desde su acción: no está siempre desplegado.
+  await page.getByRole('button', { name: 'Añadir una fuente' }).click();
   await page.getByLabel('Nueva fuente').fill('Mis documentos');
   await page
     .getByLabel('Colección de destino')
@@ -218,7 +220,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
     buffer: await makePdf([POLITICA, ANEXO]),
   });
   // La pantalla confirma el resultado de ESE documento, no solo que la petición fue bien.
-  await expect(page.getByText(/indexado y listo para preguntar/i)).toBeVisible({
+  await expect(page.getByText(/ya está dentro y se puede preguntar/i)).toBeVisible({
     timeout: 30_000,
   });
 
@@ -270,9 +272,9 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
 
   // ── 8. Y EL PANEL YA NO PIDE LO QUE ESTÁ HECHO ────────────────────────────
   await page.getByRole('link', { name: 'Panel', exact: true }).click();
-  // El rótulo de la métrica, exacto: el panel también explica en una frase qué va a deducir
-  // por su cuenta a partir de 'tus documentos'.
-  await expect(page.getByText('Documentos', { exact: true })).toBeVisible();
+  // Mientras quede algún primer paso, el panel ES la lista de primeros pasos: nada de
+  // contadores. Lo que se comprueba es que la lista refleja lo ya hecho.
+  await expect(page.getByText('Primeros pasos')).toBeVisible();
   await expect(
     page.getByRole('link', { name: /conecta una fuente/i }),
   ).toHaveCount(0);
@@ -309,7 +311,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await expect(enlacePropuestas).toBeVisible({ timeout: 30_000 });
   await enlacePropuestas.click();
 
-  const propuesta = page.getByRole('listitem').first();
+  const propuesta = page.getByRole('main').getByRole('listitem').first();
   await expect(propuesta).toBeVisible();
   // Queda claro que la propone el sistema, no un compañero.
   await expect(
@@ -341,7 +343,10 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await page
     .getByRole('button', { name: /ver decisiones anteriores/i })
     .click();
-  const decidida = page.getByRole('listitem').filter({ hasText: 'aceptada' });
+  const decidida = page
+    .getByRole('main')
+    .getByRole('listitem')
+    .filter({ hasText: 'aceptada' });
   await expect(decidida).toBeVisible({ timeout: 30_000 });
   // Con quién decidió y cuándo: la decisión es de una persona, y queda dicho. Se busca dentro
   // de la fila, no en toda la página — el nombre también sale en la cabecera de sesión.

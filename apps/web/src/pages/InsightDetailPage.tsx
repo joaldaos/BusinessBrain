@@ -62,7 +62,7 @@ export function InsightDetailPage() {
         <div className="mt-3 flex flex-wrap items-center gap-2 t-fine text-muted">
           <Badge>{labels.insightType(data.type)}</Badge>
           <span>
-            {t('common.confidence', { value: data.confidence.toFixed(2) })}
+            {labels.confidence(data.confidence)}
           </span>
           <FreshnessBadge insight={data} />
           <CurationBadge insight={data} />
@@ -204,6 +204,7 @@ function HistoryCard({
   loading: boolean;
 }) {
   const t = useT();
+  const labels = useLabels();
   const formatDate = useFormatDate();
 
   return (
@@ -229,9 +230,7 @@ function HistoryCard({
                         : t('insight.history.superseded')}
                     </Badge>
                     <span>
-                      {t('common.confidence', {
-                        value: version.confidence.toFixed(2),
-                      })}
+                      {labels.confidence(version.confidence)}
                     </span>
                     <span>
                       {t('insight.history.evidenceCount', {

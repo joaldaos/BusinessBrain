@@ -6,7 +6,9 @@ import {
   hasRole,
   type AnalysisRun,
   type BusinessObjective,
+  type Insight,
   type KnowledgeItem,
+  type Recommendation,
 } from '../api/types';
 import {
   Button,
@@ -178,7 +180,21 @@ function AnalysisAdmin() {
             </Section>
           }
         >
-          {ultimo && <UltimoAnalisis run={ultimo} resumen={recien} />}
+          {ultimo && (
+            <div className="space-y-4">
+              <UltimoAnalisis run={ultimo} resumen={recien} />
+
+              {/*
+                Y AQUÍ lo que descubrió, no cuántas cosas descubrió.
+
+                Hasta esta pasada, la pantalla que responde "¿qué ha descubierto
+                BusinessBrain?" enseñaba el número 2 y un enlace. Para leer las conclusiones
+                había que irse a otra pantalla — o sea: la respuesta a la pregunta de la
+                pantalla estaba en otro sitio.
+              */}
+              <Descubrimientos />
+            </div>
+          )}
         </DataState>
 
         {/*
@@ -236,6 +252,101 @@ function AnalysisAdmin() {
           </Section>
         )}
       </div>
+    </>
+  );
+}
+
+/**
+ * Lo que ha comprendido y lo que propone, en la propia pantalla de Análisis.
+ *
+ * Sale de los mismos dos endpoints que Comprensión y Recomendaciones: no hay ningún contador
+ * aparte y no se afirma que estas conclusiones concretas salieran del último análisis —se
+ * enseñan las más recientes, que es lo que la API sabe decir— porque afirmarlo exigiría un
+ * dato que el backend no devuelve y no vamos a inventarlo aquí.
+ */
+function Descubrimientos() {
+  const t = useT();
+  const labels = useLabels();
+
+  const insights = useResource(() => api<Insight[]>('/insights?limit=4'));
+  const propuestas = useResource(() =>
+    api<Recommendation[]>('/recommendations?status=NEW'),
+  );
+
+  const conclusiones = insights.data ?? [];
+  const pendientes = propuestas.data ?? [];
+
+  return (
+    <>
+      <Section
+        title={t('analysis.found.title')}
+        actions={
+          conclusiones.length > 0 ? (
+            <Link
+              to="/insights"
+              className="t-small font-medium text-accent hover:underline"
+            >
+              {t('analysis.found.seeAll')}
+            </Link>
+          ) : undefined
+        }
+      >
+        <DataState
+          loading={insights.loading}
+          error={insights.error}
+          empty={conclusiones.length === 0}
+          emptyMessage={t('analysis.found.none')}
+          skeleton={3}
+        >
+          <ul className="divide-y divide-line">
+            {conclusiones.map((insight) => (
+              <li key={insight.id} className="py-3 first:pt-0 last:pb-0">
+                <Link
+                  to={`/insights/${insight.id}`}
+                  className="t-body font-medium text-ink hover:text-accent"
+                >
+                  {insight.summary}
+                </Link>
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 t-small text-muted">
+                  <StatusPill>{labels.insightType(insight.type)}</StatusPill>
+                  <span>{labels.confidence(insight.confidence)}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </DataState>
+      </Section>
+
+      {/* Solo si hay propuestas: una tarjeta vacía titulada "y qué te propone" no propone nada. */}
+      {pendientes.length > 0 && (
+        <Section
+          title={t('analysis.proposed.title')}
+          actions={
+            <Link
+              to="/recomendaciones"
+              className="t-small font-medium text-accent hover:underline"
+            >
+              {t('analysis.proposed.seeAll')}
+            </Link>
+          }
+        >
+          <ul className="divide-y divide-line">
+            {pendientes.slice(0, 3).map((propuesta) => (
+              <li key={propuesta.id} className="py-3 first:pt-0 last:pb-0">
+                <Link
+                  to="/recomendaciones"
+                  className="t-body font-medium text-ink hover:text-accent"
+                >
+                  {propuesta.title}
+                </Link>
+                {propuesta.detected && (
+                  <p className="mt-1 t-small text-muted">{propuesta.detected}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
     </>
   );
 }
@@ -375,27 +486,19 @@ function UltimoAnalisis({
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-4">
-            <Link
-              to="/insights"
-              className="t-small font-medium text-accent underline underline-offset-2"
-            >
-              {t('analysis.seeInsights')}
-            </Link>
-            {propuestas > 0 && (
-              <Link
-                to="/recomendaciones"
-                className="t-small font-medium text-accent underline underline-offset-2"
-              >
-                {t('analysis.seeRecommendations')}
-              </Link>
-            )}
-            <span className="t-fine text-muted">
-              {t('analysis.last.when', {
-                date: formatDate(run.completedAt ?? run.createdAt),
-              })}
-            </span>
-          </div>
+          {/*
+            Aquí NO van los enlaces a la comprensión y a las recomendaciones.
+
+            Los llevan las dos tarjetas de debajo, que además enseñan lo que hay al otro lado.
+            Duplicarlos ponía dos "Ver las recomendaciones" en la misma pantalla apuntando al
+            mismo sitio: quien lo lee se pregunta en qué se diferencian, y no se diferencian
+            en nada.
+          */}
+          <p className="mt-5 border-t border-line pt-4 t-fine text-muted">
+            {t('analysis.last.when', {
+              date: formatDate(run.completedAt ?? run.createdAt),
+            })}
+          </p>
         </>
       )}
     </Section>

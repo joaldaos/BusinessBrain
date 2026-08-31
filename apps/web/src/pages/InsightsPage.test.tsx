@@ -106,6 +106,6 @@ describe('cómo se presenta una conclusión', () => {
     renderLocalized(
       <FreshnessBadge insight={insight({ freshness: 'UNRESOLVABLE' })} />,
     );
-    expect(screen.getByText(/irresoluble/i)).toBeInTheDocument();
+    expect(screen.getByText(/no se puede comprobar/i)).toBeInTheDocument();
   });
 });

@@ -211,14 +211,19 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
 
   // Por su ENCABEZADO, no por contener la palabra: desde que Conocimiento explica la cadena,
   // 'Gmail' aparece también en el texto que describe de dónde llega el material.
+  // Gmail ya no es una tarjeta a ancho completo: es una de las dos opciones de "Conectar
+  // otro origen", porque conectarlo es opcional y ocupaba tanto como lo imprescindible.
   const gmailCard = page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'Gmail', exact: true }) });
+    .locator('div')
+    .filter({ has: page.getByRole('heading', { name: 'Gmail', exact: true }) })
+    .last();
   await expect(gmailCard.getByText('activa')).toBeVisible();
   // Dice QUÉ cuenta, no solo que hay una conectada.
   await expect(page.getByText('comercial@empresa.test')).toBeVisible();
 
   // ── 4. FUENTE: etiqueta como frontera + colección restringida ───────────────
+  // El formulario de nueva fuente se abre desde su acción: no está siempre desplegado.
+  await page.getByRole('button', { name: 'Añadir una fuente' }).click();
   await page.getByLabel('Tipo de fuente').selectOption('GMAIL');
   await page.getByLabel('Nueva fuente').fill('Correo de ventas');
   await page.getByLabel('Etiqueta de Gmail').selectOption({ label: 'Ventas' });
@@ -227,7 +232,10 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
     .selectOption({ label: COLLECTION });
   await page.getByRole('button', { name: /crear fuente/i }).click();
   // La fila de la fuente, no la opción del desplegable de más abajo.
-  const fila = page.getByRole('listitem').filter({ hasText: 'Correo de ventas' });
+  const fila = page
+    .getByRole('main')
+    .getByRole('listitem')
+    .filter({ hasText: 'Correo de ventas' });
   await expect(fila).toBeVisible();
   // Y dice QUÉ etiqueta está entrando: sin eso, dos fuentes de Gmail son indistinguibles.
   await expect(fila).toContainText('Ventas');
@@ -236,7 +244,7 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
   const primera = page.waitForResponse(
     (r) => r.url().includes('/sync') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Sincronizar', exact: true }).click();
+  await page.getByRole('button', { name: 'Volver a leer', exact: true }).click();
   expect((await primera).ok()).toBe(true);
 
   await page.reload();
@@ -265,7 +273,7 @@ test('una persona conecta Gmail y su correo se convierte en conocimiento', async
   const segunda = page.waitForResponse(
     (r) => r.url().includes('/sync') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Sincronizar', exact: true }).click();
+  await page.getByRole('button', { name: 'Volver a leer', exact: true }).click();
   expect((await segunda).ok()).toBe(true);
 
   await page.reload();

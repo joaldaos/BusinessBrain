@@ -43,7 +43,8 @@ export const en: Catalog = {
 
   'page.insights.subtitle': 'What BusinessBrain has understood from your documents. Every conclusion says where it comes from and whether it still holds.',
   'page.objectives.subtitle': 'What your company wants to achieve. Without objectives the system describes what happens but cannot tell you whether it matters.',
-  'page.analysis.subtitle': 'Ask the engine to reason now over everything it has. Conclusions and recommendations come out of this.',
+  'page.analysis.subtitle':
+    'Ask BusinessBrain to go over everything it has read and tell you what it found.',
   'page.recommendations.subtitle': 'What is worth doing, with the reason up front. You decide: accept, discard or leave it for later.',
   'page.automations.subtitle': 'Tasks that run on their own when due. Each one leaves a record of what it did and when.',
   'page.reports.subtitle': 'What has been understood, gathered into a document you can send or keep.',
@@ -81,6 +82,10 @@ export const en: Catalog = {
   'settings.section.team': 'Team and access',
 
   // ── Navigation ───────────────────────────────────────────────────────────
+  'nav.group.understand': 'Understand',
+  'nav.group.decide': 'Decide',
+  'nav.group.execute': 'Run',
+  'nav.group.account': 'Your account',
   'nav.dashboard': 'Overview',
   'nav.ask': 'Ask',
   'nav.knowledge': 'Knowledge',
@@ -120,9 +125,9 @@ export const en: Catalog = {
   'status.run.PARTIAL': 'partial',
   'status.run.CANCELLED': 'cancelled',
 
-  'status.connection.PENDING': 'not synced yet',
+  'status.connection.PENDING': 'not read yet',
   'status.connection.CONNECTED': 'connected',
-  'status.connection.SYNCING': 'syncing',
+  'status.connection.SYNCING': 'reading',
   'status.connection.ERROR': 'has problems',
   'status.connection.DISABLED': 'disconnected',
 
@@ -209,6 +214,23 @@ export const en: Catalog = {
   'dashboard.metric.conclusions': 'Conclusions',
   'dashboard.metric.automations': 'Automations',
   'dashboard.metric.reports': 'Reports',
+  'dashboard.todo.title': 'Waiting for you',
+  'dashboard.todo.recommendations': 'Recommendations waiting for your decision',
+  'dashboard.todo.recommendationsWhy':
+    'BusinessBrain proposed them from your documents. None of them runs on its own.',
+  'dashboard.todo.disputed': 'Conclusions someone has questioned',
+  'dashboard.todo.stale': 'Conclusions whose document has changed',
+  'dashboard.todo.see': 'Review',
+  'dashboard.calm.title': 'Nothing is waiting for you',
+  'dashboard.calm.body':
+    'BusinessBrain keeps watching your documents. If something changes or it finds something that does not fit, it will show up here.',
+  'dashboard.state.title': 'What it knows about your company',
+  'dashboard.state.documents': 'documents read',
+  'dashboard.state.conclusions': 'conclusions',
+  'dashboard.state.lastAnalysis': 'Last analysis on {date}',
+  'dashboard.state.neverAnalysed': 'You have not run any analysis yet.',
+  'dashboard.state.ask': 'Ask',
+  'dashboard.state.analyse': 'Analyse now',
   'dashboard.attention.title': 'Needs your attention',
   'dashboard.attention.disputedWhy':
     'Someone approved an earlier version and the new evidence contradicts it.',
@@ -223,7 +245,7 @@ export const en: Catalog = {
   'dashboard.steps.source.action': 'Connect a source',
   'dashboard.steps.source.why':
     'Upload documents, a web page, your Google Drive or a Gmail label.',
-  'dashboard.steps.sync.action': 'Sync so it can learn',
+  'dashboard.steps.sync.action': 'Upload your first document',
   'dashboard.steps.sync.why':
     'Until something comes in, BusinessBrain knows nothing about your company.',
   'dashboard.steps.ask.action': 'Ask it a question',
@@ -234,18 +256,26 @@ export const en: Catalog = {
     'It looks for risks, deviations and opportunities in what it already knows.',
 
   // ── Understanding ────────────────────────────────────────────────────────
-  'common.confidence': 'confidence {value}',
+  'common.confidence.low': 'low reliability',
+  'common.confidence.medium': 'medium reliability',
+  'common.confidence.high': 'high reliability',
   'insights.title': 'Conclusions ({count})',
   'insights.empty':
     'There are no conclusions within your reach. There may be no analysis yet, or you may not have access to the collections they rest on.',
   'insight.badge.freshEvidence': 'evidence intact',
   'insight.badge.evidenceChanged': 'its evidence changed',
-  'insight.badge.evidenceUnresolvable': 'evidence unresolvable',
+  'insight.badge.evidenceUnresolvable': 'cannot be checked',
   'insight.badge.disputed': 'approval disputed',
   'insight.badge.inherited': 'approved on an earlier version',
   'insight.badge.curated': 'approved by a person',
 
   // ── Analysis ─────────────────────────────────────────────────────────────
+  'analysis.found.title': 'What it found',
+  'analysis.found.none':
+    'This analysis found nothing new. That is normal if no new knowledge has come in since the previous one.',
+  'analysis.found.seeAll': 'See all the understanding',
+  'analysis.proposed.title': 'And what it proposes',
+  'analysis.proposed.seeAll': 'See the recommendations',
   'analysis.last.title': 'Latest analysis',
   'analysis.last.created': 'new conclusions',
   'analysis.last.updated': 'conclusions updated',
@@ -255,8 +285,6 @@ export const en: Catalog = {
   'analysis.last.failed': 'The latest analysis did not finish.',
   'analysis.last.nothingNew':
     'It found nothing new. That is normal if no new knowledge has come in since the last analysis.',
-  'analysis.seeInsights': 'See the understanding',
-  'analysis.seeRecommendations': 'See the recommendations',
   'analysis.needs.title': 'What it needs in order to analyse',
   'analysis.needs.knowledge': 'Documents from your company',
   'analysis.needs.knowledgeWhy':
@@ -345,7 +373,7 @@ export const en: Catalog = {
     'No sources: this answer is not backed by any of your documents.',
   'ask.sources': 'Sources',
   'ask.sourceMissing': 'no longer at its origin',
-  'ask.indexedAt': 'indexed {date}',
+  'ask.indexedAt': 'added on {date}',
 
   // ── Recommendations ──────────────────────────────────────────────────────
   'recs.pending.title': 'Waiting for your decision ({count})',
@@ -477,7 +505,7 @@ export const en: Catalog = {
   'automations.new.timezone': 'Time zone: {timezone}',
   'automations.new.whatItDoes': 'What it will do',
   'automations.new.reread': 'Read again',
-  'automations.new.sourceLabel': 'Source to sync',
+  'automations.new.sourceLabel': 'Source that will be read again',
   'automations.new.noSource': '(no source)',
   'automations.new.analyze': 'Analyse the knowledge and update the understanding',
   'automations.new.andReport': 'And generate the report',
@@ -503,6 +531,11 @@ export const en: Catalog = {
   // ── Knowledge ────────────────────────────────────────────────────────────
   'knowledge.title': 'Your company knowledge',
   'knowledge.subtitle': 'Everything BusinessBrain knows comes from here. Nothing is made up: every answer comes from these documents.',
+  'knowledge.connect.title': 'Connect another origin',
+  'knowledge.connect.why':
+    'Optional. Besides uploading documents, BusinessBrain can read a folder from your Drive or a label from your mail.',
+  'knowledge.sources.add': 'Add a source',
+  'knowledge.sources.cancel': 'Cancel',
   'knowledge.chain.title': 'How it works',
   'knowledge.chain.sources': 'Sources',
   'knowledge.chain.sourcesHint': 'Where the material arrives from: your computer, a website, Drive or Gmail.',
@@ -524,7 +557,7 @@ export const en: Catalog = {
 
   'knowledge.drive.title': 'Google Drive',
   'knowledge.drive.connected': 'connected',
-  'knowledge.drive.folders': '{count} folder(s) syncing',
+  'knowledge.drive.folders': 'connected folders: {count}',
   'knowledge.drive.permission':
     'BusinessBrain will ask for READ-ONLY permission on your Drive. It never writes or changes anything, and you can withdraw it whenever you want.',
   'knowledge.drive.connect': 'Connect Google Drive',
@@ -532,13 +565,13 @@ export const en: Catalog = {
   'knowledge.gmail.title': 'Gmail',
   'knowledge.gmail.active': 'active',
   'knowledge.gmail.unknownAccount': 'account not identified',
-  'knowledge.gmail.labels': '{count} label(s) syncing',
+  'knowledge.gmail.labels': 'connected labels: {count}',
   'knowledge.gmail.revoked': 'revoked',
   'knowledge.gmail.revokedExplain':
     'Access to {account} was withdrawn. What had already been read is still available; to receive new email again, connect it once more.',
   'knowledge.gmail.thatAccount': 'that account',
   'knowledge.gmail.permission':
-    'BusinessBrain will ask for READ-ONLY permission on your email. It never sends or changes anything. Only the label you choose comes in, and indexed email goes into a restricted collection: connecting Gmail does not make it visible to the whole organisation.',
+    'BusinessBrain will ask for READ-ONLY permission on your mail. It never sends or changes anything. Only the label you choose comes in, and it goes to a restricted collection: connecting Gmail does not open it to the whole company.',
   'knowledge.gmail.connect': 'Connect Gmail',
   'knowledge.disconnect': 'Disconnect',
 
@@ -572,29 +605,29 @@ export const en: Catalog = {
     'Email requires a RESTRICTED collection: choose one the whole organisation cannot reach.',
   'knowledge.sources.create': 'Create source',
 
-  'knowledge.source.lastSync': 'last sync {date}',
-  'knowledge.source.stats': '{created} new, {updated} updated',
-  'knowledge.source.statsFailed': ', {failed} with errors',
+  'knowledge.source.lastSync': 'last read {date}',
+  'knowledge.source.stats': 'new: {created} · updated: {updated}',
+  'knowledge.source.statsFailed': ' · could not be read: {failed}',
   'knowledge.source.notRetrievable':
-    '{count} not indexed for search: sync again',
-  'knowledge.source.syncing': 'Syncing…',
+    '{count} cannot be consulted yet: read the source again',
+  'knowledge.source.syncing': 'Reading…',
   'knowledge.source.readPage': 'Read the page',
-  'knowledge.source.sync': 'Sync',
+  'knowledge.source.sync': 'Read again',
   'knowledge.source.uploading': 'Uploading…',
   'knowledge.source.upload': 'Upload document',
   'knowledge.upload.failed':
     'We could not upload this document. Check it and try again.',
   'knowledge.upload.unreadable': 'We could not read {file}. Check it and try again.',
-  'knowledge.upload.indexed': '{file} indexed and ready to ask about.',
+  'knowledge.upload.indexed': '{file} is in and can be asked about.',
   'knowledge.upload.duplicate': '{file} was already here: it has not been duplicated.',
 
   'knowledge.items.title': 'Documents ({count})',
-  'knowledge.items.empty': 'No documents indexed yet.',
+  'knowledge.items.empty': 'No document has come in yet.',
   'knowledge.items.column.title': 'Title',
   'knowledge.items.column.area': 'Area',
   'knowledge.items.column.status': 'Status',
-  'knowledge.items.column.confidence': 'Confidence',
-  'knowledge.items.column.indexed': 'Indexed',
+  'knowledge.items.column.confidence': 'Reliability',
+  'knowledge.items.column.indexed': 'Added',
   'knowledge.items.missingAtSource': 'no longer at its origin',
 
   // ── Settings: AI ─────────────────────────────────────────────────────────

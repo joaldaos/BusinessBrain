@@ -16,7 +16,7 @@ import {
   StatusPill,
   fieldClass,
   useAction,
-  useFormatDate,
+  useFormatDay,
   usePageTitle,
   useResource,
 } from '../components/ui';
@@ -416,7 +416,12 @@ function Turn({
   return (
     <div className="rounded-lg border border-line bg-surface p-4 shadow-card sm:p-5">
       <p className="mb-2 t-micro text-muted">{t('ask.brain')}</p>
-      <p className="whitespace-pre-wrap t-body text-ink">{content}</p>
+      {/*
+        La respuesta es EL contenido de la pantalla y se leía con la misma tipografía que la
+        pregunta, que el pie de página y que la lista de conversaciones. Un tamaño más y peso
+        de tinta: es lo que hace que la vista aterrice ahí y no en el formulario.
+      */}
+      <p className="whitespace-pre-wrap t-lead text-ink">{content}</p>
 
       {citations.length > 0 && <Sources citations={citations} />}
 
@@ -462,29 +467,51 @@ function Turn({
  */
 function Sources({ citations }: { citations: MessageCitation[] }) {
   const t = useT();
-  const formatDate = useFormatDate();
+  const formatDay = useFormatDay();
   const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'), []);
 
-  const titleOf = (knowledgeItemId: string) =>
-    items.data?.find((item) => item.id === knowledgeItemId)?.title;
+  /*
+   * Un documento aparece UNA vez, aunque la respuesta se apoye en tres trozos suyos.
+   *
+   * El sistema cita fragmentos, y hace bien: la respuesta se apoya en pasajes concretos.
+   * Pero en pantalla salia "[1] politica-descuentos.pdf / [2] politica-descuentos.pdf", y eso
+   * a ojos de quien lo lee no es precision: es un fallo. Lo que quiere saber es de QUE
+   * documentos sale la respuesta; los numeros que ve dentro del texto siguen siendo los que
+   * puso el sistema, y aqui se enseñan juntos.
+   */
+  const porDocumento = new Map<
+    string,
+    { ordinales: number[]; label: string; knowledgeItemId: string }
+  >();
+  for (const cita of citations) {
+    const clave = cita.knowledgeItemId || cita.label;
+    const previa = porDocumento.get(clave);
+    if (previa) previa.ordinales.push(cita.ordinal);
+    else
+      porDocumento.set(clave, {
+        ordinales: [cita.ordinal],
+        label: cita.label,
+        knowledgeItemId: cita.knowledgeItemId,
+      });
+  }
 
   return (
     <div className="mt-4 border-t border-line pt-3">
       <p className="t-micro text-muted">{t('ask.sources')}</p>
       <ol className="mt-2 space-y-1.5">
-        {citations.map((citation) => {
+        {[...porDocumento.values()].map((fuente) => {
           const item = items.data?.find(
-            (candidate) => candidate.id === citation.knowledgeItemId,
+            (candidate) => candidate.id === fuente.knowledgeItemId,
           );
           return (
             <li
-              key={`${citation.ordinal}-${citation.chunkId}`}
+              key={fuente.knowledgeItemId || fuente.label}
               className="flex flex-wrap items-baseline gap-x-2 t-small text-ink-soft"
             >
               <span className="t-figure font-medium text-accent">
-                [{citation.ordinal}]
+                [{fuente.ordinales.join(', ')}]
               </span>
-              <span>{titleOf(citation.knowledgeItemId) ?? citation.label}</span>
+              <span>{item?.title ?? fuente.label}</span>
               {item?.sourceMissingSince && (
                 <StatusPill tone="attention">
                   {t('ask.sourceMissing')}
@@ -492,7 +519,7 @@ function Sources({ citations }: { citations: MessageCitation[] }) {
               )}
               {item && (
                 <span className="t-fine text-faint">
-                  {t('ask.indexedAt', { date: formatDate(item.indexedAt) })}
+                  {t('ask.indexedAt', { date: formatDay(item.indexedAt) })}
                 </span>
               )}
             </li>

@@ -30,9 +30,23 @@
  * Ver `docs/DEMO.md`.
  */
 
+import { randomBytes } from 'node:crypto';
+
 const API = process.env.BB_API_URL ?? 'http://localhost:3999';
 const EMAIL = process.env.BB_DEMO_EMAIL ?? 'ana@panaderia-ruiz.demo';
-const PASSWORD = process.env.BB_DEMO_PASSWORD ?? 'DemoBusinessBrain2026!';
+/**
+ * La contraseña de la cuenta de demostración.
+ *
+ * Sale del entorno o se genera al azar en cada ejecución. NO hay ninguna escrita aquí: este
+ * fichero está en el repositorio, y una contraseña en el repositorio es una contraseña
+ * publicada — aunque la cuenta se llame "demo" y aunque el escenario sea de prueba.
+ *
+ * Se enseña al terminar, una vez. Si quieres una fija —para volver a entrar mañana sin
+ * repetir el montaje— pásala en `BB_DEMO_PASSWORD`.
+ */
+const PASSWORD =
+  process.env.BB_DEMO_PASSWORD ??
+  `${randomBytes(12).toString('base64url')}Aa1!`;
 const CLAVE_IA = process.env.OPENAI_API_KEY;
 
 const EMPRESA = 'Panadería Ruiz';
@@ -322,7 +336,11 @@ async function main() {
   console.log('\n─────────────────────────────────────────────');
   console.log('Escenario montado. Entra con:');
   console.log(`  correo:     ${EMAIL}`);
-  console.log(`  contraseña: ${PASSWORD}`);
+  console.log(
+    process.env.BB_DEMO_PASSWORD
+      ? '  contraseña: la de BB_DEMO_PASSWORD'
+      : `  contraseña (SOLO se enseña ahora, no se guarda): ${PASSWORD}`,
+  );
   if (!CLAVE_IA) {
     console.log('\nSIN pregunta respondida y SIN análisis: falta OPENAI_API_KEY.');
     console.log('Con la clave puesta, vuelve a lanzarlo y se completan los dos.');

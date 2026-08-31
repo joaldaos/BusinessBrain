@@ -324,6 +324,58 @@ function CurateCard({
  * puede ver y cambios de evidencia fuera de su alcance. Omitirlos presentaría una historia
  * incompleta como si fuera completa.
  */
+/**
+ * Qué ha cambiado, en una frase.
+ *
+ * Es todo lo que necesita saber quien no va a auditar nada: cuántas veces se ha movido esta
+ * conclusión y qué la movió la última vez. Sale de las TRANSICIONES, que el motor ya calcula
+ * y que sí están en lenguaje comprensible —entró información nueva, la contradijo, su
+ * documento fue sustituido—, no de los resúmenes de cada versión, que están escritos con los
+ * números del motor y no se pueden traducir desde aquí: la historia no trae la traza de cada
+ * versión, solo el texto ya compuesto.
+ *
+ * Por eso este resumen NO intenta contar el porqué de cada salto de confianza. Contaría algo
+ * que no sabe.
+ */
+function ResumenDelCambio({ history }: { history: BeliefHistory }) {
+  const t = useT();
+  const formatDay = useFormatDay();
+
+  const cambios = history.transitions.length;
+  const ultima = history.transitions[cambios - 1];
+  const version = history.versions[history.versions.length - 1];
+
+  if (cambios === 0) {
+    return (
+      <p className="t-body text-ink-soft">
+        {t('insight.history.neverChanged', {
+          date: formatDay(version?.createdAt ?? null),
+        })}
+      </p>
+    );
+  }
+
+  // Cada motivo una vez: tres piezas de evidencia que entraron a la vez son "entró
+  // información nueva", no la misma frase escrita tres veces.
+  const motivos = [...new Set(ultima.changes.map((change) => change.kind))];
+
+  return (
+    <>
+      <p className="t-body text-ink-soft">
+        {t('insight.history.changedTimes', { count: cambios })}
+      </p>
+      {motivos.length > 0 && (
+        <p className="mt-1.5 t-body text-ink-soft">
+          {t('insight.history.lastChange', {
+            date: formatDay(version?.createdAt ?? null),
+          })}{' '}
+          {motivos.map((kind) => describeChange(t, kind)).join(', ')}.
+        </p>
+      )}
+    </>
+  );
+}
+
 function HistoryCard({
   history,
   error,
@@ -346,6 +398,7 @@ function HistoryCard({
    * lee alguien que solo quería entender el hallazgo.
    */
   const [abierto, setAbierto] = useState(false);
+  const [detalle, setDetalle] = useState(false);
 
   return (
     <Card
@@ -368,7 +421,22 @@ function HistoryCard({
 
       {abierto && history && history.versions.length > 0 && (
         <>
-          <ol className="space-y-3">
+          <ResumenDelCambio history={history} />
+
+          <div className="mt-4 border-t border-line pt-4">
+            <Button
+              variant="ghost"
+              aria-expanded={detalle}
+              onClick={() => setDetalle(!detalle)}
+            >
+              {detalle
+                ? t('insight.finding.detailHide')
+                : t('insight.finding.detail')}
+            </Button>
+          </div>
+
+          {detalle && (
+          <ol className="mt-3 space-y-3">
             {history.versions.map((version, index) => {
               const transition = history.transitions[index - 1];
               return (
@@ -431,6 +499,7 @@ function HistoryCard({
               );
             })}
           </ol>
+          )}
 
           {history.hiddenVersionCount > 0 && (
             <p className="mt-3 t-fine text-muted">

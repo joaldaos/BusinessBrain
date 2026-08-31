@@ -194,6 +194,20 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   // entender el hallazgo. Sigue estando entero.
   await expect(page.getByText(/cómo ha cambiado/i).first()).toBeVisible();
   await page.getByRole('button', { name: /ver cómo ha cambiado/i }).click();
+
+  // Primero, el resumen en una frase: cuántas veces ha cambiado y qué la movió. Es lo que
+  // necesita quien no va a auditar nada.
+  await expect(
+    page.getByText(/no ha cambiado desde que se detectó|ha cambiado \d+ vez/i),
+  ).toBeVisible();
+
+  // Y detrás de su botón, la trayectoria entera: cada versión con el texto que compuso el
+  // motor, su seguridad y las piezas de evidencia que la movieron. La trazabilidad sigue
+  // completa; lo que cambia es que ya no es lo primero que se lee.
+  await page
+    .getByRole('button', { name: /ver el detalle técnico/i })
+    .last()
+    .click();
   await expect(page.getByText(/versión de ahora/i)).toBeVisible();
 
   // ── 11. INFORME ───────────────────────────────────────────────────────────

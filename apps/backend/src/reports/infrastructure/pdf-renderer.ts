@@ -55,12 +55,79 @@ export class PdfRenderer {
 
         for (const row of section.rows) {
           doc.fontSize(11).fillColor('#000').text(`• ${row.primary}`);
-          doc.fontSize(9).fillColor('#666').text(`  ${row.secondary}`);
-          doc.moveDown(0.3);
+
+          // Qué se detectó, por qué importa y qué hacer. Sangrados bajo el hallazgo, en el
+          // orden en que los necesita quien recibe el informe.
+          for (const linea of [row.detected, row.matters]) {
+            if (linea) doc.fontSize(10).fillColor('#333').text(`   ${linea}`);
+          }
+          if (row.whatToDo) {
+            /*
+             * "Qué hacer:" y no una flecha.
+             *
+             * La fuente por defecto de PDFKit es Helvetica en WinAnsi, que no tiene `→`: en
+             * el PDF salía `!’`. Se ve al abrir el fichero y no lo detecta ninguna prueba que
+             * mire el buffer, porque los bytes son perfectamente válidos.
+             */
+            doc
+              .fontSize(10)
+              .fillColor('#333')
+              .text(`   Qué hacer: ${row.whatToDo}`);
+          }
+          if (row.source) {
+            doc.fontSize(9).fillColor('#666').text(`   ${row.source}`);
+          }
+
+          doc.moveDown(0.5);
         }
       }
 
+      this.renderAnexo(doc, params.composed);
+
       doc.end();
     });
+  }
+
+  /**
+   * El anexo: lo que hace falta para comprobar el informe.
+   *
+   * Aquí va lo que antes se leía debajo de cada punto —el resumen literal del motor con sus
+   * números, y la ficha con el tipo, la confianza y la frescura—. No se ha quitado nada: se
+   * ha movido al final, que es donde lo busca quien lo necesita y donde no estorba a quien
+   * solo quiere leer el informe.
+   *
+   * Empieza en página nueva porque es un documento distinto dentro del mismo fichero: quien
+   * lo lleva a una reunión reparte las primeras páginas y se guarda esta.
+   */
+  private renderAnexo(doc: PDFKit.PDFDocument, composed: ComposedReport): void {
+    const conDetalle = composed.sections.filter(
+      (section) => !section.empty && section.rows.some((row) => row.technical),
+    );
+    if (conDetalle.length === 0) return;
+
+    doc.addPage();
+    doc.fillColor('#000').fontSize(14).text('Anexo · detalle técnico');
+    doc
+      .moveDown(0.3)
+      .fontSize(9)
+      .fillColor('#666')
+      .text(
+        'Lo que registró el sistema al producir este informe, tal cual. Sirve para ' +
+          'comprobarlo o para contárselo a quien lleve vuestros sistemas.',
+      );
+
+    for (const section of conDetalle) {
+      doc.moveDown(0.9).fillColor('#000').fontSize(11).text(section.title);
+      doc.moveDown(0.3);
+
+      for (const row of section.rows) {
+        doc.fontSize(9).fillColor('#333').text(`• ${row.primary}`);
+        if (row.verbatim && row.verbatim !== row.primary) {
+          doc.fontSize(9).fillColor('#666').text(`   ${row.verbatim}`);
+        }
+        doc.fontSize(9).fillColor('#888').text(`   ${row.technical}`);
+        doc.moveDown(0.25);
+      }
+    }
   }
 }

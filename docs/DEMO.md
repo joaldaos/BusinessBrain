@@ -32,12 +32,35 @@ puesta se vuelve a lanzar y se completan.
 ## 2. Desde una base limpia
 
 ```bash
-npm run db:reset --workspace @businessbrain/database
+npx prisma migrate reset --schema packages/database/prisma/schema.prisma
 ```
 
-Si ese comando no existe en tu copia, vale igualmente con volver a aplicar las migraciones
-sobre una base vacía. Lo importante es empezar sin datos: el escenario se apoya en que la
-empresa no existe todavía.
+Borra la base, vuelve a aplicar las migraciones y ejecuta el seed. **El seed imprime las
+credenciales de las dos cuentas base y no las guarda en ningún sitio**: cópialas de la
+terminal en ese momento.
+
+Lo importante es empezar sin datos: el escenario se apoya en que la empresa no existe todavía.
+
+### Las dos cuentas base
+
+| Cuenta | Para qué | Rol |
+|---|---|---|
+| `plataforma@businessbrain.dev` | Administrar BusinessBrain en `/platform` | `SUPERADMIN`, **sin ninguna empresa** |
+| `demo@businessbrain.dev` | Usar el producto como cliente | `OWNER` de la empresa «BusinessBrain Demo» |
+
+Son dos cuentas distintas a propósito: quien administra la plataforma no es dueño de los datos
+de ningún cliente, y la API de cliente le responde 403 igual que a un desconocido. Cambiar de
+sombrero exige cambiar de cuenta.
+
+**Para fijar o cambiar una contraseña**, vuelve a sembrar con la variable puesta:
+
+```bash
+SEED_SUPERADMIN_PASSWORD='la-que-elijas' npx prisma db seed --schema packages/database/prisma/schema.prisma
+```
+
+Lo mismo con `SEED_DEMO_OWNER_PASSWORD`. Sin la variable, una cuenta que ya existe **no se
+toca**: el seed lo dice en vez de imprimir una contraseña que no funcionaría. La otra vía es
+«¿Has olvidado tu contraseña?» en la pantalla de entrada, que manda el enlace por correo.
 
 ---
 
@@ -118,6 +141,20 @@ Entra con el correo y la contraseña que imprime el script.
 - **Recomendaciones sobre varios documentos**: con dos documentos, las propuestas que produce
   el motor son las que corresponden a dos documentos. Para una demo más rica hace falta subir
   más material.
-- **El texto de las conclusiones** lo redacta el motor de comprensión y hoy está escrito en su
-  propio vocabulario («la confianza cayó a 0.64, por debajo del umbral configurado»). Se
-  entiende, pero no es lenguaje de negocio. Está anotado como pendiente.
+- **Recomendaciones repetidas**: con dos documentos que fallan por el mismo motivo, el motor
+  propone dos veces lo mismo. Es correcto —son dos documentos— pero en una demo se ve raro.
+  Con más material variado no ocurre.
+
+## 6. Sobre el lenguaje de las conclusiones
+
+El motor de comprensión redacta y guarda su propio resumen, en su vocabulario: «la confianza
+cayó a 0.64, por debajo del umbral 0.95 configurado por la organización».
+
+Ese texto **ya no es lo que se lee**, ni en pantalla ni en el PDF. Ambos lo traducen a partir
+de los hechos que el propio motor guarda, y dejan el original donde se comprueba: «Ver el
+detalle técnico» en la pantalla, y el «Anexo · detalle técnico» al final del PDF.
+
+Nada se ha reescrito en la base de datos y no hace falta ninguna migración: el PDF se compone
+cada vez que se pide, así que una conclusión de hace meses también se cuenta bien. Y si
+mañana el motor emite una señal que nadie ha traducido todavía, se enseña su texto tal cual
+en vez de inventarse un titular.

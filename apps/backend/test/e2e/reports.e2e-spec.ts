@@ -142,6 +142,40 @@ describe('Informes (E2E)', () => {
     expect(pdf.headers['content-disposition']).toMatch(/attachment; filename=/);
     expect(pdf.headers['x-report-run-id']).toBeTruthy();
     expect(Buffer.from(pdf.body).subarray(0, 5).toString()).toBe('%PDF-');
+
+    /*
+     * 6. Y el PDF se entiende sin saber nada de IA.
+     *
+     * Es lo que se lleva a una reunión y lo que se le reenvía a la gestoría: ahí no puede
+     * abrir cada punto con «la confianza cayó a 0.64, por debajo del umbral 0.95». Se lee el
+     * documento de verdad, no el buffer: el texto va comprimido y buscar cadenas en los
+     * bytes daría un falso verde.
+     */
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const documento = await getDocumentProxy(
+      new Uint8Array(Buffer.from(pdf.body)),
+    );
+    const { text } = await extractText(documento, { mergePages: false });
+    const paginas: string[] = Array.isArray(text) ? text : [String(text)];
+
+    const cuerpo = paginas.slice(0, -1).join(' ');
+    const anexo = paginas[paginas.length - 1];
+
+    // El cuerpo habla de negocio.
+    expect(cuerpo).not.toMatch(
+      /umbral|recuperable|ANOMALY|PATTERN|confianza 0/i,
+    );
+    expect(cuerpo).toMatch(
+      /ya no ofrece la seguridad que pide vuestra empresa/i,
+    );
+    expect(cuerpo).toMatch(/Qué hacer: /);
+    // Ningún carácter que la fuente del PDF no sepa dibujar: `→` salía como `!’`.
+    expect(cuerpo).not.toMatch(/!’|Ã|�/);
+
+    // Y el anexo conserva ENTERA la trazabilidad: sin él, simplificar sería perder.
+    expect(anexo).toMatch(/detalle técnico/i);
+    expect(anexo).toMatch(/umbral/i);
+    expect(anexo).toMatch(/confianza \d/i);
   });
 
   describe('el alcance gobierna el contenido del PDF', () => {

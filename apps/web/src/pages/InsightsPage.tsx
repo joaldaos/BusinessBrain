@@ -13,6 +13,7 @@ import {
 } from '../components/ui';
 import { useT } from '../i18n';
 import { useLabels } from '../i18n/labels';
+import { useHallazgo } from '../insights/lenguaje';
 
 /**
  * Comprensión viva.
@@ -31,6 +32,7 @@ export function InsightsPage() {
   const t = useT();
   usePageTitle('nav.insights');
   const labels = useLabels();
+  const comoHallazgo = useHallazgo();
   const formatDate = useFormatDate();
 
   return (
@@ -54,13 +56,15 @@ export function InsightsPage() {
                 to={`/insights/${insight.id}`}
                 className="block t-body font-medium text-ink transition-colors hover:text-accent"
               >
-                {insight.summary}
+                {comoHallazgo(insight).titular}
               </Link>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 t-fine text-muted">
                 <Badge>{labels.insightType(insight.type)}</Badge>
                 <span>
-                  {labels.confidence(insight.confidence)}
+                  {t('insight.certainty.inline', {
+                    level: labels.confidence(insight.confidence),
+                  })}
                 </span>
                 <FreshnessBadge insight={insight} />
                 <CurationBadge insight={insight} />

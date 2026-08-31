@@ -113,10 +113,10 @@ export const es = {
   // El backend habla con constantes cerradas porque eso es lo correcto para un modelo de
   // datos. Pintarlas tal cual pone en la pantalla de una panadería palabras que no significan
   // nada. Aquí se traducen; en ningún otro sitio.
-  'status.knowledgeItem.PENDING': 'en cola',
-  'status.knowledgeItem.PROCESSING': 'procesando',
-  'status.knowledgeItem.INDEXED': 'listo',
-  'status.knowledgeItem.FAILED': 'con problemas',
+  'status.knowledgeItem.PENDING': 'esperando turno',
+  'status.knowledgeItem.PROCESSING': 'leyéndolo',
+  'status.knowledgeItem.INDEXED': 'listo para consultar',
+  'status.knowledgeItem.FAILED': 'no se ha podido leer',
   'status.knowledgeItem.SUPERSEDED': 'versión anterior',
   'status.knowledgeItem.DELETED': 'eliminado',
 
@@ -125,8 +125,17 @@ export const es = {
   'status.insightType.RISK': 'riesgo',
   'status.insightType.OPPORTUNITY': 'oportunidad',
 
+  'status.evidenceKind.KNOWLEDGE_ITEM': 'un documento tuyo',
+  'status.evidenceKind.KNOWLEDGE_CHUNK': 'un pasaje de un documento',
+  'status.evidenceKind.CANONICAL_ENTITY': 'un hecho recogido en varios documentos',
+  'status.evidenceRole.BASELINE': 'lo sostiene',
+  'status.evidenceRole.DEVIATION': 'es lo que se ha desviado',
+  'status.evidenceRole.CONTRADICTION': 'lo contradice',
+  'insight.evidence.none':
+    'No queda nada dentro de tu alcance que sostenga esta conclusión.',
+
   'status.freshness.FRESH': 'al día',
-  'status.freshness.STALE': 'ha cambiado desde que se calculó',
+  'status.freshness.STALE': 'lo que la sostenía ha cambiado',
   'status.freshness.UNRESOLVABLE': 'ya no se puede comprobar',
 
   'status.run.PENDING': 'en cola',
@@ -265,18 +274,18 @@ export const es = {
     'Busca por su cuenta riesgos, anomalías y oportunidades en lo que ya sabe.',
 
   // ── Comprensión ──────────────────────────────────────────────────────────
-  'common.confidence.low': 'fiabilidad baja',
-  'common.confidence.medium': 'fiabilidad media',
-  'common.confidence.high': 'fiabilidad alta',
+  'common.confidence.low': 'baja',
+  'common.confidence.medium': 'media',
+  'common.confidence.high': 'alta',
   'insights.title': 'Conclusiones ({count})',
   'insights.empty':
     'No hay conclusiones dentro de tu alcance. Puede que no haya análisis todavía, o que no tengas acceso a las colecciones que las sostienen.',
-  'insight.badge.freshEvidence': 'evidencia intacta',
-  'insight.badge.evidenceChanged': 'su evidencia cambió',
-  'insight.badge.evidenceUnresolvable': 'no se puede comprobar',
-  'insight.badge.disputed': 'validación en disputa',
-  'insight.badge.inherited': 'validado en una versión anterior',
-  'insight.badge.curated': 'validado por una persona',
+  'insight.badge.freshEvidence': 'al día',
+  'insight.badge.evidenceChanged': 'lo que la sostenía ha cambiado',
+  'insight.badge.evidenceUnresolvable': 'ya no se puede comprobar',
+  'insight.badge.disputed': 'lo decidido ya no encaja',
+  'insight.badge.inherited': 'decidido sobre una versión anterior',
+  'insight.badge.curated': 'revisado por una persona',
 
   // ── Análisis ─────────────────────────────────────────────────────────────
   'analysis.found.title': 'Qué ha descubierto',
@@ -400,8 +409,8 @@ export const es = {
   'recs.field.advantages': 'A favor',
   'recs.field.drawbacks': 'En contra',
   'recs.field.plan': 'Por dónde empezar',
-  'recs.evidence.show': 'Ver evidencia',
-  'recs.evidence.hide': 'Ocultar evidencia',
+  'recs.evidence.show': 'Ver en qué se basa',
+  'recs.evidence.hide': 'Ocultar',
   'recs.evidence.why': '¿Por qué me propones esto?',
   'recs.evidence.from': 'Sale de esta conclusión:',
   'recs.evidence.openIt':
@@ -412,19 +421,47 @@ export const es = {
   'recs.readOnly': 'Solo lectura: pide a un compañero con permisos que decida.',
 
   // ── Detalle de una conclusión ────────────────────────────────────────────
+  'insight.finding.CONFIDENCE_DECAYED.title':
+    '«{document}» ya no ofrece la seguridad que pide tu empresa',
+  'insight.finding.CONFIDENCE_DECAYED.detected':
+    'Ha dejado de alcanzar el nivel de fiabilidad que tu empresa exige para usar un documento como referencia.',
+  'insight.finding.CONFIDENCE_DECAYED.matters':
+    'Mientras siga así, BusinessBrain no lo usará para responder preguntas. Conviene revisarlo o volver a subirlo actualizado.',
+  'insight.finding.SOURCE_DISCONNECTED.title':
+    'La fuente «{source}» ha dejado de traer información',
+  'insight.finding.SOURCE_DISCONNECTED.detected':
+    'Está desconectada o está dando error, así que lo que llegaba por ella ya no se actualiza.',
+  'insight.finding.SOURCE_DISCONNECTED.matters':
+    'Hay {count} documentos que dependen de ella y se están quedando desfasados.',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.title':
+    '{count} documentos dicen cosas distintas sobre lo mismo',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.detected':
+    'BusinessBrain no puede determinar por su cuenta cuál de ellos prevalece.',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.matters':
+    'Hasta que alguien lo decida, las respuestas sobre este punto pueden quedarse incompletas.',
+  'insight.finding.goKnowledge': 'Ir a Conocimiento',
+  'insight.finding.detected': 'Qué hemos detectado',
+  'insight.finding.matters': 'Por qué importa',
+  'insight.finding.source': 'De dónde sale',
+  'insight.finding.detail': 'Ver el detalle técnico',
+  'insight.finding.detailHide': 'Ocultar el detalle',
+  'insight.finding.detailWhy':
+    'Lo que registró el sistema al detectarlo, tal cual. Sirve para comprobarlo o para contárselo a quien lleve vuestros sistemas.',
+  'insight.certainty.inline': 'seguridad {level}',
+  'insight.certainty.label': 'Seguridad de esta conclusión',
+  'insight.certainty.explain':
+    'Cuánta seguridad tiene BusinessBrain en lo que afirma aquí. No es la fiabilidad de los documentos: esa se ve en Conocimiento, documento a documento.',
   'insight.notFound': 'No encontrada.',
   'insight.title': 'Conclusión',
-  'insight.curatedOwn': 'Validada sobre esta misma versión',
-  'insight.curatedInherited':
-    'Validada sobre una versión anterior de esta creencia',
+  'insight.curatedOwn': 'Revisada sobre esta misma versión',
+  'insight.curatedInherited': 'Revisada sobre una versión anterior',
   'insight.curatedOn': 'el {date}.',
-  'insight.curationDisputed':
-    'La evidencia posterior contradice lo que se validó.',
-  'insight.mattersBecause': 'Importa porque:',
-  'insight.evidence': 'Evidencia ({count})',
+  'insight.curationDisputed': 'Lo que ha entrado después contradice lo que se decidió.',
+  'insight.mattersBecause': 'Afecta a estos objetivos:',
+  'insight.evidence': 'En qué se apoya ({count})',
   'insight.decide.title': 'Tu decisión',
   'insight.decide.explain':
-    'Lo que decidas tiene prioridad sobre cualquier recálculo automático posterior, hasta que lo revoques. Descartarla la retira de la lectura habitual, sin borrar nada.',
+    'Lo que decidas manda sobre cualquier recálculo posterior, hasta que lo cambies. Descartarla la retira de la lectura habitual; no borra nada.',
   'insight.decide.field': 'Decisión',
   'insight.decide.confirm': 'La confirmo',
   'insight.decide.correct': 'La corrijo',
@@ -432,22 +469,23 @@ export const es = {
   'insight.decide.comment': 'Comentario (opcional)',
   'insight.decide.submit': 'Registrar',
   'insight.decide.done': 'Decisión registrada.',
-  'insight.history.title': 'Cómo ha cambiado esta creencia',
-  'insight.history.empty':
-    'No hay ninguna versión visible dentro de tu alcance.',
-  'insight.history.current': 'versión actual',
-  'insight.history.superseded': 'superada',
-  'insight.history.evidenceCount': '{count} evidencia(s)',
-  'insight.history.confidenceRose': 'La confianza subió {delta} porque:',
-  'insight.history.confidenceFell': 'La confianza bajó {delta} porque:',
+  'insight.history.show': 'Ver cómo ha cambiado',
+  'insight.history.hide': 'Ocultar',
+  'insight.history.title': 'Cómo ha cambiado',
+  'insight.history.empty': 'No hay ninguna versión que puedas ver.',
+  'insight.history.current': 'versión de ahora',
+  'insight.history.superseded': 'versión anterior',
+  'insight.history.evidenceCount': 'se apoya en {count}',
+  'insight.history.confidenceRose': 'Ganó seguridad porque:',
+  'insight.history.confidenceFell': 'Perdió seguridad porque:',
   'insight.history.outOfScope':
     'Y {count} cambio(s) más fuera de tu alcance, que no podemos detallarte.',
   'insight.history.hiddenVersions':
     'Hay {count} versión(es) de esta creencia que no puedes ver con tu alcance actual.',
-  'insight.change.ENTERED': 'entró evidencia nueva',
+  'insight.change.ENTERED': 'entró información nueva',
   'insight.change.LEFT': 'dejó de sostenerla',
   'insight.change.CONTRADICTED': 'la contradijo',
-  'insight.change.SUPERSEDED_EVIDENCE': 'su fuente fue reemplazada',
+  'insight.change.SUPERSEDED_EVIDENCE': 'su documento fue sustituido',
 
   // ── Informes ─────────────────────────────────────────────────────────────
   'reports.new.open': 'Crear informe',
@@ -680,7 +718,7 @@ export const es = {
   // ── Configuración: organización y personas ───────────────────────────────
   'settings.org.title': 'Organización',
   'settings.org.name': 'Nombre',
-  'settings.org.slug': 'Identificador',
+  'settings.org.slug': 'Nombre corto',
   'settings.org.yourRole': 'Tu rol',
   'settings.members.title': 'Miembros ({count})',
   'settings.members.column.name': 'Nombre',
@@ -771,7 +809,7 @@ export const es = {
   'privacy.stored.DOCUMENTS.what':
     'Los documentos que subes o que se leen de tus fuentes',
   'privacy.stored.DOCUMENTS.detail':
-    'Su texto completo, para poder responder con citas. Se guarda en la base de datos de BusinessBrain.',
+    'Su texto completo, para poder responder con citas. Se guarda dentro de BusinessBrain.',
   'privacy.stored.CONVERSATIONS.what': 'Las preguntas y respuestas',
   'privacy.stored.CONVERSATIONS.detail':
     'Para que puedas volver a una conversación anterior.',

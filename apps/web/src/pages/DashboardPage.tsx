@@ -24,6 +24,7 @@ import {
 } from '../components/ui';
 import { useT, type TranslationKey } from '../i18n';
 import { useLabels } from '../i18n/labels';
+import { useHallazgo } from '../insights/lenguaje';
 
 /**
  * El panel: en qué estado está la comprensión de la empresa ahora mismo.
@@ -49,6 +50,7 @@ import { useLabels } from '../i18n/labels';
 export function DashboardPage() {
   const t = useT();
   const labels = useLabels();
+  const comoHallazgo = useHallazgo();
   const formatDay = useFormatDay();
   const { organizations, organizationId } = useAuth();
   usePageTitle('nav.dashboard');
@@ -224,12 +226,14 @@ export function DashboardPage() {
                     to={`/insights/${insight.id}`}
                     className="t-body font-medium text-ink hover:text-accent"
                   >
-                    {insight.summary}
+                    {comoHallazgo(insight).titular}
                   </Link>
                   <p className="mt-1.5 flex flex-wrap items-center gap-2 t-small text-muted">
                     <Badge>{labels.insightType(insight.type)}</Badge>
                     <span>
-                      {labels.confidence(insight.confidence)}
+                      {t('insight.certainty.inline', {
+                        level: labels.confidence(insight.confidence),
+                      })}
                     </span>
                     <span aria-hidden>·</span>
                     <span>{formatDay(insight.createdAt)}</span>

@@ -324,7 +324,7 @@ test('una PYME entra, conecta su conocimiento y obtiene una respuesta con fuente
   await expect(page.getByText(/no ejecuta ninguna acción/i)).toBeVisible();
 
   // ── 11. VER LA EVIDENCIA: ¿por qué me propones esto? ──────────────────────
-  await propuesta.getByRole('button', { name: /ver evidencia/i }).click();
+  await propuesta.getByRole('button', { name: /ver en qué se basa/i }).click();
   await expect(page.getByText(/por qué me propones esto/i)).toBeVisible();
   await expect(page.getByText(/sale de esta conclusión/i)).toBeVisible();
 

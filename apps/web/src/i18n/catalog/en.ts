@@ -102,10 +102,10 @@ export const en: Catalog = {
   'shell.logout': 'Sign out',
 
   // ── System vocabulary, in plain English ──────────────────────────────────
-  'status.knowledgeItem.PENDING': 'queued',
-  'status.knowledgeItem.PROCESSING': 'processing',
-  'status.knowledgeItem.INDEXED': 'ready',
-  'status.knowledgeItem.FAILED': 'has problems',
+  'status.knowledgeItem.PENDING': 'waiting its turn',
+  'status.knowledgeItem.PROCESSING': 'reading it',
+  'status.knowledgeItem.INDEXED': 'ready to consult',
+  'status.knowledgeItem.FAILED': 'could not be read',
   'status.knowledgeItem.SUPERSEDED': 'earlier version',
   'status.knowledgeItem.DELETED': 'deleted',
 
@@ -114,8 +114,16 @@ export const en: Catalog = {
   'status.insightType.RISK': 'risk',
   'status.insightType.OPPORTUNITY': 'opportunity',
 
+  'status.evidenceKind.KNOWLEDGE_ITEM': 'one of your documents',
+  'status.evidenceKind.KNOWLEDGE_CHUNK': 'a passage from a document',
+  'status.evidenceKind.CANONICAL_ENTITY': 'a fact recorded across several documents',
+  'status.evidenceRole.BASELINE': 'supports it',
+  'status.evidenceRole.DEVIATION': 'is what deviated',
+  'status.evidenceRole.CONTRADICTION': 'contradicts it',
+  'insight.evidence.none': 'Nothing within your scope is left supporting this conclusion.',
+
   'status.freshness.FRESH': 'up to date',
-  'status.freshness.STALE': 'changed since it was worked out',
+  'status.freshness.STALE': 'what supported it has changed',
   'status.freshness.UNRESOLVABLE': 'can no longer be checked',
 
   'status.run.PENDING': 'queued',
@@ -256,18 +264,18 @@ export const en: Catalog = {
     'It looks for risks, deviations and opportunities in what it already knows.',
 
   // ── Understanding ────────────────────────────────────────────────────────
-  'common.confidence.low': 'low reliability',
-  'common.confidence.medium': 'medium reliability',
-  'common.confidence.high': 'high reliability',
+  'common.confidence.low': 'low',
+  'common.confidence.medium': 'medium',
+  'common.confidence.high': 'high',
   'insights.title': 'Conclusions ({count})',
   'insights.empty':
     'There are no conclusions within your reach. There may be no analysis yet, or you may not have access to the collections they rest on.',
-  'insight.badge.freshEvidence': 'evidence intact',
-  'insight.badge.evidenceChanged': 'its evidence changed',
-  'insight.badge.evidenceUnresolvable': 'cannot be checked',
-  'insight.badge.disputed': 'approval disputed',
-  'insight.badge.inherited': 'approved on an earlier version',
-  'insight.badge.curated': 'approved by a person',
+  'insight.badge.freshEvidence': 'up to date',
+  'insight.badge.evidenceChanged': 'what supported it has changed',
+  'insight.badge.evidenceUnresolvable': 'cannot be checked any more',
+  'insight.badge.disputed': 'the decision no longer fits',
+  'insight.badge.inherited': 'decided on an earlier version',
+  'insight.badge.curated': 'reviewed by a person',
 
   // ── Analysis ─────────────────────────────────────────────────────────────
   'analysis.found.title': 'What it found',
@@ -395,8 +403,8 @@ export const en: Catalog = {
   'recs.field.advantages': 'In favour',
   'recs.field.drawbacks': 'Against',
   'recs.field.plan': 'Where to start',
-  'recs.evidence.show': 'See evidence',
-  'recs.evidence.hide': 'Hide evidence',
+  'recs.evidence.show': 'See what it is based on',
+  'recs.evidence.hide': 'Hide',
   'recs.evidence.why': 'Why are you suggesting this?',
   'recs.evidence.from': 'It comes from this conclusion:',
   'recs.evidence.openIt':
@@ -408,18 +416,47 @@ export const en: Catalog = {
     'Read only: ask a colleague with permissions to make the decision.',
 
   // ── One conclusion in detail ─────────────────────────────────────────────
+  'insight.finding.CONFIDENCE_DECAYED.title':
+    '"{document}" no longer offers the assurance your company requires',
+  'insight.finding.CONFIDENCE_DECAYED.detected':
+    'It no longer reaches the level of reliability your company requires to use a document as a reference.',
+  'insight.finding.CONFIDENCE_DECAYED.matters':
+    'While it stays like this, BusinessBrain will not use it to answer questions. It is worth reviewing it or uploading an updated version.',
+  'insight.finding.SOURCE_DISCONNECTED.title':
+    'The source "{source}" has stopped bringing information',
+  'insight.finding.SOURCE_DISCONNECTED.detected':
+    'It is disconnected or failing, so whatever came through it is no longer being updated.',
+  'insight.finding.SOURCE_DISCONNECTED.matters':
+    'There are {count} documents that depend on it and are falling out of date.',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.title':
+    '{count} documents say different things about the same point',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.detected':
+    'BusinessBrain cannot determine on its own which of them prevails.',
+  'insight.finding.CANONICALIZATION_UNRESOLVED.matters':
+    'Until someone decides, answers about this point may come out incomplete.',
+  'insight.finding.goKnowledge': 'Go to Knowledge',
+  'insight.finding.detected': 'What we found',
+  'insight.finding.matters': 'Why it matters',
+  'insight.finding.source': 'Where it comes from',
+  'insight.finding.detail': 'See the technical detail',
+  'insight.finding.detailHide': 'Hide the detail',
+  'insight.finding.detailWhy':
+    'What the system recorded when it detected this, as it is. Useful to check it or to pass on to whoever runs your systems.',
+  'insight.certainty.inline': '{level} confidence',
+  'insight.certainty.label': 'Confidence in this conclusion',
+  'insight.certainty.explain':
+    'How sure BusinessBrain is about what it states here. It is not the reliability of the documents: that one is in Knowledge, document by document.',
   'insight.notFound': 'Not found.',
   'insight.title': 'Conclusion',
-  'insight.curatedOwn': 'Approved on this very version',
-  'insight.curatedInherited': 'Approved on an earlier version of this belief',
+  'insight.curatedOwn': 'Reviewed on this same version',
+  'insight.curatedInherited': 'Reviewed on an earlier version',
   'insight.curatedOn': 'on {date}.',
-  'insight.curationDisputed':
-    'Later evidence contradicts what was approved.',
-  'insight.mattersBecause': 'It matters because:',
-  'insight.evidence': 'Evidence ({count})',
+  'insight.curationDisputed': 'What came in afterwards contradicts what was decided.',
+  'insight.mattersBecause': 'It affects these objectives:',
+  'insight.evidence': 'What supports it ({count})',
   'insight.decide.title': 'Your decision',
   'insight.decide.explain':
-    'What you decide takes priority over any later automatic recalculation, until you revoke it. Dismissing it takes it out of everyday reading without deleting anything.',
+    'What you decide overrides any later recalculation, until you change it. Discarding it removes it from normal reading; it deletes nothing.',
   'insight.decide.field': 'Decision',
   'insight.decide.confirm': 'I confirm it',
   'insight.decide.correct': 'I correct it',
@@ -427,21 +464,23 @@ export const en: Catalog = {
   'insight.decide.comment': 'Comment (optional)',
   'insight.decide.submit': 'Record',
   'insight.decide.done': 'Decision recorded.',
-  'insight.history.title': 'How this belief has changed',
-  'insight.history.empty': 'No version is visible within your reach.',
+  'insight.history.show': 'See how it has changed',
+  'insight.history.hide': 'Hide',
+  'insight.history.title': 'How it has changed',
+  'insight.history.empty': 'There is no version you can see.',
   'insight.history.current': 'current version',
-  'insight.history.superseded': 'superseded',
-  'insight.history.evidenceCount': '{count} piece(s) of evidence',
-  'insight.history.confidenceRose': 'Confidence rose {delta} because:',
-  'insight.history.confidenceFell': 'Confidence fell {delta} because:',
+  'insight.history.superseded': 'earlier version',
+  'insight.history.evidenceCount': 'supported by {count}',
+  'insight.history.confidenceRose': 'It gained confidence because:',
+  'insight.history.confidenceFell': 'It lost confidence because:',
   'insight.history.outOfScope':
     'And {count} more change(s) outside your reach, which we cannot detail.',
   'insight.history.hiddenVersions':
     'There are {count} version(s) of this belief you cannot see with your current reach.',
-  'insight.change.ENTERED': 'new evidence came in',
-  'insight.change.LEFT': 'it stopped supporting it',
-  'insight.change.CONTRADICTED': 'it contradicted it',
-  'insight.change.SUPERSEDED_EVIDENCE': 'its source was replaced',
+  'insight.change.ENTERED': 'new information came in',
+  'insight.change.LEFT': 'stopped supporting it',
+  'insight.change.CONTRADICTED': 'contradicted it',
+  'insight.change.SUPERSEDED_EVIDENCE': 'its document was replaced',
 
   // ── Reports ──────────────────────────────────────────────────────────────
   'reports.new.open': 'Create report',
@@ -671,7 +710,7 @@ export const en: Catalog = {
   // ── Settings: organisation and people ────────────────────────────────────
   'settings.org.title': 'Organisation',
   'settings.org.name': 'Name',
-  'settings.org.slug': 'Identifier',
+  'settings.org.slug': 'Short name',
   'settings.org.yourRole': 'Your role',
   'settings.members.title': 'Members ({count})',
   'settings.members.column.name': 'Name',
@@ -679,10 +718,10 @@ export const en: Catalog = {
   'settings.members.column.role': 'Role',
   'settings.reliability.title': 'How demanding you are with your sources',
   'settings.reliability.explain':
-    'Below this reliability level, BusinessBrain will flag a document for someone to review. A number between 0 and 1: the higher, the stricter.',
-  'settings.reliability.field': 'Reliability threshold',
-  'settings.reliability.save': 'Save threshold',
-  'settings.reliability.saved': 'Threshold saved.',
+    'Below this reliability level, BusinessBrain marks a document for someone to review. A number between 0 and 1: the higher, the stricter.',
+  'settings.reliability.field': 'Required reliability',
+  'settings.reliability.save': 'Save requirement',
+  'settings.reliability.saved': 'Requirement saved.',
   'settings.invite.title': 'Invite someone',
   'settings.invite.explain':
     'An invitation link is created. Copy it and send it however you already talk. It will only work for that address.',
@@ -755,7 +794,7 @@ export const en: Catalog = {
   'privacy.stored.DOCUMENTS.what':
     'The documents you upload or that are read from your sources',
   'privacy.stored.DOCUMENTS.detail':
-    'Their full text, so answers can cite them. Stored in the BusinessBrain database.',
+    'Their full text, so answers can cite them. Kept inside BusinessBrain.',
   'privacy.stored.CONVERSATIONS.what': 'Questions and answers',
   'privacy.stored.CONVERSATIONS.detail':
     'So you can come back to an earlier conversation.',

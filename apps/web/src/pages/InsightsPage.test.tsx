@@ -44,7 +44,7 @@ describe('cómo se presenta una conclusión', () => {
     );
 
     expect(screen.getByText(/versión anterior/i)).toBeInTheDocument();
-    expect(screen.queryByText('validado por una persona')).toBeNull();
+    expect(screen.queryByText('revisado por una persona')).toBeNull();
   });
 
   it('una validación en disputa se marca como tal', () => {
@@ -63,7 +63,7 @@ describe('cómo se presenta una conclusión', () => {
       />,
     );
 
-    expect(screen.getByText(/en disputa/i)).toBeInTheDocument();
+    expect(screen.getByText(/ya no encaja/i)).toBeInTheDocument();
   });
 
   it('una validación propia se presenta como tal', () => {
@@ -82,7 +82,7 @@ describe('cómo se presenta una conclusión', () => {
       />,
     );
 
-    expect(screen.getByText('validado por una persona')).toBeInTheDocument();
+    expect(screen.getByText('revisado por una persona')).toBeInTheDocument();
   });
 
   it('sin curación no se inventa ninguna insignia', () => {
@@ -93,12 +93,12 @@ describe('cómo se presenta una conclusión', () => {
   it('una conclusión cuya evidencia cambió NO se presenta como vigente', () => {
     // §3.4: "la frescura se entrega, no se oculta".
     renderLocalized(<FreshnessBadge insight={insight({ freshness: 'STALE' })} />);
-    expect(screen.getByText(/su evidencia cambió/i)).toBeInTheDocument();
+    expect(screen.getByText(/lo que la sostenía ha cambiado/i)).toBeInTheDocument();
   });
 
   it('la evidencia intacta se distingue de la irresoluble', () => {
     const { unmount } = renderLocalized(<FreshnessBadge insight={insight()} />);
-    expect(screen.getByText(/intacta/i)).toBeInTheDocument();
+    expect(screen.getByText(/al día/i)).toBeInTheDocument();
 
     // Se desmonta y se vuelve a montar en vez de usar `rerender`: el proveedor de idioma
     // envuelve al componente, y `rerender` sustituiría el árbol entero dejándolo fuera.

@@ -171,7 +171,10 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await expect(page.getByText('conclusiones nuevas')).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByRole('link', { name: 'Ver la comprensión' })).toBeVisible();
+  // El enlace vive ahora en la tarjeta que enseña las conclusiones, no repetido arriba.
+  await expect(
+    page.getByRole('link', { name: 'Ver toda la comprensión' }),
+  ).toBeVisible();
 
   // ── 8. COMPRENSIÓN visible ────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Comprensión', exact: true }).click();
@@ -186,8 +189,12 @@ test('una persona recorre BusinessBrain de principio a fin', async ({ page }) =>
   await expect(page.getByText('Decisión registrada.')).toBeVisible();
 
   // ── 10. HISTORIA de la creencia ───────────────────────────────────────────
-  await expect(page.getByText(/cómo ha cambiado esta creencia/i)).toBeVisible();
-  await expect(page.getByText(/versión actual/i)).toBeVisible();
+  // Detrás de su botón: cada versión guarda el resumen que compuso el motor en su momento,
+  // con sus números y su umbral, y eso no puede ser lo último que lee quien solo quería
+  // entender el hallazgo. Sigue estando entero.
+  await expect(page.getByText(/cómo ha cambiado/i).first()).toBeVisible();
+  await page.getByRole('button', { name: /ver cómo ha cambiado/i }).click();
+  await expect(page.getByText(/versión de ahora/i)).toBeVisible();
 
   // ── 11. INFORME ───────────────────────────────────────────────────────────
   await page.getByRole('link', { name: 'Informes', exact: true }).click();

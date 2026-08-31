@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { BeliefHistory, Insight } from '../api/types';
+import type { BeliefHistory, Insight, KnowledgeItem } from '../api/types';
 import {
   Badge,
   Button,
@@ -9,14 +9,19 @@ import {
   Empty,
   ErrorNote,
   Field,
+  PageHeader,
+  Section,
   inputClass,
   useAction,
   useFormatDate,
+  useFormatDay,
+  usePageTitle,
   useResource,
 } from '../components/ui';
 import { CurationBadge, FreshnessBadge } from './InsightsPage';
 import { useT, type TranslationKey } from '../i18n';
 import { useLabels } from '../i18n/labels';
+import { useHallazgo } from '../insights/lenguaje';
 
 /**
  * Una conclusión: en qué se apoya, qué se ha decidido sobre ella y cómo ha cambiado.
@@ -32,7 +37,9 @@ export function InsightDetailPage() {
   const { insightId = '' } = useParams();
   const t = useT();
   const labels = useLabels();
-  const formatDate = useFormatDate();
+  const formatDay = useFormatDay();
+  const comoHallazgo = useHallazgo();
+  usePageTitle('nav.insights');
 
   const insight = useResource(
     () => api<Insight>(`/insights/${insightId}`),
@@ -53,55 +60,98 @@ export function InsightDetailPage() {
   if (!insight.data) return <Empty>{t('insight.notFound')}</Empty>;
 
   const data = insight.data;
+  const hallazgo = comoHallazgo(data);
 
   return (
     <>
-      <Card title={t('insight.title')}>
-        <p className="t-small">{data.summary}</p>
+      {/*
+        ── NIVEL 1 ────────────────────────────────────────────────────────────
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 t-fine text-muted">
-          <Badge>{labels.insightType(data.type)}</Badge>
-          <span>
-            {labels.confidence(data.confidence)}
-          </span>
-          <FreshnessBadge insight={data} />
-          <CurationBadge insight={data} />
-          <span className="text-faint">{formatDate(data.createdAt)}</span>
-        </div>
+        Qué ha pasado → por qué importa → qué hacer. En ese orden, y con el titular como
+        encabezado de la pantalla: antes esta página empezaba con una tarjeta llamada
+        "Conclusión" y, dentro, la frase que compone el motor —«la confianza cayó a 0.64, por
+        debajo del umbral 0.95»—. La pantalla, además, no tenía `h1`.
+      */}
+      <PageHeader title={hallazgo.titular} />
 
-        <p className="mt-2 t-fine text-muted">{data.freshnessRationale}</p>
+      <div className="space-y-4">
+        <Section>
+          {hallazgo.detectado && (
+            <div className="mb-4">
+              <p className="t-micro text-muted">{t('insight.finding.detected')}</p>
+              <p className="mt-1 t-body text-ink-soft">{hallazgo.detectado}</p>
+            </div>
+          )}
 
-        {data.curation && (
-          <p className="mt-2 t-fine text-muted">
-            {data.curation.origin === 'OWN'
-              ? t('insight.curatedOwn')
-              : t('insight.curatedInherited')}{' '}
-            {t('insight.curatedOn', { date: formatDate(data.curation.at) })}
-            {data.curation.comment && ` «${data.curation.comment}»`}
-            {data.curation.disputed && ` ${t('insight.curationDisputed')}`}
-          </p>
-        )}
+          {hallazgo.porQueImporta && (
+            <div className="mb-4">
+              <p className="t-micro text-muted">{t('insight.finding.matters')}</p>
+              <p className="mt-1 t-body text-ink-soft">{hallazgo.porQueImporta}</p>
+            </div>
+          )}
 
-        {data.businessObjectives.length > 0 && (
-          <p className="mt-2 t-fine text-muted">
-            {t('insight.mattersBecause')}{' '}
-            {data.businessObjectives.map((o) => o.statement).join(' · ')}
-          </p>
-        )}
+          {data.businessObjectives.length > 0 && (
+            <div className="mb-4">
+              <p className="t-micro text-muted">{t('insight.mattersBecause')}</p>
+              <ul className="mt-1 space-y-0.5">
+                {data.businessObjectives.map((objetivo) => (
+                  <li key={objetivo.id} className="t-body text-ink-soft">
+                    {objetivo.statement}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-        <div className="mt-3">
-          <p className="t-fine font-medium text-ink-soft">
-            {t('insight.evidence', { count: data.evidence.length })}
-          </p>
-          <ul className="mt-1 space-y-1 t-fine text-muted">
-            {data.evidence.map((piece, index) => (
-              <li key={`${piece.refId}-${index}`}>
-                {piece.role} · {piece.kind} · {piece.refId}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Card>
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+            {hallazgo.accion && (
+              <Link
+                to={hallazgo.accion.a}
+                className="rounded-md bg-ink px-3.5 py-2 t-small font-medium text-white transition-colors hover:bg-ink-soft"
+              >
+                {hallazgo.accion.texto}
+              </Link>
+            )}
+            <Badge>{labels.insightType(data.type)}</Badge>
+            <FreshnessBadge insight={data} />
+            <CurationBadge insight={data} />
+            <span className="t-fine text-faint">{formatDay(data.createdAt)}</span>
+          </div>
+
+          {data.curation && (
+            <p className="mt-3 t-small text-muted">
+              {data.curation.origin === 'OWN'
+                ? t('insight.curatedOwn')
+                : t('insight.curatedInherited')}{' '}
+              {t('insight.curatedOn', { date: formatDay(data.curation.at) })}
+              {data.curation.comment && ` «${data.curation.comment}»`}
+              {data.curation.disputed && ` ${t('insight.curationDisputed')}`}
+            </p>
+          )}
+        </Section>
+
+        {/* ── NIVEL 2: de dónde sale y cuánta seguridad tiene ─────────────── */}
+        <Section title={t('insight.finding.source')}>
+          <Evidencia insight={data} />
+
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="t-micro text-muted">{t('insight.certainty.label')}</p>
+            <p className="mt-1 t-body font-medium text-ink">
+              {labels.confidence(data.confidence)}
+            </p>
+            {/*
+              Con nombre y apellido. "Fiabilidad alta" a secas, junto a un texto que hablaba
+              de un 0.64, se leía como una contradicción: son dos cosas distintas —la
+              seguridad de la conclusión y la de un documento— que se llamaban igual.
+            */}
+            <p className="mt-1 max-w-xl t-small text-muted">
+              {t('insight.certainty.explain')}
+            </p>
+          </div>
+
+          <DetalleTecnico insight={data} />
+        </Section>
+      </div>
 
       <CurateCard
         insightId={insightId}
@@ -117,6 +167,86 @@ export function InsightDetailPage() {
         loading={history.loading}
       />
     </>
+  );
+}
+
+/**
+ * En qué se apoya la conclusión, con los documentos por su nombre.
+ *
+ * Antes esto era una lista de `DEVIATION · KNOWLEDGE_ITEM · cmtfv...`: tres constantes
+ * internas y un identificador que no significa nada para nadie. Los documentos se resuelven
+ * contra `/knowledge-items`, que ya viene acotado por alcance — si una pieza de evidencia
+ * cayera fuera del alcance de quien mira, aquí no aparecería su nombre, y eso es lo correcto.
+ */
+function Evidencia({ insight }: { insight: Insight }) {
+  const t = useT();
+  const labels = useLabels();
+  const items = useResource(() => api<KnowledgeItem[]>('/knowledge-items'), []);
+
+  if (insight.evidence.length === 0) {
+    return <p className="t-small text-muted">{t('insight.evidence.none')}</p>;
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {insight.evidence.map((pieza, indice) => {
+        const documento = items.data?.find((item) => item.id === pieza.refId);
+        return (
+          <li
+            key={`${pieza.refId}-${indice}`}
+            className="flex flex-wrap items-baseline gap-x-2 t-body text-ink-soft"
+          >
+            <span>{documento?.title ?? labels.evidenceKind(pieza.kind)}</span>
+            <span className="t-fine text-muted">
+              {labels.evidenceRole(pieza.role)}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * El nivel 2 del nivel 2: lo que registró el motor, tal cual.
+ *
+ * No se tira nada. Quien tenga que comprobar por qué el sistema decidió esto —o pasárselo a
+ * quien lleve sus sistemas— lo tiene aquí, incluido el resumen literal con sus números. Lo
+ * que cambia es que ya no es lo primero que se lee.
+ */
+function DetalleTecnico({ insight }: { insight: Insight }) {
+  const t = useT();
+  const [abierto, setAbierto] = useState(false);
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <Button
+        variant="ghost"
+        aria-expanded={abierto}
+        onClick={() => setAbierto(!abierto)}
+      >
+        {abierto ? t('insight.finding.detailHide') : t('insight.finding.detail')}
+      </Button>
+
+      {abierto && (
+        <div className="mt-3 rounded-md bg-sunken p-4">
+          <p className="t-fine text-muted">{t('insight.finding.detailWhy')}</p>
+          <p className="mt-3 t-small text-ink-soft">{insight.summary}</p>
+          {insight.freshnessRationale && (
+            <p className="mt-2 t-small text-muted">
+              {insight.freshnessRationale}
+            </p>
+          )}
+          <ul className="mt-3 space-y-0.5 font-mono t-fine text-muted">
+            {insight.evidence.map((pieza, indice) => (
+              <li key={`${pieza.refId}-${indice}`}>
+                {pieza.role} · {pieza.kind} · {pieza.refId}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -206,16 +336,37 @@ function HistoryCard({
   const t = useT();
   const labels = useLabels();
   const formatDate = useFormatDate();
+  /*
+   * Plegado.
+   *
+   * Cada versión guarda el resumen que compuso el motor en su momento, con sus números y su
+   * umbral, y ese texto NO se puede reescribir desde aquí: la historia no trae la traza de
+   * cada versión, solo el texto ya compuesto. Inventarle un titular sería afirmar algo que
+   * no sabemos, así que se enseña tal cual — pero detrás de su botón, no como lo último que
+   * lee alguien que solo quería entender el hallazgo.
+   */
+  const [abierto, setAbierto] = useState(false);
 
   return (
-    <Card title={t('insight.history.title')}>
-      <ErrorNote error={error} />
-      {loading && <Empty>{t('common.loading')}</Empty>}
-      {history && history.versions.length === 0 && (
+    <Card
+      title={t('insight.history.title')}
+      actions={
+        <Button
+          variant="ghost"
+          aria-expanded={abierto}
+          onClick={() => setAbierto(!abierto)}
+        >
+          {abierto ? t('insight.history.hide') : t('insight.history.show')}
+        </Button>
+      }
+    >
+      {abierto && <ErrorNote error={error} />}
+      {abierto && loading && <Empty>{t('common.loading')}</Empty>}
+      {abierto && history && history.versions.length === 0 && (
         <Empty>{t('insight.history.empty')}</Empty>
       )}
 
-      {history && history.versions.length > 0 && (
+      {abierto && history && history.versions.length > 0 && (
         <>
           <ol className="space-y-3">
             {history.versions.map((version, index) => {
@@ -230,7 +381,9 @@ function HistoryCard({
                         : t('insight.history.superseded')}
                     </Badge>
                     <span>
-                      {labels.confidence(version.confidence)}
+                      {t('insight.certainty.inline', {
+                        level: labels.confidence(version.confidence),
+                      })}
                     </span>
                     <span>
                       {t('insight.history.evidenceCount', {

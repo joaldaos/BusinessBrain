@@ -73,6 +73,16 @@ export function useLabels() {
        * Los cortes son los del propio producto —0.7 es el suelo por defecto de recuperación—
        * y no una escala inventada aquí.
        */
+      /**
+       * De qué clase es una pieza de evidencia: un documento, un pasaje, otra conclusión.
+       *
+       * Se usa solo cuando NO se ha podido resolver el nombre real. Con nombre, el nombre
+       * gana siempre: "politica-descuentos.pdf" dice más que "un documento".
+       */
+      evidenceKind: (v: string | null | undefined) => traducir('evidenceKind', v),
+      /** Qué papel juega esa pieza: la sostiene, la contradice, es lo que se desvió. */
+      evidenceRole: (v: string | null | undefined) => traducir('evidenceRole', v),
+
       confidence: (valor: number | null | undefined): string => {
         if (valor == null) return t('common.none');
         if (valor >= 0.85) return t('common.confidence.high');

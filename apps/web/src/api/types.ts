@@ -130,6 +130,26 @@ export interface Insight {
   freshness: InsightFreshness;
   freshnessRationale: string;
   strategyKey: string;
+  /**
+   * Cómo llegó el motor a esta conclusión.
+   *
+   * La API lo devolvía desde siempre y la interfaz no lo declaraba, así que lo único que se
+   * podía enseñar era el `summary` que compone el propio motor — escrito en su vocabulario:
+   * «la confianza cayó a 0.64, por debajo del umbral 0.95 configurado por la organización».
+   *
+   * Aquí están los HECHOS con los que se compuso esa frase. Con ellos, la pantalla puede
+   * decir lo mismo en palabras de negocio sin inventarse nada: `signalKind` dice de qué tipo
+   * de hallazgo se trata y `facts` trae los datos concretos.
+   *
+   * Es deliberadamente laxo: lo escribe cada estrategia y una desconocida no debe romper la
+   * pantalla. Quien lo lea comprueba antes lo que necesita.
+   */
+  reasoningTrace?: {
+    strategyKind?: string;
+    signalKind?: string;
+    rule?: string;
+    facts?: Record<string, unknown>;
+  } | null;
   evidence: { kind: string; role: string; refId: string | null }[];
   businessObjectives: { id: string; statement: string }[];
   curation: EffectiveCuration | null;

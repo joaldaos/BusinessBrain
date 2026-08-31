@@ -26,6 +26,7 @@ import {
 } from '../components/ui';
 import { useT } from '../i18n';
 import { useLabels } from '../i18n/labels';
+import { useHallazgo } from '../insights/lenguaje';
 
 /**
  * Análisis: pedirle al motor que razone ahora.
@@ -267,6 +268,7 @@ function AnalysisAdmin() {
 function Descubrimientos() {
   const t = useT();
   const labels = useLabels();
+  const comoHallazgo = useHallazgo();
 
   const insights = useResource(() => api<Insight[]>('/insights?limit=4'));
   const propuestas = useResource(() =>
@@ -305,11 +307,15 @@ function Descubrimientos() {
                   to={`/insights/${insight.id}`}
                   className="t-body font-medium text-ink hover:text-accent"
                 >
-                  {insight.summary}
+                  {comoHallazgo(insight).titular}
                 </Link>
                 <p className="mt-1.5 flex flex-wrap items-center gap-2 t-small text-muted">
                   <StatusPill>{labels.insightType(insight.type)}</StatusPill>
-                  <span>{labels.confidence(insight.confidence)}</span>
+                  <span>
+                    {t('insight.certainty.inline', {
+                      level: labels.confidence(insight.confidence),
+                    })}
+                  </span>
                 </p>
               </li>
             ))}

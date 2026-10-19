@@ -12,6 +12,7 @@ import {
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -133,7 +134,10 @@ export class IntegrationsService {
     // se conserva el que ya había: sobrescribirlo con nulo dejaría la conexión viva hasta que
     // caducara el de acceso y muerta después, sin que nadie supiera por qué.
     const refreshTokenEnc = params.tokens.refreshToken
-      ? this.encryption.encrypt(params.tokens.refreshToken)
+      ? this.encryption.encryptFor(
+          forOrganization(params.organizationId),
+          params.tokens.refreshToken,
+        )
       : (existing?.refreshTokenEnc ?? null);
 
     if (!refreshTokenEnc) {
@@ -147,7 +151,10 @@ export class IntegrationsService {
       organizationId: params.organizationId,
       provider: params.provider,
       status: ConnectionStatus.CONNECTED,
-      accessTokenEnc: this.encryption.encrypt(params.tokens.accessToken),
+      accessTokenEnc: this.encryption.encryptFor(
+        forOrganization(params.organizationId),
+        params.tokens.accessToken,
+      ),
       refreshTokenEnc,
       scope: params.tokens.scope,
       expiresAt: params.tokens.expiresAt,
@@ -220,7 +227,10 @@ export class IntegrationsService {
       integration.expiresAt.getTime() - EXPIRY_MARGIN_MS > Date.now();
 
     if (stillValid) {
-      return this.encryption.decrypt(integration.accessTokenEnc!);
+      return this.encryption.decryptFor(
+        forOrganization(integration.organizationId),
+        integration.accessTokenEnc!,
+      );
     }
 
     if (!integration.refreshTokenEnc) {
@@ -232,16 +242,27 @@ export class IntegrationsService {
 
     try {
       const renewed = await this.oauth.refreshTokens(
-        this.encryption.decrypt(integration.refreshTokenEnc),
+        this.encryption.decryptFor(
+          forOrganization(integration.organizationId),
+          integration.refreshTokenEnc,
+        ),
       );
 
       await this.prisma.integration.update({
         where: { id: integration.id },
         data: {
-          accessTokenEnc: this.encryption.encrypt(renewed.accessToken),
+          accessTokenEnc: this.encryption.encryptFor(
+            forOrganization(integration.organizationId),
+            renewed.accessToken,
+          ),
           expiresAt: renewed.expiresAt,
           ...(renewed.refreshToken
-            ? { refreshTokenEnc: this.encryption.encrypt(renewed.refreshToken) }
+            ? {
+                refreshTokenEnc: this.encryption.encryptFor(
+                  forOrganization(integration.organizationId),
+                  renewed.refreshToken,
+                ),
+              }
             : {}),
         },
       });
@@ -277,7 +298,10 @@ export class IntegrationsService {
     if (integration.refreshTokenEnc) {
       try {
         await this.oauth.revoke(
-          this.encryption.decrypt(integration.refreshTokenEnc),
+          this.encryption.decryptFor(
+            forOrganization(integration.organizationId),
+            integration.refreshTokenEnc,
+          ),
         );
       } catch (error) {
         // Si Google no responde, la desconexión sigue adelante: dejar los tokens aquí

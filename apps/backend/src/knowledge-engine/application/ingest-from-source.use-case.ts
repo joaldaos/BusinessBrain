@@ -12,6 +12,7 @@ import {
 } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -177,7 +178,10 @@ export class IngestFromSourceUseCase {
       const extracted = await connector.extract({
         ...(params.connectorInput as Record<string, unknown> | undefined),
         organizationId: params.organizationId,
-        config: this.readConfig(knowledgeSource.configEnc),
+        config: this.readConfig(
+          knowledgeSource.configEnc,
+          params.organizationId,
+        ),
         cursor:
           typeof knowledgeSource.syncCursor === 'string'
             ? knowledgeSource.syncCursor
@@ -693,10 +697,15 @@ export class IngestFromSourceUseCase {
    * conector quien dice qué le falta, en su idioma. `configEnc` puede venir de una fuente
    * antigua o de una clave rotada, y "no se pudo descifrar" no le dice nada a nadie.
    */
-  private readConfig(configEnc: string): Record<string, unknown> {
+  private readConfig(
+    configEnc: string,
+    organizationId: string,
+  ): Record<string, unknown> {
     if (!configEnc) return {};
     try {
-      const parsed: unknown = JSON.parse(this.encryption.decrypt(configEnc));
+      const parsed: unknown = JSON.parse(
+        this.encryption.decryptFor(forOrganization(organizationId), configEnc),
+      );
       return typeof parsed === 'object' &&
         parsed !== null &&
         !Array.isArray(parsed)

@@ -4,6 +4,7 @@ import {
   explainVerificationFailure,
 } from './ai-configuration.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { ProviderRegistry } from './provider-registry.service';
@@ -73,9 +74,9 @@ describe('AiConfigurationService', () => {
       const guardado = prisma.llmProfile.create.mock.calls[0][0].data;
       // Cifrada de verdad: el valor en claro no está en lo que se escribe.
       expect(guardado.apiKeyEnc).not.toContain('sk-la-clave-de-la-empresa');
-      expect(encryption.decrypt(guardado.apiKeyEnc)).toBe(
-        'sk-la-clave-de-la-empresa',
-      );
+      expect(
+        encryption.decryptFor(forOrganization('org-1'), guardado.apiKeyEnc),
+      ).toBe('sk-la-clave-de-la-empresa');
 
       // Y la respuesta no la lleva por ninguna vía, ni siquiera enmascarada.
       expect(JSON.stringify(resultado)).not.toContain('sk-');

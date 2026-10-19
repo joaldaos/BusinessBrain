@@ -15,7 +15,7 @@ describe('KnowledgeSourcesService', () => {
     knowledgeCollection: { count: jest.Mock };
     $transaction: jest.Mock;
   };
-  let encryption: { encrypt: jest.Mock };
+  let encryption: { encryptFor: jest.Mock };
   let service: KnowledgeSourcesService;
 
   beforeEach(() => {
@@ -35,7 +35,9 @@ describe('KnowledgeSourcesService', () => {
     prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) =>
       fn(prisma),
     );
-    encryption = { encrypt: jest.fn().mockReturnValue('iv:tag:cipher') };
+    encryption = {
+      encryptFor: jest.fn().mockReturnValue('v2:iv:tag:cipher'),
+    };
     service = new KnowledgeSourcesService(
       prisma as unknown as PrismaService,
       encryption as unknown as EncryptionService,
@@ -59,11 +61,14 @@ describe('KnowledgeSourcesService', () => {
       config: { foo: 'bar' },
     });
 
-    expect(encryption.encrypt).toHaveBeenCalledWith(
+    // Y cifrada PARA esta organización: desde la Fase 9A la clave se deriva del dueño del
+    // secreto, así que el ámbito forma parte de la garantía, no es un parámetro más.
+    expect(encryption.encryptFor).toHaveBeenCalledWith(
+      { kind: 'organization', id: 'org-1' },
       JSON.stringify({ foo: 'bar' }),
     );
     const call = prisma.knowledgeSource.create.mock.calls[0][0];
-    expect(call.data.configEnc).toBe('iv:tag:cipher');
+    expect(call.data.configEnc).toBe('v2:iv:tag:cipher');
     expect(call.select).not.toHaveProperty('configEnc');
   });
 
@@ -76,7 +81,10 @@ describe('KnowledgeSourcesService', () => {
       connectorKey: 'file_upload_v1',
     });
 
-    expect(encryption.encrypt).toHaveBeenCalledWith('{}');
+    expect(encryption.encryptFor).toHaveBeenCalledWith(
+      { kind: 'organization', id: 'org-1' },
+      '{}',
+    );
   });
 
   it('lanza NotFoundException si la fuente no existe en la organización', async () => {

@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { LlmProviderName, type LlmProfile } from '@businessbrain/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import { AnthropicProvider } from '../infrastructure/providers/anthropic.provider';
 import { OpenAiProvider } from '../infrastructure/providers/openai.provider';
 import type { LlmProviderPort } from '../domain/ports/llm-provider.port';
@@ -222,6 +223,22 @@ export class ProviderRegistry {
    * plataforma no tiene tope por presupuesto— y quien lo acota es el tope de vueltas del
    * propio asistente.
    */
+  /**
+   * La clave del perfil, descifrada con el ámbito de su DUEÑO.
+   *
+   * El perfil de plataforma no tiene organización: su clave se cifró con la maestra y así se
+   * lee. Es el único secreto que no pertenece a ninguna empresa, y por eso es el único que
+   * no se deriva.
+   */
+  private readApiKey(profile: LlmProfile): string {
+    return profile.organizationId
+      ? this.encryption.decryptFor(
+          forOrganization(profile.organizationId),
+          profile.apiKeyEnc!,
+        )
+      : this.encryption.decrypt(profile.apiKeyEnc!);
+  }
+
   private usable(
     profile: LlmProfile,
     organizationId: string | null,
@@ -237,7 +254,11 @@ export class ProviderRegistry {
           : this.meteredLlm(organizationId, provider),
       // Sin clave propia se devuelve `undefined`, que es lo que el proveedor interpreta como
       // "usa la de plataforma". Nunca una cadena vacía: parecería una clave y fallaría lejos.
-      apiKey: apiKeyEnc ? this.encryption.decrypt(apiKeyEnc) : undefined,
+      //
+      // Se descifra con el ámbito de QUIEN POSEE el perfil, no de quien lo consume: una
+      // empresa que usa el perfil de plataforma tiene que poder leer esa clave, y derivarla
+      // por el consumidor la dejaría ilegible.
+      apiKey: apiKeyEnc ? this.readApiKey(profile) : undefined,
     };
   }
 

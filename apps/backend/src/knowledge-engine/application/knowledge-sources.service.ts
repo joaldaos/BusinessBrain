@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import { RestrictedPerimeterService } from './restricted-perimeter.service';
 import type { CreateKnowledgeSourceDto } from '../dto/create-knowledge-source.dto';
 
@@ -63,7 +64,10 @@ export class KnowledgeSourcesService {
           type: dto.type,
           connectorKey: dto.connectorKey,
           name: dto.name,
-          configEnc: this.encryption.encrypt(JSON.stringify(dto.config ?? {})),
+          configEnc: this.encryption.encryptFor(
+            forOrganization(organizationId),
+            JSON.stringify(dto.config ?? {}),
+          ),
           createdById,
           integrationId: dto.integrationId ?? null,
         },
@@ -158,9 +162,15 @@ export class KnowledgeSourcesService {
    * secretos de otras fuentes presentes o futuras; no devolver nada dejaría a la persona sin
    * saber QUÉ etiqueta o carpeta está entrando, que es la mitad de la decisión que tomó.
    */
-  private describe<T extends { configEnc: string; connectorKey: string }>(
-    source: T & { ingestionJobs?: LastJob[] },
-  ) {
+  private describe<
+    T extends {
+      configEnc: string;
+      connectorKey: string;
+      // Hace falta para descifrar: desde la Fase 9A la clave se deriva de la organización
+      // dueña del secreto, así que describir una fuente exige saber de quién es.
+      organizationId: string;
+    },
+  >(source: T & { ingestionJobs?: LastJob[] }) {
     const { configEnc, ingestionJobs, ...visible } = source;
     const [lastJob] = ingestionJobs ?? [];
 
@@ -168,7 +178,7 @@ export class KnowledgeSourcesService {
       ...visible,
       syncScope: describeSyncScope(
         visible.connectorKey,
-        this.readConfig(configEnc),
+        this.readConfig(configEnc, visible.organizationId),
       ),
       // Qué pasó en la última ejecución: cuántos entraron, cuántos se actualizaron y qué
       // falló. Sin esto, "sincronizado" no distingue traer 40 documentos de no traer ninguno.
@@ -184,10 +194,15 @@ export class KnowledgeSourcesService {
   }
 
   /** Config descifrada. Una config ilegible no rompe el listado: se describe como vacía. */
-  private readConfig(configEnc: string): Record<string, unknown> {
+  private readConfig(
+    configEnc: string,
+    organizationId: string,
+  ): Record<string, unknown> {
     if (!configEnc) return {};
     try {
-      const parsed: unknown = JSON.parse(this.encryption.decrypt(configEnc));
+      const parsed: unknown = JSON.parse(
+        this.encryption.decryptFor(forOrganization(organizationId), configEnc),
+      );
       return typeof parsed === 'object' &&
         parsed !== null &&
         !Array.isArray(parsed)

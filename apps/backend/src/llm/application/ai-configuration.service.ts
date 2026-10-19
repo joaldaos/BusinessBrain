@@ -3,6 +3,7 @@ import { LlmProviderName } from '@businessbrain/database';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forOrganization } from '../../common/utils/encryption-scope';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -131,7 +132,10 @@ export class AiConfigurationService {
       organizationId: params.organizationId,
       provider: params.provider,
       modelName,
-      apiKeyEnc: this.encryption.encrypt(apiKey),
+      apiKeyEnc: this.encryption.encryptFor(
+        forOrganization(params.organizationId),
+        apiKey,
+      ),
       isDefault: true,
     };
 

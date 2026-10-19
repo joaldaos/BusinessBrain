@@ -501,6 +501,7 @@ model Organization {
   jobs                      Job[]
   businessEntities          BusinessEntity[]
   businessEvents            BusinessEvent[]
+  organizationConnectors    OrganizationConnector[]
 
   @@index([slug])
 }
@@ -1207,11 +1208,31 @@ model Integration {
   // indexa ni se recupera, al contrario que el contenido que trae.
   accountLabel    String?
   connectedById   String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
 
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // ── Ampliación de la Fase 9A ──────────────────────────────────────────
+  // Las columnas de arriba tienen forma de OAuth de Google, que es lo único que había. Un
+  // TPV con clave de API o un programa de facturación con usuario y contraseña no caben
+  // ahí. Las de abajo generalizan SIN tocar lo que ya funciona: Google sigue usando las
+  // suyas y no se migra nada.
+
+  /// Qué implementación la usa, p. ej. "square_v1". Nulo en las conexiones anteriores a
+  /// esta fase, que se identifican por `provider`.
+  connectorKey String?
+  /// Cómo se autentica. Decide qué se le pide a la persona al conectar.
+  authKind     ConnectorAuthKind @default(OAUTH2)
+  /// El secreto, cifrado y genérico: una clave de API, un par usuario/contraseña en JSON,
+  /// lo que el conector necesite. Cifrado SIEMPRE con la clave derivada de la organización.
+  secretEnc    String?
+  /// Cuándo se revocó. Una conexión revocada conserva su fila —para poder contar qué pasó—
+  /// pero ya no tiene secreto que usar.
+  revokedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   knowledgeSources KnowledgeSource[]
+  connectors       OrganizationConnector[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -1849,4 +1870,75 @@ model BusinessEvent {
   @@index([organizationId, kind, occurredAt])
   @@index([organizationId, correlationId])
   @@index([subjectId])
+}
+
+// Cómo se autentica una conexión externa. Hoy solo hay OAuth de Google; el resto existe
+// porque un TPV o un programa de facturación casi nunca usan OAuth.
+enum ConnectorAuthKind {
+  OAUTH2
+  API_KEY
+  BASIC
+  NONE
+}
+
+/// Un conector activo en una empresa — gemelo de `KnowledgeSource` para la vía de hechos.
+///
+/// **No se reutiliza `KnowledgeSource` a propósito.** Sus invariantes —pertenecer a
+/// colecciones, producir `KnowledgeItem`— no se cumplen aquí, y una fila que las incumpla
+/// envenenaría el alcance de conocimiento, que es lo que sostiene los permisos de lectura.
+model OrganizationConnector {
+  id             String @id @default(cuid())
+  organizationId String
+  /// Qué implementación lo atiende, p. ej. "square_v1". Texto y no enum: añadir un conector
+  /// no debe exigir una migración.
+  connectorKey   String
+  displayName    String
+
+  status       ConnectionStatus @default(PENDING)
+  /// Conexión que lo autoriza y custodia su secreto. Nula mientras no se haya conectado.
+  integrationId String?
+
+  /// Por dónde se quedó. **No es un secreto** —no da acceso a nada— y por eso no viaja en
+  /// el bloque cifrado, que se descifra entero en cada uso.
+  syncCursor Json?
+
+  lastSyncedAt DateTime?
+  lastError    String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  Integration?    @relation(fields: [integrationId, organizationId], references: [id, organizationId], onDelete: SetNull)
+  syncs        ConnectorSync[]
+
+  /// Un conector por empresa y clase. Dos conexiones al mismo TPV duplicarían cada hecho
+  /// bajo dos `connectorId` distintos, y la unicidad que da la idempotencia dejaría de
+  /// servir para nada.
+  @@unique([organizationId, connectorKey])
+  @@unique([id, organizationId])
+  @@index([organizationId])
+}
+
+/// Una ejecución de sincronización — gemelo de `IngestionJob`.
+///
+/// Sin histórico por ejecución no hay diagnóstico posible: `lastError` dice qué falló la
+/// última vez, no si lleva fallando tres semanas.
+model ConnectorSync {
+  id             String    @id @default(cuid())
+  connectorId    String
+  organizationId String
+  trigger        IngestionTriggerType @default(MANUAL)
+  status         RunStatus @default(PENDING)
+  /// { entitiesCreated, entitiesUpdated, eventsCreated, eventsSkippedDuplicate, eventsRejected }
+  stats          Json      @default("{}")
+  error          String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  connector OrganizationConnector @relation(fields: [connectorId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([connectorId, startedAt])
+  @@index([organizationId])
 }

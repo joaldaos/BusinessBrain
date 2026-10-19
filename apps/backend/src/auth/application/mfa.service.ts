@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
+import { forUser } from '../../common/utils/encryption-scope';
 import { AuditService } from '../../audit/audit.service';
 import {
   AUDIT_ACTIONS,
@@ -91,7 +92,9 @@ export class MfaService {
     const secret = generateTotpSecret();
     await this.prisma.user.update({
       where: { id: userId },
-      data: { mfaSecretEnc: this.encryption.encrypt(secret) },
+      data: {
+        mfaSecretEnc: this.encryption.encryptFor(forUser(userId), secret),
+      },
     });
 
     const url = otpauthUrl({ secret, account: user.email });
@@ -127,7 +130,12 @@ export class MfaService {
       );
     }
 
-    if (!verifyTotp(this.encryption.decrypt(user.mfaSecretEnc), code)) {
+    if (
+      !verifyTotp(
+        this.encryption.decryptFor(forUser(userId), user.mfaSecretEnc),
+        code,
+      )
+    ) {
       await this.recordFailure(userId, 'enrollment');
       throw new BadRequestException(MFA_CODE_REJECTED_MESSAGE);
     }
@@ -200,7 +208,12 @@ export class MfaService {
       throw new UnauthorizedException(MFA_CODE_REJECTED_MESSAGE);
     }
 
-    if (verifyTotp(this.encryption.decrypt(user.mfaSecretEnc), code)) {
+    if (
+      verifyTotp(
+        this.encryption.decryptFor(forUser(userId), user.mfaSecretEnc),
+        code,
+      )
+    ) {
       await this.resetAttempts(userId);
       await this.audit.record({
         organizationId: null,

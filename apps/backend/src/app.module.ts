@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
+import { JobsModule } from './jobs/jobs.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -52,6 +53,7 @@ import type { AppConfig } from './config/configuration';
     }),
     PrismaModule,
     AuditModule,
+    JobsModule,
     MailModule,
     AlertsModule,
     AuthModule,

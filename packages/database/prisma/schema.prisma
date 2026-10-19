@@ -498,6 +498,7 @@ model Organization {
   insights                  Insight[]
   usageRecords              UsageRecord[]
   platformAccessGrants      PlatformAccessGrant[]
+  jobs                      Job[]
 
   @@index([slug])
 }
@@ -1659,4 +1660,72 @@ model InsightEvidence {
   @@index([insightId])
   @@index([knowledgeItemId])
   @@index([derivedInsightId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Trabajo diferido — Fase 9A
+// ─────────────────────────────────────────────────────────────────────────
+
+// Estado de un trabajo en la cola. No existe DONE: un trabajo cumplido se borra.
+//
+// La cola es una LISTA DE TAREAS, no un libro de cuentas. Lo que ocurrió queda en
+// `ConnectorSync` y en `AuditLog`, que es donde alguien lo va a buscar. Conservar aquí
+// cada trabajo cumplido engordaría sin límite la única tabla que se consulta con
+// bloqueo en cada tic.
+//
+// Los muertos SÍ se conservan: son los que hay que mirar.
+enum JobStatus {
+  PENDING // esperando su turno
+  RUNNING // reclamado por un proceso
+  FAILED // falló y volverá a intentarse cuando venza `runAt`
+  DEAD // agotó los intentos, o nadie sabe atenderlo
+}
+
+/// Un trabajo diferido, durable y recuperable — FASE-9A-9B-ARQUITECTURA-CERRADA.md §3.2.
+///
+/// Vive en Postgres y no en Redis a propósito: así encolar un trabajo, escribir los hechos
+/// que produce y darlo por cumplido caben en UNA transacción. Con la cola en otro almacén
+/// hay una ventana entre ambos en la que un reinicio deja hechos duplicados o perdidos, y
+/// la idempotencia es justo lo que esta fase tiene que garantizar.
+model Job {
+  id   String @id @default(cuid())
+  kind String // qué sabe atenderlo, p. ej. "connector.sync"
+
+  /// A qué empresa pertenece el trabajo. Nulo solo en tareas del propio sistema.
+  /// Va en la fila —y no únicamente dentro de `payload`— para poder acotar, contar y
+  /// auditar por organización sin abrir el contenido de cada trabajo.
+  organizationId String?
+
+  payload Json @default("{}")
+
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+
+  /// Cuándo puede volver a intentarse. Es lo que implementa la espera creciente: un fallo
+  /// no vuelve a la cabeza de la cola, vuelve más tarde.
+  runAt DateTime @default(now())
+
+  /// Quién lo tiene y desde cuándo. Si un proceso muere con el trabajo reclamado, otro lo
+  /// recupera al vencer el arrendamiento: sin esto, una caída deja trabajo colgado para
+  /// siempre.
+  lockedAt DateTime?
+  lockedBy String?
+
+  lastError String?
+
+  /// Evita encolar dos veces lo mismo. Un índice único PARCIAL —en la migración, porque
+  /// Prisma no sabe expresarlo— lo exige solo mientras el trabajo sigue vivo: al cumplirse
+  /// la fila desaparece y la clave queda libre, y un trabajo muerto no bloquea a los
+  /// siguientes.
+  dedupeKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// El índice que sostiene la reclamación. Sin él, cada tic recorre la tabla entera.
+  @@index([status, runAt])
+  @@index([organizationId])
 }

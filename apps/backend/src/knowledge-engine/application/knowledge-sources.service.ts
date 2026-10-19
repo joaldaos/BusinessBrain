@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/utils/encryption.util';
 import { forOrganization } from '../../common/utils/encryption-scope';
 import { RestrictedPerimeterService } from './restricted-perimeter.service';
+import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import type { CreateKnowledgeSourceDto } from '../dto/create-knowledge-source.dto';
 
 /** Nunca se selecciona `configEnc` en una respuesta — es un secreto cifrado, no un dato a exponer. */
@@ -36,6 +37,7 @@ export class KnowledgeSourcesService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly perimeter: RestrictedPerimeterService,
+    private readonly connectors: ConnectorRegistry,
   ) {}
 
   async create(
@@ -177,6 +179,7 @@ export class KnowledgeSourcesService {
     return {
       ...visible,
       syncScope: describeSyncScope(
+        this.connectors,
         visible.connectorKey,
         this.readConfig(configEnc, visible.organizationId),
       ),
@@ -233,25 +236,19 @@ const LAST_JOB_SELECT = {
 /**
  * Frontera sincronizada de una fuente, en texto legible.
  *
- * Lista blanca por conector, y no un volcado de la config: la config puede contener secretos
- * —hoy no, mañana sí— y una fuente nueva no debe empezar a filtrar la suya por el hecho de
- * existir. Lo que no está aquí, no se cuenta.
+ * Sigue siendo lista blanca —la config puede contener secretos y no se vuelca entera— pero
+ * **la lista la declara ahora cada conector**, no un `switch` aquí dentro.
+ *
+ * Lo de antes estaba bien razonado y aun así era conocimiento de proveedor en un servicio
+ * del núcleo: con diez conectores, ese `switch` es inmanejable, y cada conector nuevo
+ * obligaba a tocar este fichero. Un conector que no declare su frontera no cuenta nada, que
+ * es el valor por defecto correcto.
  */
 function describeSyncScope(
+  registry: ConnectorRegistry,
   connectorKey: string,
   config: Record<string, unknown>,
 ): string | null {
-  const text = (value: unknown): string | null =>
-    typeof value === 'string' && value.length > 0 ? value : null;
-
-  switch (connectorKey) {
-    case 'gmail_v1':
-      return text(config.labelName) ?? text(config.labelId);
-    case 'web_page_v1':
-      return text(config.url);
-    case 'google_drive_v1':
-      return text(config.folderName) ?? text(config.folderId);
-    default:
-      return null;
-  }
+  const connector = registry.find(connectorKey);
+  return connector?.describeScope?.(config) ?? null;
 }

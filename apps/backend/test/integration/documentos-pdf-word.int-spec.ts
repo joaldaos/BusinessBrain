@@ -73,6 +73,7 @@ describe('Documentos PDF y Word (integración)', () => {
       db,
       encryptionService(),
       restrictedPerimeter(db, connectors),
+      connectors,
     );
   });
 

@@ -1,3 +1,4 @@
+import { ConnectorRegistry } from '../infrastructure/connectors/connector-registry.service';
 import { NotFoundException } from '@nestjs/common';
 import { KnowledgeSourcesService } from './knowledge-sources.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -46,6 +47,9 @@ describe('KnowledgeSourcesService', () => {
       {
         assertPerimeterFor: jest.fn().mockResolvedValue(undefined),
       } as unknown as RestrictedPerimeterService,
+      // El registro solo se usa para describir la frontera sincronizada, que estas pruebas
+      // no miran: vacío basta, y además comprueba que no tenerlo no rompe nada.
+      { find: jest.fn().mockReturnValue(null) } as unknown as ConnectorRegistry,
     );
   });
 

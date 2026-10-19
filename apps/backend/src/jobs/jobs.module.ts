@@ -31,6 +31,6 @@ import { PostgresJobQueue } from './infrastructure/postgres-job-queue';
     JobHandlerRegistry,
     JobDispatcherService,
   ],
-  exports: [JOB_QUEUE_PORT, PostgresJobQueue],
+  exports: [JOB_QUEUE_PORT, PostgresJobQueue, JobHandlerRegistry],
 })
 export class JobsModule {}

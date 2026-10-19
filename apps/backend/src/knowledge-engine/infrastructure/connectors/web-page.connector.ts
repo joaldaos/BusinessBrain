@@ -1,8 +1,9 @@
 import { lookup } from 'node:dns/promises';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import type {
+import {
   ConnectorPort,
   ExtractedContent,
+  texto,
 } from '../../domain/ports/connector.port';
 import {
   extractFromHtml,
@@ -57,6 +58,11 @@ export class WebPageConnector implements ConnectorPort {
   private readonly logger = new Logger(WebPageConnector.name);
 
   readonly key = 'web_page_v1';
+  /** La dirección que se lee. */ describeScope(
+    config: Record<string, unknown>,
+  ): string | null {
+    return texto(config.url);
+  }
   readonly acquisition = 'PULL' as const;
 
   async extract(input: WebPageConnectorInput): Promise<ExtractedContent[]> {

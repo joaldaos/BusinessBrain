@@ -4,9 +4,10 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import type {
+import {
   ConnectorPort,
   ExtractedContent,
+  texto,
 } from '../../knowledge-engine/domain/ports/connector.port';
 import { GMAIL_PORT, type GmailPort } from '../domain/ports/gmail.port';
 import {
@@ -63,6 +64,11 @@ export class GmailConnector implements ConnectorPort {
   private readonly logger = new Logger(GmailConnector.name);
 
   readonly key = 'gmail_v1';
+  /** La etiqueta de correo que se lee. Nunca la cuenta ni nada de la config. */ describeScope(
+    config: Record<string, unknown>,
+  ): string | null {
+    return texto(config.labelName) ?? texto(config.labelId);
+  }
   readonly acquisition = 'PULL' as const;
   /**
    * Un buzón no es una carpeta compartida: exige un perímetro de acceso restringido.

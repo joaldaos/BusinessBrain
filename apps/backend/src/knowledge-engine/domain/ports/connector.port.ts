@@ -51,5 +51,27 @@ export interface ConnectorPort {
    * comprobación —al crear la fuente Y en cada sincronización— ya existe.
    */
   readonly requiresRestrictedCollection?: boolean;
+  /**
+   * Qué parte del origen se sincroniza, en texto legible: la etiqueta, la carpeta, la URL.
+   *
+   * Lo declara el CONECTOR, y eso es lo que importa. Antes era un `switch` sobre claves de
+   * conector dentro de un servicio del núcleo: bien razonado —lista blanca, para que la
+   * config, que puede llevar secretos, no se vuelque entera— pero conocimiento de proveedor
+   * en el sitio equivocado, y con diez conectores, inmanejable.
+   *
+   * Sigue siendo lista blanca: cada conector expone solo lo suyo. Lo que no se declara, no se
+   * cuenta — por eso devolver `null` es la respuesta correcta por defecto y no un descuido.
+   */
+  describeScope?(config: Record<string, unknown>): string | null;
   extract(input: unknown): Promise<ExtractedContent[]>;
+}
+
+/**
+ * Un valor de la config, solo si es texto con contenido.
+ *
+ * Compartido por los conectores que describen su frontera: lo que no es una cadena útil no
+ * se cuenta, en vez de enseñar `[object Object]` o un hueco.
+ */
+export function texto(valor: unknown): string | null {
+  return typeof valor === 'string' && valor.length > 0 ? valor : null;
 }

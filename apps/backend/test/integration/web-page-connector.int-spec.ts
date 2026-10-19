@@ -61,6 +61,7 @@ describe('Conector de página web (integración)', () => {
     db,
     encryptionService(),
     restrictedPerimeter(db, connectors),
+    connectors,
   );
 
   /**

@@ -4,9 +4,10 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import type {
+import {
   ConnectorPort,
   ExtractedContent,
+  texto,
 } from '../../knowledge-engine/domain/ports/connector.port';
 import {
   GOOGLE_DRIVE_PORT,
@@ -75,6 +76,11 @@ export class GoogleDriveConnector implements ConnectorPort {
   private readonly logger = new Logger(GoogleDriveConnector.name);
 
   readonly key = 'google_drive_v1';
+  /** La carpeta de Drive que se lee. */ describeScope(
+    config: Record<string, unknown>,
+  ): string | null {
+    return texto(config.folderName) ?? texto(config.folderId);
+  }
   readonly acquisition = 'PULL' as const;
 
   constructor(

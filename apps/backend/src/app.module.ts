@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
 import { JobsModule } from './jobs/jobs.module';
 import { BusinessFactsModule } from './business-facts/business-facts.module';
+import { ConnectorsModule } from './connectors/connectors.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -56,6 +57,7 @@ import type { AppConfig } from './config/configuration';
     AuditModule,
     JobsModule,
     BusinessFactsModule,
+    ConnectorsModule,
     MailModule,
     AlertsModule,
     AuthModule,

@@ -70,6 +70,7 @@ describe('El conocimiento ingerido es preguntable (integración)', () => {
       db,
       encryptionService(),
       restrictedPerimeter(db, connectors),
+      connectors,
     );
   });
 

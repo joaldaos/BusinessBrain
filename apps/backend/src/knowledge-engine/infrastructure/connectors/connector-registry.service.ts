@@ -33,6 +33,16 @@ export class ConnectorRegistry {
     return Object.keys(this.connectors);
   }
 
+  /**
+   * `null` en vez de excepción.
+   *
+   * Una fuente antigua puede apuntar a un conector retirado, y describirla no debe reventar
+   * por eso: se cuenta lo que se sabe y lo demás se calla.
+   */
+  find(connectorKey: string): ConnectorPort | null {
+    return this.connectors[connectorKey] ?? null;
+  }
+
   get(connectorKey: string): ConnectorPort {
     const connector = this.connectors[connectorKey];
     if (!connector) {

@@ -18,16 +18,25 @@ export class JobHandlerRegistry {
   constructor(
     @Optional() @Inject(JOB_HANDLER) handlers: JobHandler[] | JobHandler | null,
   ) {
-    const lista = normalizar(handlers);
-    for (const handler of lista) {
-      if (this.handlers.has(handler.kind)) {
-        throw new Error(
-          `Hay dos manejadores declarados para el trabajo "${handler.kind}". ` +
-            `Cada clase de trabajo debe tener exactamente uno.`,
-        );
-      }
-      this.handlers.set(handler.kind, handler);
+    for (const handler of normalizar(handlers)) this.register(handler);
+  }
+
+  /**
+   * Da de alta un manejador.
+   *
+   * Existe como método y no solo como inyección porque Nest no tiene proveedores `multi`:
+   * un token no puede acumular aportaciones de varios módulos. Cada módulo que trae un
+   * manejador lo registra al arrancar, que además deja la relación explícita en su propio
+   * código en vez de escondida en un token compartido.
+   */
+  register(handler: JobHandler): void {
+    if (this.handlers.has(handler.kind)) {
+      throw new Error(
+        `Hay dos manejadores declarados para el trabajo "${handler.kind}". ` +
+          `Cada clase de trabajo debe tener exactamente uno.`,
+      );
     }
+    this.handlers.set(handler.kind, handler);
   }
 
   /** `null` cuando nadie sabe atenderlo — el despachador lo entierra en vez de insistir. */

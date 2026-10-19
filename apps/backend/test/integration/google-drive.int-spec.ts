@@ -98,6 +98,7 @@ describe('Google Drive (integración)', () => {
       db,
       encryptionService(),
       restrictedPerimeter(db, connectors),
+      connectors,
     );
 
     drive.putFile({

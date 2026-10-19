@@ -100,6 +100,7 @@ describe('Gmail (integración)', () => {
       db,
       encryptionService(),
       restrictedPerimeter(db, connectors),
+      connectors,
     );
     access = new CollectionAccessService(db, auditService(db));
 

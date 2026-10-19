@@ -499,6 +499,8 @@ model Organization {
   usageRecords              UsageRecord[]
   platformAccessGrants      PlatformAccessGrant[]
   jobs                      Job[]
+  businessEntities          BusinessEntity[]
+  businessEvents            BusinessEvent[]
 
   @@index([slug])
 }
@@ -1728,4 +1730,123 @@ model Job {
   /// El índice que sostiene la reclamación. Sin él, cada tic recorre la tabla entera.
   @@index([status, runAt])
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Hechos empresariales — Fase 9A (la vía NO documental)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Qué clase de maestro es.
+//
+// Cerrado a propósito, como el resto de catálogos del sistema: lo que BusinessBrain sabe
+// entender tiene que ser una lista explícita y revisable, no lo que a un conector se le
+// ocurra escribir. Un conector que trae algo que no encaja aquí NO lo inventa: no lo emite.
+enum BusinessEntityKind {
+  CUSTOMER
+  SUPPLIER
+  PRODUCT
+  EMPLOYEE
+  LOCATION
+}
+
+// Qué clase de hecho es.
+//
+// Deliberadamente corto. Cada valor existe porque hay un caso de uso ya analizado que lo
+// necesita —el ciclo de una comanda y el de una factura—, no porque un ERP suela tenerlo.
+// Añadir uno es una decisión, no un trámite.
+enum BusinessEventKind {
+  // El ciclo de un pedido. Las restas entre estos instantes son todas las métricas de
+  // cocina: preparación, servicio, saturación.
+  ORDER_PLACED
+  ORDER_SENT_TO_KITCHEN
+  ORDER_ITEM_READY
+  ORDER_COMPLETED
+  ORDER_CANCELLED
+
+  // El dinero.
+  SALE_RECORDED
+  INVOICE_ISSUED
+  PAYMENT_RECEIVED
+}
+
+/// Un maestro externo, tal como lo llama su sistema de origen.
+///
+/// No se traduce ni se fusiona con nada: si el TPV llama "Mesa 4" a algo, aquí se llama
+/// "Mesa 4". Resolver que dos sistemas hablan del mismo cliente es un problema distinto
+/// —canonicalización— que ya tiene su sitio en el motor de conocimiento.
+model BusinessEntity {
+  id             String             @id @default(cuid())
+  organizationId String
+  connectorId    String
+  kind           BusinessEntityKind
+  /// Su identificador en el sistema de origen. Es lo que hace reconocible al mismo maestro
+  /// entre dos sincronizaciones.
+  externalId     String
+  displayName    String
+  attributes     Json               @default("{}")
+  firstSeenAt    DateTime           @default(now())
+  lastSeenAt     DateTime           @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       BusinessEvent[]
+
+  /// Dos sincronizaciones del mismo cliente son el mismo cliente. Sin esto, cada pasada
+  /// duplicaría el maestro entero.
+  @@unique([organizationId, connectorId, kind, externalId])
+  /// Permite que un hecho apunte a su maestro con clave COMPUESTA: así la base impide que
+  /// el hecho de una empresa cuelgue del cliente de otra.
+  @@unique([id, organizationId])
+  @@index([organizationId, kind])
+}
+
+/// Un hecho con fecha. **Append-only**: nada se actualiza y nada se borra.
+///
+/// Es la misma disciplina que ya gobierna `ConfidenceEvent`, `AuditLog` y el historial de
+/// creencias. Un hecho que ocurrió no deja de haber ocurrido porque el proveedor cambie de
+/// opinión: si la operación se anula, llega otro hecho que lo dice.
+///
+/// Una comanda NO es una fila: son varias unidas por `correlationId`, y las métricas de
+/// cocina son restas entre dos de ellas. Un proveedor que no emita uno de esos hechos
+/// simplemente no escribe esa fila, y la ausencia es visible — en vez de ser un nulo que
+/// alguien acabaría rellenando a ojo.
+model BusinessEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  connectorId    String
+  kind           BusinessEventKind
+  externalId     String
+
+  /// Cuándo ocurrió EN EL NEGOCIO. Es el eje de todo análisis temporal.
+  occurredAt DateTime
+  /// Cuándo nos enteramos. Distinto de `occurredAt` siempre que haya retraso o recuperación
+  /// de histórico, y es lo que permite distinguir "pasó tarde" de "nos llegó tarde".
+  recordedAt DateTime @default(now())
+
+  // Promovidas a columna, y no dejadas en `attributes`, porque son sobre las que se hacen
+  // cuentas: una media no puede depender de leer JSON fila a fila.
+  amountCents Int?
+  currency    String?
+  quantity    Decimal?
+
+  /// A qué maestro se refiere, si se sabe.
+  subjectId String?
+  /// Qué hechos son el mismo pedido. Sin esto no hay ciclo que medir.
+  correlationId String?
+
+  attributes Json @default("{}")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Clave COMPUESTA a propósito: el maestro al que apunta un hecho tiene que ser de la
+  /// misma empresa, y eso lo garantiza el almacenamiento, no una comprobación que alguien
+  /// pueda olvidar.
+  subject BusinessEntity? @relation(fields: [subjectId, organizationId], references: [id, organizationId], onDelete: SetNull)
+
+  /// LA garantía de idempotencia, y la razón de que exista esta restricción.
+  ///
+  /// Un webhook reenviado, un reintento tras un fallo o dos ventanas de sondeo que se solapan
+  /// no pueden duplicar una venta: aquí un duplicado es facturación inventada.
+  @@unique([organizationId, connectorId, kind, externalId])
+  @@index([organizationId, kind, occurredAt])
+  @@index([organizationId, correlationId])
+  @@index([subjectId])
 }

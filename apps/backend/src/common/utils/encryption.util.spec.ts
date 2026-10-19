@@ -128,7 +128,8 @@ describe('EncryptionService', () => {
     it('rechaza un secreto manipulado en vez de devolver basura', () => {
       const s = servicio();
       const org = forOrganization('org-1');
-      const [v, iv, tag, ct] = s.encryptFor(org, 'intacto').split(':');
+      // El ciphertext se descarta: lo que se comprueba es que sustituirlo invalida el todo.
+      const [v, iv, tag] = s.encryptFor(org, 'intacto').split(':');
       const manipulado = [
         v,
         iv,

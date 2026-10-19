@@ -7,6 +7,8 @@ import { JobHandlerRegistry } from '../jobs/application/job-handler-registry';
 import { BusinessConnectorRegistry } from './application/business-connector-registry.service';
 import { ConnectorSyncJobHandler } from './application/connector-sync.job-handler';
 import { RunConnectorSyncUseCase } from './application/run-connector-sync.use-case';
+import { ReceiveWebhookUseCase } from './application/receive-webhook.use-case';
+import { WebhooksController } from './api/webhooks.controller';
 
 /**
  * Conectores de hechos — Fase 9A.
@@ -20,11 +22,13 @@ import { RunConnectorSyncUseCase } from './application/run-connector-sync.use-ca
  */
 @Module({
   imports: [PrismaModule, JobsModule, BusinessFactsModule],
+  controllers: [WebhooksController],
   providers: [
     EncryptionService,
     BusinessConnectorRegistry,
     RunConnectorSyncUseCase,
     ConnectorSyncJobHandler,
+    ReceiveWebhookUseCase,
   ],
   exports: [BusinessConnectorRegistry, RunConnectorSyncUseCase],
 })

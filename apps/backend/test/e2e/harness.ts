@@ -85,7 +85,9 @@ export async function startTestApp(
 
   const moduleRef = await builder.compile();
 
-  app = moduleRef.createNestApplication();
+  // Mismo `rawBody` que en producción: sin él, las pruebas de webhook comprobarían una
+  // aplicación distinta de la que se despliega.
+  app = moduleRef.createNestApplication({ rawBody: true });
 
   // La MISMA función que `main.ts`, no una copia. Mientras fueron dos listas paralelas, la
   // política de origen cruzado existía en producción y no aquí: se podía cerrar mal sin que

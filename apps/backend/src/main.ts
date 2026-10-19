@@ -6,7 +6,10 @@ import { configureApp } from './bootstrap';
 import type { AppConfig } from './config/configuration';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody` para poder verificar la firma de un webhook sobre los BYTES recibidos.
+  // Firmar sobre el JSON reserializado no verifica nada: cualquier reescritura por el
+  // camino —un proxy que reordene claves o cambie el espaciado— pasaría la comprobación.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService<AppConfig, true>);
 
   // La misma función que usa el arranque de los tests. Si aquí se añadiera algo que allí no

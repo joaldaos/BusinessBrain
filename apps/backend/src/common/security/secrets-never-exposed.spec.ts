@@ -50,6 +50,10 @@ const CUSTODIOS = [
   'llm/application/ai-configuration.service.ts',
   'llm/application/provider-registry.service.ts',
   'connectors/application/run-connector-sync.use-case.ts',
+  // Descifra el secreto compartido para verificar la firma de un envío entrante. No puede
+  // no leerlo: comprobar la firma ES su trabajo. Lo usa y lo suelta; no lo devuelve ni lo
+  // registra, y la prueba de integración comprueba que un rechazo no filtra ni el motivo.
+  'connectors/application/receive-webhook.use-case.ts',
 ];
 
 /**

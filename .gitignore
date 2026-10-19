@@ -16,4 +16,8 @@ apps/web/playwright-report/
 backups/
 
 # Ajustes locales de la herramienta, no del producto.
-.claude/
+# Se excluye el CONTENIDO, no el directorio: git no puede reincluir un fichero que está
+# dentro de un directorio excluido, y las reglas de permisos del proyecto sí se comparten.
+.claude/*
+# `settings.local.json` no se comparte: es de cada persona y acumula rutas de su máquina.
+!.claude/settings.json

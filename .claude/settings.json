@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "Bash(npx jest*)",
+      "Bash(npx tsc*)",
+      "Bash(npx eslint*)",
+      "Bash(npx nest build*)",
+      "Bash(node --experimental-vm-modules*)",
+      "Bash(node --env-file=.env --experimental-vm-modules*)",
+      "Bash(npm run test*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run build*)",
+      "Bash(npm run smoke*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npx prisma generate*)",
+      "Bash(npx prisma validate*)",
+      "Bash(npx prisma format*)",
+      "Bash(npx prisma migrate deploy*)",
+      "Bash(npx prisma migrate diff*)",
+      "Bash(npx prisma migrate status*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(git rev-parse*)",
+      "Bash(git worktree list*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git checkout --*)",
+      "Bash(git clean*)",
+      "Bash(npx prisma migrate reset*)",
+      "Bash(npx prisma db push*)",
+      "Bash(npx prisma db execute*)",
+      "Bash(npx prisma db seed*)",
+      "Bash(docker*)",
+      "Bash(npm install*)",
+      "Bash(npm publish*)",
+      "Bash(node -e*)",
+      "Bash(node --env-file=.env -e*)",
+      "Bash(node --eval*)",
+      "Bash(npx ts-node -e*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(rm -fr*)",
+      "Bash(npx prisma migrate reset --force*)"
+    ]
+  }
+}

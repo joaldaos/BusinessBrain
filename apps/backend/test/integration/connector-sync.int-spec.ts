@@ -7,6 +7,7 @@ import {
 import { BusinessConnectorRegistry } from '../../src/connectors/application/business-connector-registry.service';
 import { RunConnectorSyncUseCase } from '../../src/connectors/application/run-connector-sync.use-case';
 import { RecordBusinessFactsUseCase } from '../../src/business-facts/application/record-business-facts.use-case';
+import { ConnectorUsageService } from '../../src/connectors/application/connector-usage.service';
 import { EncryptionService } from '../../src/common/utils/encryption.util';
 import type { BusinessConnectorPort } from '../../src/connectors/domain/ports/business-connector.port';
 import type { NormalizedBatch } from '../../src/business-facts/domain/normalized-batch';
@@ -91,6 +92,7 @@ describe('Sincronización de un conector (integración)', () => {
       new BusinessConnectorRegistry([conectorFalso()]),
       new RecordBusinessFactsUseCase(db),
       encryption,
+      new ConnectorUsageService(db),
     );
   });
 
@@ -99,6 +101,9 @@ describe('Sincronización de un conector (integración)', () => {
       where: { organizationId: org.orgId },
     });
     await prisma.businessEntity.deleteMany({
+      where: { organizationId: org.orgId },
+    });
+    await prisma.usageRecord.deleteMany({
       where: { organizationId: org.orgId },
     });
     await destroyTestOrg(org);
@@ -223,6 +228,135 @@ describe('Sincronización de un conector (integración)', () => {
         where: { organizationId: org.orgId },
       });
       expect(hecho.connectorId).toBe(id);
+    });
+  });
+
+  /**
+   * El techo diario — Fase 9B.
+   *
+   * No protege al cliente de su factura (eso es el techo de IA): nos protege a nosotros. El
+   * caso real es un TPV mal configurado reenviando el mismo día en bucle, o una recuperación
+   * de histórico lanzada sobre cinco años de tickets. La idempotencia impide que se
+   * dupliquen; no impide que sean demasiados.
+   */
+  describe('techo diario de hechos', () => {
+    const ponerTecho = (limite: number) =>
+      prisma.organization.update({
+        where: { id: org.orgId },
+        data: { settings: { connectors: { dailyEventLimit: limite } } },
+      });
+
+    it('apunta los hechos CREADOS, no los recibidos', async () => {
+      const { id } = await crearConector();
+      loteDevuelto = { entities: [], events: [venta('t-1'), venta('t-2')] };
+
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+      // Segunda pasada idéntica: la idempotencia los absorbe, así que no consumen techo.
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      const consumo = await prisma.usageRecord.findFirst({
+        where: { organizationId: org.orgId, metric: 'connector_events' },
+      });
+      expect(consumo?.value).toBe(2);
+    });
+
+    it('al alcanzarlo, OMITE la sincronización en vez de fallar', async () => {
+      const { id } = await crearConector();
+      await ponerTecho(1);
+      loteDevuelto = { entities: [], events: [venta('t-1'), venta('t-2')] };
+
+      // La primera pasa y se pasa del techo: el lote que lo cruza se escribe entero.
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      loteDevuelto = { entities: [], events: [venta('t-3')] };
+      const segunda = await caso.execute({
+        organizationId: org.orgId,
+        connectorId: id,
+      });
+
+      expect(segunda.status).toBe(RunStatus.SKIPPED);
+      // Y el hecho nuevo NO entró.
+      expect(
+        await prisma.businessEvent.count({
+          where: { organizationId: org.orgId },
+        }),
+      ).toBe(2);
+    });
+
+    /**
+     * Omitir no es fallar, y la diferencia importa: si se tratara como fallo, la cola
+     * gastaría sus reintentos en algo que solo se arregla esperando a mañana y acabaría
+     * enterrando el conector, que dejaría de sincronizar hasta que alguien lo tocara.
+     */
+    it('omitir NO avanza el marcador: lo de hoy entra mañana', async () => {
+      const { id } = await crearConector();
+      loteDevuelto = { entities: [], events: [venta('t-1')], cursor: { p: 7 } };
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      await ponerTecho(1);
+      loteDevuelto = {
+        entities: [],
+        events: [venta('t-9')],
+        cursor: { p: 99 },
+      };
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      const fila = await prisma.organizationConnector.findUniqueOrThrow({
+        where: { id },
+      });
+      expect(fila.syncCursor).toEqual({ p: 7 });
+    });
+
+    it('explica el motivo en el idioma de la empresa', async () => {
+      const { id } = await crearConector();
+      await ponerTecho(1);
+      loteDevuelto = { entities: [], events: [venta('t-1'), venta('t-2')] };
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      const omitida = await prisma.connectorSync.findFirstOrThrow({
+        where: { connectorId: id, status: RunStatus.SKIPPED },
+      });
+      expect(omitida.error).toMatch(/máximo|mañana/i);
+      expect(omitida.error).not.toMatch(/UsageRecord|metric|periodStart/i);
+    });
+
+    it('el techo es de cada empresa: el de una no frena a la otra', async () => {
+      const { id } = await crearConector();
+      await ponerTecho(1);
+      loteDevuelto = { entities: [], events: [venta('t-1'), venta('t-2')] };
+      await caso.execute({ organizationId: org.orgId, connectorId: id });
+
+      const otra = await createTestOrg('sync-techo-vecina');
+      const suyo = await prisma.organizationConnector.create({
+        data: {
+          organizationId: otra.orgId,
+          connectorKey: CLAVE,
+          displayName: 'TPV vecino',
+          status: ConnectionStatus.CONNECTED,
+          createdById: otra.userId,
+        },
+        select: { id: true },
+      });
+
+      loteDevuelto = { entities: [], events: [venta('t-vecina')] };
+      const suya = await caso.execute({
+        organizationId: otra.orgId,
+        connectorId: suyo.id,
+      });
+
+      expect(suya.status).toBe(RunStatus.SUCCESS);
+
+      await prisma.businessEvent.deleteMany({
+        where: { organizationId: otra.orgId },
+      });
+      await prisma.usageRecord.deleteMany({
+        where: { organizationId: otra.orgId },
+      });
+      await prisma.organizationConnector.deleteMany({
+        where: { organizationId: otra.orgId },
+      });
+      await destroyTestOrg(otra);
     });
   });
 

@@ -32,31 +32,63 @@ export class OrganizationInspectionService {
     if (!organization)
       throw new NotFoundException('Organización no encontrada');
 
-    const [miembros, documentos, colecciones, fuentes, conclusiones] =
-      await Promise.all([
-        this.prisma.membership.count({ where: { organizationId } }),
-        this.prisma.knowledgeItem.count({ where: { organizationId } }),
-        this.prisma.knowledgeCollection.count({ where: { organizationId } }),
-        this.prisma.knowledgeSource.findMany({
-          where: { organizationId },
-          // El NOMBRE de la fuente y su estado. Ni `configEnc` —que lleva credenciales— ni
-          // nada que se acerque al contenido que trae.
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            status: true,
-            lastSyncedAt: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        }),
-        this.prisma.insight.count({ where: { organizationId } }),
-      ]);
+    const [
+      miembros,
+      documentos,
+      colecciones,
+      fuentes,
+      conclusiones,
+      conectores,
+      hechos,
+    ] = await Promise.all([
+      this.prisma.membership.count({ where: { organizationId } }),
+      this.prisma.knowledgeItem.count({ where: { organizationId } }),
+      this.prisma.knowledgeCollection.count({ where: { organizationId } }),
+      this.prisma.knowledgeSource.findMany({
+        where: { organizationId },
+        // El NOMBRE de la fuente y su estado. Ni `configEnc` —que lleva credenciales— ni
+        // nada que se acerque al contenido que trae.
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          status: true,
+          lastSyncedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.insight.count({ where: { organizationId } }),
+      /*
+       * Los conectores de hechos — Fase 9B.
+       *
+       * Hasta aquí la plataforma no sabía ni que existían, así que un administrador no podía
+       * responder "¿por qué este cliente dice que su TPV no entra?" sin pedirle acceso a su
+       * contenido, que es desproporcionado para una avería de conexión.
+       *
+       * Qué conector, cómo está y cuándo leyó por última vez. **Nada del secreto**: ni
+       * `secretEnc`, ni la configuración, ni el marcador de sincronización —que no es un
+       * secreto pero tampoco le dice nada a nadie—. Hay una prueba estructural que impide
+       * que esta consulta llegue a nombrar una columna cifrada.
+       */
+      this.prisma.organizationConnector.findMany({
+        where: { organizationId },
+        select: {
+          id: true,
+          connectorKey: true,
+          displayName: true,
+          status: true,
+          lastSyncedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.businessEvent.count({ where: { organizationId } }),
+    ]);
 
     return {
       organization,
-      counts: { miembros, documentos, colecciones, conclusiones },
+      counts: { miembros, documentos, colecciones, conclusiones, hechos },
       sources: fuentes,
+      connectors: conectores,
     };
   }
 
@@ -103,10 +135,71 @@ export class OrganizationInspectionService {
       select: { id: true, error: true, createdAt: true },
     });
 
+    /*
+     * Lo mismo para los conectores de hechos.
+     *
+     * `lastError` se devuelve tal cual porque es lo que permite diagnosticar —«credenciales
+     * rechazadas», «el TPV no responde»—. Lo que nunca aparece es el secreto con el que se
+     * intentó, ni los hechos que la sincronización traía: `stats` son recuentos, no datos.
+     */
+    const [conectoresConError, sincronizaciones] = await Promise.all([
+      this.prisma.organizationConnector.findMany({
+        where: { organizationId, NOT: { lastError: null } },
+        select: {
+          id: true,
+          connectorKey: true,
+          displayName: true,
+          status: true,
+          lastError: true,
+          lastSyncedAt: true,
+        },
+      }),
+      this.prisma.connectorSync.findMany({
+        where: { organizationId },
+        orderBy: { startedAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          connectorId: true,
+          trigger: true,
+          status: true,
+          error: true,
+          stats: true,
+          startedAt: true,
+          finishedAt: true,
+        },
+      }),
+    ]);
+
+    /*
+     * Y los trabajos MUERTOS de la cola.
+     *
+     * Son, por definición, los que hay que mirar: agotaron sus intentos o nadie supo
+     * atenderlos. Sin esto, un administrador ve "la sincronización no ocurre" y no tiene
+     * dónde averiguar por qué. Se devuelve el tipo y el error, **nunca el contenido del
+     * trabajo**: aunque la regla es que ahí no van secretos, un diagnóstico no es sitio para
+     * comprobar si alguien la cumplió.
+     */
+    const trabajosMuertos = await this.prisma.job.findMany({
+      where: { organizationId, status: 'DEAD' },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        kind: true,
+        attempts: true,
+        lastError: true,
+        updatedAt: true,
+      },
+    });
+
     return {
       failingSources: fuentesConError,
       recentJobs: trabajos,
       failedAnalyses: analisis,
+      failingConnectors: conectoresConError,
+      recentSyncs: sincronizaciones,
+      deadJobs: trabajosMuertos,
     };
   }
 

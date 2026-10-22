@@ -69,6 +69,38 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
       },
     });
     documentoId = documento.id;
+
+    /*
+     * Un conector de hechos con su secreto — Fase 9B.
+     *
+     * El secreto se escribe EN CLARO a propósito. En la vida real va cifrado, pero aquí lo
+     * que se comprueba es que la proyección de plataforma no lo devuelve: si estuviera
+     * cifrado, la prueba pasaría aunque la consulta lo seleccionara, porque el cifrado haría
+     * irreconocible la cadena. Con el secreto en claro, la fuga se vería.
+     */
+    const conexion = await prisma.integration.create({
+      data: {
+        organizationId: tenant.organizationId,
+        provider: 'CUSTOM',
+        connectorKey: 'tpv_ficticio_v1',
+        authKind: 'API_KEY',
+        status: 'CONNECTED',
+        connectedById: tenant.owner.userId,
+        secretEnc: 'SECRETO-EN-CLARO-QUE-NO-DEBE-SALIR',
+      },
+    });
+    await prisma.organizationConnector.create({
+      data: {
+        organizationId: tenant.organizationId,
+        connectorKey: 'tpv_ficticio_v1',
+        displayName: 'TPV del local',
+        status: 'ERROR',
+        createdById: tenant.owner.userId,
+        integrationId: conexion.id,
+        lastError: 'El TPV rechazó las credenciales',
+        syncCursor: { desde: 'MARCADOR-QUE-TAMPOCO-DEBE-SALIR' },
+      },
+    });
   });
 
   afterAll(async () => {
@@ -246,6 +278,55 @@ describe('Concesiones de acceso de plataforma (E2E)', () => {
       // documento falló" sin saber cuál— pero nunca su contenido.
       expect(cuerpo).toContain('fichero dañado');
       expect(cuerpo).not.toContain('quince por ciento');
+    });
+
+    /**
+     * Fase 9B, decisión 6: la plataforma puede gestionar el estado de una integración sin
+     * acceder a su secreto.
+     *
+     * Hasta aquí se cumplía por omisión —la plataforma no sabía ni que los conectores
+     * existían—, lo cual era seguro e inútil: un administrador no podía responder "¿por qué
+     * mi TPV no entra?" sin pedir acceso al contenido de la empresa, que para una avería de
+     * conexión es desproporcionado.
+     */
+    describe('conectores de hechos', () => {
+      it('el estado del conector se ve, el secreto NO', async () => {
+        await pedir('METADATA');
+        const respuesta = await comoAdmin()
+          .get(`${base()}/overview`)
+          .expect(200);
+
+        const cuerpo = JSON.stringify(respuesta.body);
+        // Lo que permite dar soporte.
+        expect(cuerpo).toContain('TPV del local');
+        expect(cuerpo).toContain('tpv_ficticio_v1');
+        // Lo que no sale jamás.
+        expect(cuerpo).not.toContain('SECRETO-EN-CLARO-QUE-NO-DEBE-SALIR');
+        expect(cuerpo).not.toContain('secretEnc');
+        // Ni el marcador: no es un secreto, pero no le dice nada a nadie.
+        expect(cuerpo).not.toContain('MARCADOR-QUE-TAMPOCO-DEBE-SALIR');
+      });
+
+      it('el diagnóstico da el motivo de la avería, no la credencial con la que falló', async () => {
+        await pedir('DIAGNOSTICS');
+        const respuesta = await comoAdmin()
+          .get(`${base()}/diagnostics`)
+          .expect(200);
+
+        const cuerpo = JSON.stringify(respuesta.body);
+        expect(cuerpo).toContain('El TPV rechazó las credenciales');
+        expect(cuerpo).not.toContain('SECRETO-EN-CLARO-QUE-NO-DEBE-SALIR');
+      });
+
+      it('sin concesión no se ve ni el estado de un conector', async () => {
+        // El alcance manda igual que para todo lo demás: que sea "solo un estado" no lo
+        // saca del modelo de concesiones.
+        const respuesta = await comoAdmin(otroAdmin)
+          .get(`${base()}/overview`)
+          .expect(403);
+
+        expect(JSON.stringify(respuesta.body)).not.toContain('TPV del local');
+      });
     });
   });
 

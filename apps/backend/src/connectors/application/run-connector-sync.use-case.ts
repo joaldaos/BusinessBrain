@@ -11,6 +11,8 @@ import { forOrganization } from '../../common/utils/encryption-scope';
 import { RecordBusinessFactsUseCase } from '../../business-facts/application/record-business-facts.use-case';
 import type { NormalizedBatch } from '../../business-facts/domain/normalized-batch';
 import { BusinessConnectorRegistry } from './business-connector-registry.service';
+import { ConnectorUsageService } from './connector-usage.service';
+import { budgetReachedMessage } from '../domain/connector-budget';
 import type { ConnectorContext } from '../domain/ports/business-connector.port';
 
 export interface SyncOutcome {
@@ -50,6 +52,7 @@ export class RunConnectorSyncUseCase {
     private readonly registry: BusinessConnectorRegistry,
     private readonly facts: RecordBusinessFactsUseCase,
     private readonly encryption: EncryptionService,
+    private readonly usage: ConnectorUsageService,
   ) {}
 
   async execute(params: {
@@ -72,6 +75,43 @@ export class RunConnectorSyncUseCase {
     }
 
     const connector = this.registry.get(row.connectorKey);
+
+    /*
+     * El techo diario, comprobado ANTES de traer nada.
+     *
+     * Y una sincronización que se pasa del techo NO es un fallo: ha hecho su trabajo hasta
+     * donde se le permite. Lanzar aquí gastaría los reintentos de la cola en algo que no se
+     * arregla reintentando —sino esperando a mañana— y acabaría enterrando el conector, que
+     * entonces dejaría de sincronizar hasta que alguien lo tocara a mano.
+     */
+    const presupuesto = await this.usage.status(organizationId);
+    if (presupuesto.exhausted) {
+      const motivo = budgetReachedMessage(presupuesto.limit);
+      this.logger.warn(
+        `La organización ${organizationId} alcanzó su techo diario de hechos ` +
+          `(${presupuesto.used}/${presupuesto.limit}): se omite la sincronización`,
+      );
+
+      const omitida = await this.prisma.connectorSync.create({
+        data: {
+          connectorId: row.id,
+          organizationId,
+          trigger: params.trigger ?? IngestionTriggerType.MANUAL,
+          status: RunStatus.SKIPPED,
+          error: motivo,
+          finishedAt: new Date(),
+        },
+        select: { id: true },
+      });
+
+      // El marcador NO se toca: lo que no entró hoy entra mañana.
+      await this.prisma.organizationConnector.update({
+        where: { id: row.id },
+        data: { lastError: motivo },
+      });
+
+      return { syncId: omitida.id, status: RunStatus.SKIPPED, stats: {} };
+    }
 
     const sync = await this.prisma.connectorSync.create({
       data: {
@@ -120,6 +160,18 @@ export class RunConnectorSyncUseCase {
           return written;
         },
       );
+
+      /*
+       * El consumo se apunta DESPUÉS y FUERA de la transacción.
+       *
+       * Después, porque apuntar por adelantado haría que una empresa gastara cupo por hechos
+       * que no llegaron a escribirse. Fuera, porque un fallo al contar no puede deshacer lo
+       * que ya está bien escrito: el contador es una salvaguarda, no el dato.
+       *
+       * Se cuentan los CREADOS, no los recibidos: los duplicados que la idempotencia absorbe
+       * no ocupan sitio y no deben consumir el techo de nadie.
+       */
+      await this.usage.record(organizationId, stats.eventsCreated);
 
       if (rejections.length > 0) {
         this.logger.warn(

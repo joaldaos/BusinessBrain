@@ -8,6 +8,7 @@ import { BusinessConnectorRegistry } from './application/business-connector-regi
 import { ConnectorSyncJobHandler } from './application/connector-sync.job-handler';
 import { RunConnectorSyncUseCase } from './application/run-connector-sync.use-case';
 import { ReceiveWebhookUseCase } from './application/receive-webhook.use-case';
+import { ConnectorUsageService } from './application/connector-usage.service';
 import { WebhooksController } from './api/webhooks.controller';
 
 /**
@@ -29,6 +30,7 @@ import { WebhooksController } from './api/webhooks.controller';
     RunConnectorSyncUseCase,
     ConnectorSyncJobHandler,
     ReceiveWebhookUseCase,
+    ConnectorUsageService,
   ],
   exports: [BusinessConnectorRegistry, RunConnectorSyncUseCase],
 })

@@ -200,6 +200,11 @@ enum RunStatus {
   RUNNING
   SUCCESS
   FAILED
+  // Se decidió no ejecutarla. No es un éxito —no hizo su trabajo— ni un fallo —nada salió
+  // mal—, y meterla en cualquiera de los dos mentiría en la pantalla del cliente: vería un
+  // error donde hubo un tope de seguridad, o un "todo bien" donde no entró nada.
+  // Hoy lo usa el techo diario de hechos (Fase 9B).
+  SKIPPED
 }
 
 enum ReportFormat {
@@ -501,6 +506,7 @@ model Organization {
   jobs                      Job[]
   businessEntities          BusinessEntity[]
   businessEvents            BusinessEvent[]
+  businessMetricWindows     BusinessMetricWindow[]
   organizationConnectors    OrganizationConnector[]
 
   @@index([slug])
@@ -1563,6 +1569,13 @@ enum InsightEvidenceKind {
   KNOWLEDGE_CHUNK
   CANONICAL_ENTITY // Canonical Knowledge Entity — modelado en subfase 2.5
   DERIVED_INSIGHT
+  // Una métrica calculada sobre hechos — Fase 9B.
+  //
+  // No es ninguna de las anteriores: no es un documento, ni un fragmento, ni una entidad, ni
+  // otra conclusión. Sin esto, una conclusión sacada de datos de un TPV sería la primera del
+  // producto SIN evidencia, y con ella caerían "ver el detalle técnico", el anexo del PDF y
+  // la regla de no afirmar sin respaldo.
+  BUSINESS_METRIC
 }
 
 // Registra una única ejecución del pipeline de razonamiento para una organización — §3.1.
@@ -1671,18 +1684,64 @@ model InsightEvidence {
 
   // Referencia polimórfica a la pieza de evidencia. Exactamente una está informada,
   // según `kind` — validado en dominio y por restricción CHECK en la migración.
-  knowledgeItemId  String?
-  knowledgeChunkId String?
-  derivedInsightId String?
+  knowledgeItemId    String?
+  knowledgeChunkId   String?
+  derivedInsightId   String?
+  businessMetricId   String?
 
   createdAt DateTime @default(now())
 
   insight        Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
   derivedInsight Insight? @relation("InsightAsEvidence", fields: [derivedInsightId], references: [id], onDelete: Restrict)
+  /// `Restrict`, no `Cascade`: borrar una ventana de métrica dejaría viva una conclusión sin
+  /// la evidencia que la sostenía, que es exactamente lo que este modelo existe para impedir.
+  businessMetric BusinessMetricWindow? @relation(fields: [businessMetricId], references: [id], onDelete: Restrict)
 
   @@index([insightId])
   @@index([knowledgeItemId])
   @@index([derivedInsightId])
+  @@index([businessMetricId])
+}
+
+/// Una métrica calculada sobre hechos, en una ventana concreta — Fase 9B.
+///
+/// La evidencia de una conclusión sobre datos operativos no es una fila de `BusinessEvent`:
+/// es **un cálculo sobre muchas**. Citar un ticket suelto no respalda «los sábados se tarda
+/// un 31 % más»; lo que lo respalda es la ventana, el valor y cuántos hechos lo sostienen.
+///
+/// Se persiste en vez de recalcularse al leer para que la conclusión sea reproducible: dentro
+/// de seis meses, «esto se dijo porque la mediana de esas seis semanas era 24 minutos sobre
+/// 412 comandas» tiene que seguir siendo comprobable aunque los hechos hayan cambiado.
+model BusinessMetricWindow {
+  id             String @id @default(cuid())
+  organizationId String
+
+  /// Qué se midió, p. ej. "kitchen.prep_time_p50". Texto y no enum: cada métrica nueva no
+  /// debe exigir una migración.
+  metricKey String
+  /// Sobre qué corte, p. ej. { weekday: 6, hourBucket: 14 }. Forma parte de la identidad:
+  /// la misma métrica en dos cortes distintos son dos ventanas distintas.
+  dimensions Json @default("{}")
+
+  windowStart DateTime
+  windowEnd   DateTime
+  value       Decimal
+
+  /// Cuántos hechos la sostienen.
+  ///
+  /// No es adorno: **es lo que permite callarse.** Una mediana sobre cuatro comandas no se
+  /// enseña, igual que el motor no sintetiza con menos de N fragmentos. Sin este número no
+  /// hay forma de distinguir una medida sólida de una anécdota.
+  sampleSize Int
+
+  computedAt DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  evidence     InsightEvidence[]
+
+  /// Recalcular la misma ventana no crea una fila nueva: la actualiza.
+  @@unique([organizationId, metricKey, dimensions, windowStart, windowEnd])
+  @@index([organizationId, metricKey, windowStart])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

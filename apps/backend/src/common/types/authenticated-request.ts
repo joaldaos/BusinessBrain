@@ -18,7 +18,17 @@ export interface RequestUser {
    * NO es el idioma de los documentos de su empresa. Ver `common/i18n/locales.ts`.
    */
   locale: Locale;
-  memberships: Array<{ organizationId: string; role: MembershipRole }>;
+  /**
+   * Las empresas a las que pertenece, con su rol en cada una.
+   *
+   * Lleva `id` porque es la clave de los permisos concedidos: sin él, cada ruta que exija un
+   * permiso tendría que resolver la membresía con una consulta propia.
+   */
+  memberships: Array<{
+    id: string;
+    organizationId: string;
+    role: MembershipRole;
+  }>;
   /**
    * La sesión de la que viene esta petición.
    *

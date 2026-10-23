@@ -61,7 +61,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       this.prisma.user.findUnique({
         where: { id: payload.sub },
         include: {
-          memberships: { select: { organizationId: true, role: true } },
+          // `id` además de la organización y el rol: es la clave con la que se leen los
+          // permisos concedidos. Llevarlo aquí evita una consulta por petición en cada ruta
+          // que exija un permiso.
+          memberships: {
+            select: { id: true, organizationId: true, role: true },
+          },
         },
       }),
       this.prisma.authSession.findUnique({

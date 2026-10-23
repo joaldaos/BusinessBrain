@@ -512,6 +512,35 @@ model Organization {
   @@index([slug])
 }
 
+/// Un permiso concedido a una persona dentro de su empresa — Fase de permisos granulares.
+///
+/// ## Por qué una fila por permiso y no una lista en la membresía
+///
+/// Porque la pregunta que hay que poder responder es «¿quién puede ver la facturación?», y
+/// con una columna JSON eso es recorrer todas las membresías y abrir cada una. Con filas es
+/// un índice.
+///
+/// ## Qué significa NO tener ninguna fila
+///
+/// Que se aplica lo que le corresponde a su rol. **No es lo mismo que tener cero permisos**:
+/// sin filas, la persona puede lo que su rol permite; con las filas puestas, solo lo que
+/// digan. Confundirlos convertiría «le he quitado todo» en «lo tiene todo», y es la razón de
+/// que el dominio distinga `null` de `[]`.
+model MembershipPermission {
+  membershipId String
+  /// `MODULO:ACCION`, p. ej. `KNOWLEDGE:READ`. Catálogo cerrado en el código: un valor que
+  /// ya no exista no concede nada, y hay una prueba que lo comprueba.
+  permission   String
+  /// Quién lo concedió y cuándo. Un permiso sin responsable no se puede auditar.
+  grantedById  String
+  grantedAt    DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, permission])
+  @@index([permission])
+}
+
 model Membership {
   id             String         @id @default(cuid())
   userId         String
@@ -520,12 +549,23 @@ model Membership {
   invitedById    String?
   joinedAt       DateTime       @default(now())
 
+  /// Si alguien le ha ajustado los permisos a mano.
+  ///
+  /// Hace falta como columna porque **cero filas en `MembershipPermission` no puede
+  /// significar dos cosas distintas**: «nunca se tocó» —y entonces vale lo que diga su
+  /// rol— y «se le quitó todo» —y entonces no puede nada— son estados opuestos con la
+  /// misma representación. Sin esto, quitarle todos los permisos a alguien se lo
+  /// devolvería íntegros.
+  permissionsCustomised Boolean @default(false)
+
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Colecciones concedidas a esta persona EN ESTA organizacion (subfase 5.8). Cuelgan de la
   // membresia para que la baja las revoque en cascada.
   collectionAccess KnowledgeCollectionAccess[]
+  /// Permisos concedidos. Vacío significa "lo que diga su rol", no "nada".
+  permissions      MembershipPermission[]
 
   @@unique([userId, organizationId])
   @@index([organizationId])

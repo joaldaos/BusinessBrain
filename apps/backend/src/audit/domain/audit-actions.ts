@@ -110,6 +110,15 @@ export const AUDIT_ACTIONS = {
    */
   ORGANIZATION_DATA_ERASED: 'organization.data_erased',
 
+  // ── Permisos de las personas de la empresa ────────────────────────────────
+  //
+  // Cambiar qué puede hacer alguien es una decisión sobre el acceso a los datos de la
+  // empresa, y por eso se audita con el mismo rigor que concederle una colección: quién lo
+  // hizo, a quién, y qué quedó concedido.
+  MEMBERSHIP_PERMISSIONS_SET: 'membership.permissions_set',
+  /** Vuelta al comportamiento del rol. Distinto de dejarlo sin ningún permiso. */
+  MEMBERSHIP_PERMISSIONS_RESET: 'membership.permissions_reset',
+
   // ── Seguridad de la cuenta: la verificación en dos pasos y la contraseña ──
   //
   // ## Por qué se auditan también los INTENTOS
@@ -220,6 +229,8 @@ export const AUDIT_TARGET_TYPES = {
   USER: 'User',
   ORGANIZATION: 'Organization',
   PLATFORM_ACCESS_GRANT: 'PlatformAccessGrant',
+  /// La pertenencia de una persona a una empresa, con su rol y sus permisos.
+  MEMBERSHIP: 'Membership',
 } as const;
 
 export type AuditTargetType =

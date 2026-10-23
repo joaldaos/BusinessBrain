@@ -1,7 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { createDecipheriv } from 'node:crypto';
+import { createDecipheriv, hkdfSync } from 'node:crypto';
 import { PrismaClient, type MembershipRole } from '@businessbrain/database';
 import { totp } from '../../src/auth/domain/totp';
 import { AppModule } from '../../src/app.module';
@@ -242,13 +242,40 @@ export async function readMfaSecret(userId: string): Promise<string> {
   });
   if (!user.mfaSecretEnc) throw new Error('La cuenta no tiene secreto TOTP');
 
-  return decryptWithAppKey(user.mfaSecretEnc);
+  return decryptWithAppKey(user.mfaSecretEnc, userId);
 }
 
-/** El mismo AES-256-GCM del producto, con la misma clave del entorno. */
-function decryptWithAppKey(payload: string): string {
-  const key = Buffer.from(process.env.ENCRYPTION_KEY ?? '', 'base64');
-  const [iv, authTag, ciphertext] = payload.split(':');
+/**
+ * El mismo AES-256-GCM del producto, con la misma clave.
+ *
+ * Desde la Fase 9B hay dos formatos y el harness tiene que entender los dos, porque el
+ * producto los entiende:
+ *
+ * - `iv:tag:ct` — escrito antes del cambio, cifrado con la clave MAESTRA.
+ * - `v2:iv:tag:ct` — cifrado con una clave DERIVADA del dueño del secreto. El de MFA es de
+ *   un USUARIO, no de una empresa: una persona puede estar en varias organizaciones y el
+ *   administrador de plataforma no está en ninguna.
+ *
+ * Si esto se quedara en el formato antiguo, el harness no podría leer el secreto que acaba
+ * de escribir el producto y toda la suite de MFA fallaría — que es exactamente lo que pasó
+ * al introducir la derivación.
+ */
+function decryptWithAppKey(payload: string, userId: string): string {
+  const master = Buffer.from(process.env.ENCRYPTION_KEY ?? '', 'base64');
+  const partes = payload.split(':');
+
+  const [key, iv, authTag, ciphertext] =
+    partes[0] === 'v2'
+      ? [
+          Buffer.from(
+            hkdfSync('sha256', master, Buffer.alloc(0), `user:${userId}`, 32),
+          ),
+          partes[1],
+          partes[2],
+          partes[3],
+        ]
+      : [master, partes[0], partes[1], partes[2]];
+
   const decipher = createDecipheriv(
     'aes-256-gcm',
     key,

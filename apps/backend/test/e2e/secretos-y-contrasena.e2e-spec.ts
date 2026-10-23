@@ -137,8 +137,21 @@ describe('secretos que no salen, y contraseña que no se cambia sola', () => {
 
       expect(usuario.mfaSecretEnc).not.toBeNull();
       expect(usuario.mfaSecretEnc).not.toContain(actor.mfaSecret!);
-      // El formato del `EncryptionService`: iv:authTag:ciphertext, todo en base64.
-      expect(usuario.mfaSecretEnc!.split(':')).toHaveLength(3);
+
+      /*
+       * El formato del `EncryptionService` desde la Fase 9B: `v2:iv:authTag:ciphertext`.
+       *
+       * La marca de versión no es cosmética: es lo que permite que un secreto escrito con la
+       * clave maestra —antes de que las claves se derivaran por ámbito— se siga pudiendo
+       * leer. Comprobar que está es comprobar que un secreto nuevo NO se escribe con el
+       * formato antiguo, que es por donde volvería la clave única para todos.
+       */
+      const partes = usuario.mfaSecretEnc!.split(':');
+      expect(partes).toHaveLength(4);
+      expect(partes[0]).toBe('v2');
+      for (const parte of partes.slice(1)) {
+        expect(parte).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+      }
     });
 
     it('CRÍTICO: los códigos de recuperación se guardan con hash, no en claro', async () => {

@@ -760,6 +760,28 @@ describe('Gmail (integración)', () => {
         runner,
         new CronSchedulerAdapter(),
       );
+      /*
+       * El reloj es el ÚNICO barrido que cruza organizaciones, a propósito: solo mira fechas.
+       * Eso lo hace sensible a lo que hayan dejado otros ficheros de prueba.
+       *
+       * Sin esta limpieza el test era inestable: pasaba aislado y fallaba en la suite
+       * completa. La cota por tic es de 25 automatizaciones ordenadas por vencimiento, así
+       * que unas cuantas vencidas de otra prueba podían dejar fuera a la de aquí —y entonces
+       * nadie la reclamaba y no había ninguna ejecución que contar—, o consumir el turno
+       * ejecutando trabajo ajeno.
+       *
+       * Se neutralizan las AJENAS, no la nuestra: lo que se comprueba —que dos procesos
+       * simultáneos no la ejecuten dos veces— se comprueba igual, y deja de depender del
+       * orden en que corran los ficheros.
+       */
+      await prisma.automation.updateMany({
+        where: {
+          nextRunAt: { not: null, lte: new Date() },
+          NOT: { id: automation.id },
+        },
+        data: { nextRunAt: null },
+      });
+
       await prisma.automation.update({
         where: { id: automation.id },
         data: { nextRunAt: new Date(Date.now() - 60_000) },
